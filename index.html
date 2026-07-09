@@ -51,6 +51,18 @@
   h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
   h1 .game { color: var(--accent); }
   .period-label { color: var(--muted); font-size: 13px; margin-left: 4px; }
+  .ver-badge {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all .15s;
+  }
+  .ver-badge:hover { border-color: var(--accent); color: var(--accent); }
+  .vh-item { display: flex; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--border); }
+  .vh-item:last-child { border-bottom: none; }
+  .vh-ver { min-width: 64px; font-weight: 700; font-size: 14px; }
+  .vh-body { flex: 1; }
+  .vh-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .vh-body ul { margin: 4px 0 0 16px; font-size: 13px; line-height: 1.7; }
   .spacer { flex: 1; }
   .btn {
     background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
@@ -217,6 +229,7 @@
 
 <header>
   <h1>💳 <span class="game" id="gameName">GBTW</span> 자체결제 KPI 대시보드</h1>
+  <span class="ver-badge" id="verBadge" title="버전 히스토리 보기"></span>
   <span class="period-label" id="periodLabel"></span>
   <div class="spacer"></div>
   <button class="btn icon" id="themeBtn" title="다크/라이트 모드 전환">🌙</button>
@@ -379,6 +392,20 @@
   </div>
 </div>
 
+<!-- 버전 히스토리 모달 -->
+<div class="modal-overlay" id="verModal">
+  <div class="modal">
+    <div class="m-head">
+      <h3>📋 버전 히스토리</h3>
+      <div class="file">버전 규칙: <b>리뉴얼 . 신규 기능 . 패치</b></div>
+    </div>
+    <div class="m-body" id="verBody"></div>
+    <div class="m-foot">
+      <button class="btn primary" id="verClose">닫기</button>
+    </div>
+  </div>
+</div>
+
 <!-- 게임 KPI 시트 관리 모달 -->
 <div class="modal-overlay" id="gameSheetModal">
   <div class="modal">
@@ -418,6 +445,35 @@
 /* ================= 기본 데이터 (GBTW 2026-01-01 ~ 2026-06-30) ================= */
 const DEFAULT_GAME = "GBTW";
 const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 방식, 브라우저 localStorage에만 저장)
+
+/* ================= 버전 ================= */
+/* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
+const APP_VERSION = "1.3.0";
+const VERSION_HISTORY = [
+  { ver: "1.3.0", date: "2026-07-09", type: "기능", changes: [
+    "버전 히스토리 추가 (헤더 버전 배지 클릭)",
+  ]},
+  { ver: "1.2.0", date: "2026-07-09", type: "기능", changes: [
+    "게임 KPI 데이터 구글시트 연동 — 🎮 게임 시트에서 게임명+시트 URL 등록",
+    "대시보드를 열 때마다 등록된 게임 시트 자동 동기화 (시트가 데이터 원본)",
+    "게임별 개별/전체 동기화 및 등록 삭제",
+  ]},
+  { ver: "1.1.1", date: "2026-07-09", type: "패치", changes: [
+    "차트 피크/최저 라벨 겹침 수정 — 계단식 배치, 배경 박스, 연결선, 범례 침범 방지",
+  ]},
+  { ver: "1.1.0", date: "2026-07-09", type: "기능", changes: [
+    "이벤트/프로모션 구글시트 연동 (📅 이벤트 시트)",
+    "차트 하단 이벤트 번호 마크 + 클릭 시 상세 팝업 (기간 겹침은 한 그룹으로 묶음)",
+    "🎯 이벤트 효과 분석 페이지 — 이벤트별 기간 성과를 직전 동일 일수와 비교",
+  ]},
+  { ver: "1.0.0", date: "2026-07-09", type: "리뉴얼", changes: [
+    "자체결제 KPI 대시보드 최초 배포 (GitHub Pages)",
+    "멀티 게임 탭 — xlsx 업로드(파일명 자동 인식)·병합(중복 비교 확인창)",
+    "KPI 카드 — 선택 기간 연동, 직전 기간 대비, 성장률(시작 7일→마감 7일), 비중 카드 30일 고정",
+    "차트 5종 — 매출+비중(피크 TOP5/최저 강조), 비중 추이, PU&ARPPU, 주별, PU 추이",
+    "다크/라이트 테마, 목표 비중 설정, 일별 상세 테이블",
+  ]},
+];
 
 /* ================= 상태 ================= */
 const LS_KEY = "d2c-dashboard-v2";
@@ -1729,6 +1785,28 @@ document.getElementById("gsAdd").addEventListener("click", async () => {
     alert(`${name} 연결 실패: ` + e.message +
       '\n\n확인할 것:\n1) 시트 공유가 "링크가 있는 모든 사용자: 뷰어"인지\n2) 1행 헤더가 엑셀 포맷(datekey, DAU, 전체 IAP 매출...)과 같은지\n3) 브라우저에서 직접 열었는지 (미리보기 패널은 외부 요청 차단 가능)');
   }
+});
+
+/* 버전 히스토리 */
+const verTypeColor = t => t === "리뉴얼" ? "#f87171" : t === "기능" ? "#4f8cff" : "#8b96ad";
+document.getElementById("verBadge").textContent = "v" + APP_VERSION;
+document.getElementById("verBadge").addEventListener("click", () => {
+  document.getElementById("verBody").innerHTML = VERSION_HISTORY.map(v => `
+    <div class="vh-item">
+      <div class="vh-ver" style="color:${verTypeColor(v.type)}">v${v.ver}</div>
+      <div class="vh-body">
+        <div class="vh-meta">
+          <span class="ev-badge" style="background:${verTypeColor(v.type)}">${v.type}</span> ${v.date}
+        </div>
+        <ul>${v.changes.map(c => `<li>${c}</li>`).join("")}</ul>
+      </div>
+    </div>`).join("");
+  document.getElementById("verModal").classList.add("show");
+});
+document.getElementById("verClose").addEventListener("click", () =>
+  document.getElementById("verModal").classList.remove("show"));
+document.getElementById("verModal").addEventListener("click", e => {
+  if (e.target.id === "verModal") e.target.classList.remove("show");
 });
 
 /* 이벤트 상세 모달 닫기 */
