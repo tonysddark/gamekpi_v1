@@ -381,189 +381,7 @@
 <script>
 /* ================= 기본 데이터 (GBTW 2026-01-01 ~ 2026-06-30) ================= */
 const DEFAULT_GAME = "GBTW";
-const DEFAULT_DATA = [
-{date:"2026-06-30",dau:25844,iap:67206849,d2c:22739808,ratio:0.3384,pu:312,arppu:72884,arpdau:879.9},
-{date:"2026-06-29",dau:25292,iap:64896852,d2c:17642995,ratio:0.2719,pu:280,arppu:63011,arpdau:697.6},
-{date:"2026-06-28",dau:25345,iap:70646563,d2c:24013428,ratio:0.3399,pu:323,arppu:74345,arpdau:947.5},
-{date:"2026-06-27",dau:24995,iap:95840789,d2c:29559145,ratio:0.3084,pu:351,arppu:84214,arpdau:1182.6},
-{date:"2026-06-26",dau:25042,iap:117970108,d2c:41697676,ratio:0.3535,pu:427,arppu:97653,arpdau:1665.1},
-{date:"2026-06-25",dau:25042,iap:114825915,d2c:45152570,ratio:0.3932,pu:426,arppu:105992,arpdau:1803.1},
-{date:"2026-06-24",dau:24478,iap:130896859,d2c:52524684,ratio:0.4013,pu:532,arppu:98731,arpdau:2145.8},
-{date:"2026-06-23",dau:24342,iap:69443378,d2c:22029447,ratio:0.3172,pu:398,arppu:55350,arpdau:905},
-{date:"2026-06-22",dau:24286,iap:64412792,d2c:21351741,ratio:0.3315,pu:357,arppu:59809,arpdau:879.2},
-{date:"2026-06-21",dau:24226,iap:78243221,d2c:22463886,ratio:0.2871,pu:356,arppu:63101,arpdau:927.3},
-{date:"2026-06-20",dau:24445,iap:91114477,d2c:30963672,ratio:0.3398,pu:396,arppu:78191,arpdau:1266.7},
-{date:"2026-06-19",dau:24210,iap:95002725,d2c:31532639,ratio:0.3319,pu:435,arppu:72489,arpdau:1302.5},
-{date:"2026-06-18",dau:24190,iap:92308979,d2c:28868877,ratio:0.3127,pu:428,arppu:67451,arpdau:1193.4},
-{date:"2026-06-17",dau:24784,iap:78739813,d2c:28144835,ratio:0.3574,pu:387,arppu:72726,arpdau:1135.6},
-{date:"2026-06-16",dau:26403,iap:80327894,d2c:26197886,ratio:0.3261,pu:411,arppu:63742,arpdau:992.2},
-{date:"2026-06-15",dau:24939,iap:64014521,d2c:20158682,ratio:0.3149,pu:298,arppu:67647,arpdau:808.3},
-{date:"2026-06-14",dau:24670,iap:86623123,d2c:26553292,ratio:0.3065,pu:391,arppu:67911,arpdau:1076.3},
-{date:"2026-06-13",dau:24323,iap:97148778,d2c:32506265,ratio:0.3346,pu:402,arppu:80861,arpdau:1336.4},
-{date:"2026-06-12",dau:24021,iap:106041358,d2c:36595228,ratio:0.3451,pu:479,arppu:76399,arpdau:1523.5},
-{date:"2026-06-11",dau:24011,iap:116344396,d2c:40289623,ratio:0.3463,pu:539,arppu:74749,arpdau:1678},
-{date:"2026-06-10",dau:23777,iap:136966442,d2c:46349565,ratio:0.3384,pu:611,arppu:75859,arpdau:1949.3},
-{date:"2026-06-09",dau:24739,iap:66459951,d2c:17749434,ratio:0.2671,pu:309,arppu:57442,arpdau:717.5},
-{date:"2026-06-08",dau:25229,iap:56587331,d2c:18176931,ratio:0.3212,pu:258,arppu:70453,arpdau:720.5},
-{date:"2026-06-07",dau:24946,iap:85969283,d2c:24424572,ratio:0.2841,pu:283,arppu:86306,arpdau:979.1},
-{date:"2026-06-06",dau:25108,iap:99838415,d2c:30317446,ratio:0.3037,pu:347,arppu:87370,arpdau:1207.5},
-{date:"2026-06-05",dau:25212,iap:80951190,d2c:25645633,ratio:0.3168,pu:316,arppu:81157,arpdau:1017.2},
-{date:"2026-06-04",dau:25358,iap:76798702,d2c:24687498,ratio:0.3215,pu:340,arppu:72610,arpdau:973.6},
-{date:"2026-06-03",dau:25538,iap:81637961,d2c:27902284,ratio:0.3418,pu:331,arppu:84297,arpdau:1092.6},
-{date:"2026-06-02",dau:28071,iap:61860997,d2c:16249563,ratio:0.2627,pu:247,arppu:65788,arpdau:578.9},
-{date:"2026-06-01",dau:26403,iap:114259737,d2c:29267367,ratio:0.2561,pu:338,arppu:86590,arpdau:1108.5},
-{date:"2026-05-31",dau:25857,iap:69379022,d2c:16813798,ratio:0.2423,pu:273,arppu:61589,arpdau:650.3},
-{date:"2026-05-30",dau:26127,iap:77676703,d2c:19975827,ratio:0.2572,pu:324,arppu:61654,arpdau:764.6},
-{date:"2026-05-29",dau:26047,iap:87850276,d2c:28175986,ratio:0.3207,pu:369,arppu:76358,arpdau:1081.7},
-{date:"2026-05-28",dau:26451,iap:63391243,d2c:19770029,ratio:0.3119,pu:391,arppu:50563,arpdau:747.4},
-{date:"2026-05-27",dau:24736,iap:78309892,d2c:24642133,ratio:0.3147,pu:383,arppu:64340,arpdau:996.2},
-{date:"2026-05-26",dau:24461,iap:58664899,d2c:15773074,ratio:0.2689,pu:282,arppu:55933,arpdau:644.8},
-{date:"2026-05-25",dau:24568,iap:69294098,d2c:19820645,ratio:0.286,pu:281,arppu:70536,arpdau:806.8},
-{date:"2026-05-24",dau:24312,iap:94061782,d2c:31530747,ratio:0.3352,pu:382,arppu:82541,arpdau:1296.9},
-{date:"2026-05-23",dau:23561,iap:145133658,d2c:57193723,ratio:0.3941,pu:561,arppu:101950,arpdau:2427.5},
-{date:"2026-05-22",dau:23130,iap:65933109,d2c:17511438,ratio:0.2656,pu:284,arppu:61660,arpdau:757.1},
-{date:"2026-05-21",dau:22859,iap:76326499,d2c:20719286,ratio:0.2715,pu:369,arppu:56150,arpdau:906.4},
-{date:"2026-05-20",dau:16771,iap:24648336,d2c:5786274,ratio:0.2348,pu:110,arppu:52602,arpdau:345},
-{date:"2026-05-19",dau:24267,iap:75713270,d2c:16348638,ratio:0.2159,pu:279,arppu:58597,arpdau:673.7},
-{date:"2026-05-18",dau:22835,iap:80097151,d2c:21837424,ratio:0.2726,pu:317,arppu:68888,arpdau:956.3},
-{date:"2026-05-17",dau:22703,iap:69885074,d2c:16966700,ratio:0.2428,pu:262,arppu:64758,arpdau:747.3},
-{date:"2026-05-16",dau:22580,iap:105016778,d2c:29428685,ratio:0.2802,pu:358,arppu:82203,arpdau:1303.3},
-{date:"2026-05-15",dau:22842,iap:113983619,d2c:31813396,ratio:0.2791,pu:384,arppu:82847,arpdau:1392.8},
-{date:"2026-05-14",dau:23778,iap:84161134,d2c:24390128,ratio:0.2898,pu:372,arppu:65565,arpdau:1025.7},
-{date:"2026-05-13",dau:23001,iap:114290594,d2c:30888558,ratio:0.2703,pu:443,arppu:69726,arpdau:1342.9},
-{date:"2026-05-12",dau:22917,iap:55568144,d2c:11973306,ratio:0.2155,pu:234,arppu:51168,arpdau:522.5},
-{date:"2026-05-11",dau:23017,iap:47509420,d2c:10199054,ratio:0.2147,pu:214,arppu:47659,arpdau:443.1},
-{date:"2026-05-10",dau:23100,iap:63298985,d2c:12245601,ratio:0.1935,pu:239,arppu:51237,arpdau:530.1},
-{date:"2026-05-09",dau:23180,iap:80861165,d2c:17597538,ratio:0.2176,pu:302,arppu:58270,arpdau:759.2},
-{date:"2026-05-08",dau:22892,iap:76218060,d2c:19045607,ratio:0.2499,pu:307,arppu:62038,arpdau:832},
-{date:"2026-05-07",dau:22933,iap:46193181,d2c:8600776,ratio:0.1862,pu:243,arppu:35394,arpdau:375},
-{date:"2026-05-06",dau:23106,iap:62015008,d2c:15400530,ratio:0.2483,pu:279,arppu:55199,arpdau:666.5},
-{date:"2026-05-05",dau:24486,iap:62278496,d2c:12614750,ratio:0.2026,pu:207,arppu:60941,arpdau:515.2},
-{date:"2026-05-04",dau:23124,iap:64911313,d2c:16510456,ratio:0.2544,pu:229,arppu:72098,arpdau:714},
-{date:"2026-05-03",dau:23273,iap:78195100,d2c:16684684,ratio:0.2134,pu:254,arppu:65688,arpdau:716.9},
-{date:"2026-05-02",dau:23417,iap:100629246,d2c:23741333,ratio:0.2359,pu:291,arppu:81585,arpdau:1013.9},
-{date:"2026-05-01",dau:23624,iap:149456117,d2c:36833087,ratio:0.2464,pu:378,arppu:97442,arpdau:1559.1},
-{date:"2026-04-30",dau:24066,iap:70453130,d2c:14322180,ratio:0.2033,pu:223,arppu:64225,arpdau:595.1},
-{date:"2026-04-29",dau:23295,iap:71437598,d2c:16899020,ratio:0.2366,pu:266,arppu:63530,arpdau:725.4},
-{date:"2026-04-28",dau:24342,iap:55020212,d2c:11924311,ratio:0.2167,pu:230,arppu:51845,arpdau:489.9},
-{date:"2026-04-27",dau:24256,iap:49831419,d2c:10502456,ratio:0.2108,pu:199,arppu:52776,arpdau:433},
-{date:"2026-04-26",dau:24502,iap:63878348,d2c:15877517,ratio:0.2486,pu:241,arppu:65882,arpdau:648},
-{date:"2026-04-25",dau:24076,iap:74709789,d2c:18025985,ratio:0.2413,pu:260,arppu:69331,arpdau:748.7},
-{date:"2026-04-24",dau:25025,iap:70657282,d2c:17670192,ratio:0.2501,pu:281,arppu:62883,arpdau:706.1},
-{date:"2026-04-23",dau:23941,iap:60355074,d2c:14307425,ratio:0.2371,pu:231,arppu:61937,arpdau:597.6},
-{date:"2026-04-22",dau:23922,iap:64674494,d2c:17300892,ratio:0.2675,pu:282,arppu:61351,arpdau:723.2},
-{date:"2026-04-21",dau:26330,iap:67322677,d2c:16277631,ratio:0.2418,pu:245,arppu:66439,arpdau:618.2},
-{date:"2026-04-20",dau:24897,iap:71706411,d2c:13807473,ratio:0.1926,pu:260,arppu:53106,arpdau:554.6},
-{date:"2026-04-19",dau:25198,iap:73472775,d2c:15313156,ratio:0.2084,pu:230,arppu:66579,arpdau:607.7},
-{date:"2026-04-18",dau:23998,iap:92268012,d2c:21491191,ratio:0.2329,pu:277,arppu:77586,arpdau:895.5},
-{date:"2026-04-17",dau:23670,iap:94597057,d2c:20615216,ratio:0.2179,pu:299,arppu:68947,arpdau:870.9},
-{date:"2026-04-16",dau:23349,iap:104614854,d2c:23951533,ratio:0.2289,pu:327,arppu:73246,arpdau:1025.8},
-{date:"2026-04-15",dau:22611,iap:94751990,d2c:19845146,ratio:0.2094,pu:293,arppu:67731,arpdau:877.7},
-{date:"2026-04-14",dau:24796,iap:66894751,d2c:12938185,ratio:0.1934,pu:157,arppu:82409,arpdau:521.8},
-{date:"2026-04-13",dau:25128,iap:75919075,d2c:15022407,ratio:0.1979,pu:233,arppu:64474,arpdau:597.8},
-{date:"2026-04-12",dau:25769,iap:68047031,d2c:9941237,ratio:0.1461,pu:162,arppu:61366,arpdau:385.8},
-{date:"2026-04-11",dau:25334,iap:95511549,d2c:30211027,ratio:0.3163,pu:203,arppu:148823,arpdau:1192.5},
-{date:"2026-04-10",dau:25323,iap:102883397,d2c:23222514,ratio:0.2257,pu:239,arppu:97165,arpdau:917.1},
-{date:"2026-04-09",dau:25280,iap:96298475,d2c:25983744,ratio:0.2698,pu:231,arppu:112484,arpdau:1027.8},
-{date:"2026-04-08",dau:24967,iap:87977358,d2c:22329622,ratio:0.2538,pu:254,arppu:87912,arpdau:894.4},
-{date:"2026-04-07",dau:26860,iap:67027485,d2c:11463740,ratio:0.171,pu:174,arppu:65884,arpdau:426.8},
-{date:"2026-04-06",dau:25554,iap:72071302,d2c:14984340,ratio:0.2079,pu:159,arppu:94241,arpdau:586.4},
-{date:"2026-04-05",dau:25534,iap:81217701,d2c:15822143,ratio:0.1948,pu:191,arppu:82838,arpdau:619.6},
-{date:"2026-04-04",dau:25316,iap:112776744,d2c:23201666,ratio:0.2057,pu:243,arppu:95480,arpdau:916.5},
-{date:"2026-04-03",dau:25872,iap:102380299,d2c:24054123,ratio:0.2349,pu:260,arppu:92516,arpdau:929.7},
-{date:"2026-04-02",dau:25529,iap:110424084,d2c:28502852,ratio:0.2581,pu:296,arppu:96293,arpdau:1116.5},
-{date:"2026-04-01",dau:25310,iap:163650521,d2c:36645881,ratio:0.2239,pu:386,arppu:94938,arpdau:1447.9},
-{date:"2026-03-31",dau:26373,iap:84355775,d2c:20129154,ratio:0.2386,pu:262,arppu:76829,arpdau:763.2},
-{date:"2026-03-30",dau:26889,iap:85361998,d2c:19159314,ratio:0.2244,pu:246,arppu:77883,arpdau:712.5},
-{date:"2026-03-29",dau:27086,iap:90075679,d2c:15800509,ratio:0.1754,pu:216,arppu:73151,arpdau:583.3},
-{date:"2026-03-28",dau:26605,iap:115580018,d2c:28720638,ratio:0.2485,pu:304,arppu:94476,arpdau:1079.5},
-{date:"2026-03-27",dau:26295,iap:112269709,d2c:28769726,ratio:0.2563,pu:311,arppu:92507,arpdau:1094.1},
-{date:"2026-03-26",dau:26215,iap:127706479,d2c:45373464,ratio:0.3553,pu:376,arppu:120674,arpdau:1730.8},
-{date:"2026-03-25",dau:25787,iap:97364763,d2c:28891850,ratio:0.2967,pu:417,arppu:69285,arpdau:1120.4},
-{date:"2026-03-24",dau:29238,iap:78533445,d2c:16365976,ratio:0.2084,pu:295,arppu:55478,arpdau:559.8},
-{date:"2026-03-23",dau:28071,iap:72376185,d2c:15929285,ratio:0.2201,pu:333,arppu:47836,arpdau:567.5},
-{date:"2026-03-22",dau:27859,iap:89042389,d2c:26112844,ratio:0.2933,pu:466,arppu:56036,arpdau:937.3},
-{date:"2026-03-21",dau:27527,iap:87909710,d2c:17514161,ratio:0.1992,pu:386,arppu:45373,arpdau:636.3},
-{date:"2026-03-20",dau:27578,iap:100783590,d2c:30674139,ratio:0.3044,pu:561,arppu:54678,arpdau:1112.3},
-{date:"2026-03-19",dau:28214,iap:110109836,d2c:27262034,ratio:0.2476,pu:517,arppu:52731,arpdau:966.3},
-{date:"2026-03-18",dau:26127,iap:120566808,d2c:24481165,ratio:0.2031,pu:528,arppu:46366,arpdau:937},
-{date:"2026-03-17",dau:27193,iap:75010192,d2c:11831615,ratio:0.1577,pu:175,arppu:67609,arpdau:435.1},
-{date:"2026-03-16",dau:27071,iap:57967361,d2c:6060911,ratio:0.1046,pu:167,arppu:36293,arpdau:223.9},
-{date:"2026-03-15",dau:27352,iap:79135717,d2c:10242904,ratio:0.1294,pu:185,arppu:55367,arpdau:374.5},
-{date:"2026-03-14",dau:27205,iap:103875788,d2c:15566725,ratio:0.1499,pu:221,arppu:70438,arpdau:572.2},
-{date:"2026-03-13",dau:26348,iap:112132744,d2c:17736062,ratio:0.1582,pu:232,arppu:76449,arpdau:673.1},
-{date:"2026-03-12",dau:25455,iap:63691803,d2c:10419069,ratio:0.1636,pu:153,arppu:68098,arpdau:409.3},
-{date:"2026-03-11",dau:26865,iap:48499004,d2c:5678181,ratio:0.1171,pu:107,arppu:53067,arpdau:211.4},
-{date:"2026-03-10",dau:29295,iap:72219119,d2c:12392640,ratio:0.1716,pu:162,arppu:76498,arpdau:423},
-{date:"2026-03-09",dau:28189,iap:78895331,d2c:11747631,ratio:0.1489,pu:152,arppu:77287,arpdau:416.7},
-{date:"2026-03-08",dau:29558,iap:84118255,d2c:11280244,ratio:0.1341,pu:173,arppu:65204,arpdau:381.6},
-{date:"2026-03-07",dau:28802,iap:107322510,d2c:17906913,ratio:0.1669,pu:198,arppu:90439,arpdau:621.7},
-{date:"2026-03-06",dau:27770,iap:122251108,d2c:25087641,ratio:0.2052,pu:231,arppu:108605,arpdau:903.4},
-{date:"2026-03-05",dau:27650,iap:123776523,d2c:21273714,ratio:0.1719,pu:229,arppu:92898,arpdau:769.4},
-{date:"2026-03-04",dau:27469,iap:120295240,d2c:19170723,ratio:0.1594,pu:234,arppu:81926,arpdau:697.9},
-{date:"2026-03-03",dau:28398,iap:71781408,d2c:12335269,ratio:0.1718,pu:144,arppu:85662,arpdau:434.4},
-{date:"2026-03-02",dau:27465,iap:91860055,d2c:12935068,ratio:0.1408,pu:154,arppu:83994,arpdau:471},
-{date:"2026-03-01",dau:26512,iap:172856862,d2c:24107902,ratio:0.1395,pu:239,arppu:100870,arpdau:909.3},
-{date:"2026-02-28",dau:25361,iap:132979412,d2c:28082232,ratio:0.2112,pu:218,arppu:128818,arpdau:1107.3},
-{date:"2026-02-27",dau:25249,iap:134003029,d2c:26399761,ratio:0.197,pu:202,arppu:130692,arpdau:1045.6},
-{date:"2026-02-26",dau:25061,iap:177369467,d2c:32884793,ratio:0.1854,pu:269,arppu:122248,arpdau:1312.2},
-{date:"2026-02-25",dau:25258,iap:125764728,d2c:30280818,ratio:0.2408,pu:257,arppu:117824,arpdau:1198.9},
-{date:"2026-02-24",dau:27702,iap:71026432,d2c:7237526,ratio:0.1019,pu:147,arppu:49235,arpdau:261.3},
-{date:"2026-02-23",dau:26425,iap:75773658,d2c:10622844,ratio:0.1402,pu:170,arppu:62487,arpdau:402},
-{date:"2026-02-22",dau:27011,iap:84795717,d2c:12139031,ratio:0.1432,pu:184,arppu:65973,arpdau:449.4},
-{date:"2026-02-21",dau:26265,iap:109114409,d2c:17241643,ratio:0.158,pu:205,arppu:84106,arpdau:656.4},
-{date:"2026-02-20",dau:26220,iap:105731086,d2c:20416307,ratio:0.1931,pu:216,arppu:94520,arpdau:778.7},
-{date:"2026-02-19",dau:25921,iap:93631109,d2c:14296015,ratio:0.1527,pu:245,arppu:58351,arpdau:551.5},
-{date:"2026-02-18",dau:25946,iap:135742792,d2c:16854178,ratio:0.1242,pu:373,arppu:45185,arpdau:649.6},
-{date:"2026-02-17",dau:26878,iap:90545085,d2c:10353175,ratio:0.1143,pu:189,arppu:54779,arpdau:385.2},
-{date:"2026-02-16",dau:26823,iap:75192631,d2c:8871450,ratio:0.118,pu:137,arppu:64755,arpdau:330.7},
-{date:"2026-02-15",dau:27173,iap:108871328,d2c:13656304,ratio:0.1254,pu:203,arppu:67272,arpdau:502.6},
-{date:"2026-02-14",dau:27010,iap:115271991,d2c:14297848,ratio:0.124,pu:236,arppu:60584,arpdau:529.4},
-{date:"2026-02-13",dau:26587,iap:97019876,d2c:11903545,ratio:0.1227,pu:207,arppu:57505,arpdau:447.7},
-{date:"2026-02-12",dau:26231,iap:97187076,d2c:12719997,ratio:0.1309,pu:251,arppu:50677,arpdau:484.9},
-{date:"2026-02-11",dau:25967,iap:107378438,d2c:18159515,ratio:0.1691,pu:295,arppu:61558,arpdau:699.3},
-{date:"2026-02-10",dau:27776,iap:69154692,d2c:11194695,ratio:0.1619,pu:145,arppu:77205,arpdau:403},
-{date:"2026-02-09",dau:26114,iap:73108953,d2c:8579747,ratio:0.1174,pu:126,arppu:68093,arpdau:328.5},
-{date:"2026-02-08",dau:26330,iap:65158275,d2c:6774789,ratio:0.104,pu:120,arppu:56457,arpdau:257.3},
-{date:"2026-02-07",dau:25635,iap:104248306,d2c:14295899,ratio:0.1371,pu:165,arppu:86642,arpdau:557.7},
-{date:"2026-02-06",dau:25712,iap:107815374,d2c:18334109,ratio:0.1701,pu:173,arppu:105978,arpdau:713.1},
-{date:"2026-02-05",dau:26212,iap:100974230,d2c:19002200,ratio:0.1882,pu:170,arppu:111778,arpdau:724.9},
-{date:"2026-02-04",dau:26376,iap:119703079,d2c:22016341,ratio:0.1839,pu:183,arppu:120308,arpdau:834.7},
-{date:"2026-02-03",dau:27821,iap:61828989,d2c:8002502,ratio:0.1294,pu:90,arppu:88917,arpdau:287.6},
-{date:"2026-02-02",dau:28104,iap:72222865,d2c:10717239,ratio:0.1484,pu:112,arppu:95690,arpdau:381.3},
-{date:"2026-02-01",dau:28847,iap:126014592,d2c:18453091,ratio:0.1464,pu:185,arppu:99746,arpdau:639.7},
-{date:"2026-01-31",dau:26760,iap:109197706,d2c:20369744,ratio:0.1865,pu:197,arppu:103400,arpdau:761.2},
-{date:"2026-01-30",dau:26457,iap:90180534,d2c:17588408,ratio:0.195,pu:160,arppu:109928,arpdau:664.8},
-{date:"2026-01-29",dau:26049,iap:78345952,d2c:13600551,ratio:0.1736,pu:114,arppu:119303,arpdau:522.1},
-{date:"2026-01-28",dau:25865,iap:90484884,d2c:16714280,ratio:0.1847,pu:153,arppu:109244,arpdau:646.2},
-{date:"2026-01-27",dau:28219,iap:68096726,d2c:9190275,ratio:0.135,pu:134,arppu:68584,arpdau:325.7},
-{date:"2026-01-26",dau:27043,iap:71044611,d2c:10175376,ratio:0.1432,pu:141,arppu:72166,arpdau:376.3},
-{date:"2026-01-25",dau:26881,iap:68339597,d2c:12294852,ratio:0.1799,pu:122,arppu:100777,arpdau:457.4},
-{date:"2026-01-24",dau:26663,iap:103353785,d2c:19579320,ratio:0.1894,pu:128,arppu:152963,arpdau:734.3},
-{date:"2026-01-23",dau:25786,iap:101675462,d2c:19586836,ratio:0.1926,pu:165,arppu:118708,arpdau:759.6},
-{date:"2026-01-22",dau:25760,iap:87261183,d2c:17435484,ratio:0.1998,pu:188,arppu:92742,arpdau:676.8},
-{date:"2026-01-21",dau:25793,iap:126335923,d2c:27109946,ratio:0.2146,pu:261,arppu:103870,arpdau:1051.1},
-{date:"2026-01-20",dau:26212,iap:61748972,d2c:11373183,ratio:0.1842,pu:114,arppu:99765,arpdau:433.9},
-{date:"2026-01-19",dau:26832,iap:77101095,d2c:12790034,ratio:0.1659,pu:137,arppu:93358,arpdau:476.7},
-{date:"2026-01-18",dau:27320,iap:93401412,d2c:16414145,ratio:0.1757,pu:153,arppu:107282,arpdau:600.8},
-{date:"2026-01-17",dau:26550,iap:93461339,d2c:15808074,ratio:0.1691,pu:163,arppu:96982,arpdau:595.4},
-{date:"2026-01-16",dau:26023,iap:100693807,d2c:16074205,ratio:0.1596,pu:177,arppu:90815,arpdau:617.7},
-{date:"2026-01-15",dau:25842,iap:93053110,d2c:13399289,ratio:0.144,pu:168,arppu:79758,arpdau:518.5},
-{date:"2026-01-14",dau:26861,iap:101168226,d2c:21395972,ratio:0.2115,pu:212,arppu:100924,arpdau:796.5},
-{date:"2026-01-13",dau:28838,iap:61240055,d2c:10574953,ratio:0.1727,pu:151,arppu:70033,arpdau:366.7},
-{date:"2026-01-12",dau:27240,iap:67341110,d2c:8728025,ratio:0.1296,pu:144,arppu:60611,arpdau:320.4},
-{date:"2026-01-11",dau:27697,iap:78632736,d2c:11177527,ratio:0.1421,pu:152,arppu:73536,arpdau:403.6},
-{date:"2026-01-10",dau:27594,iap:109879435,d2c:17181327,ratio:0.1564,pu:189,arppu:90906,arpdau:622.6},
-{date:"2026-01-09",dau:26609,iap:136361601,d2c:19560010,ratio:0.1434,pu:195,arppu:100308,arpdau:735.1},
-{date:"2026-01-08",dau:26717,iap:102341792,d2c:14071482,ratio:0.1375,pu:160,arppu:87947,arpdau:526.7},
-{date:"2026-01-07",dau:27362,iap:114426775,d2c:23368033,ratio:0.2042,pu:219,arppu:106703,arpdau:854},
-{date:"2026-01-06",dau:28526,iap:69290024,d2c:12377650,ratio:0.1786,pu:187,arppu:66191,arpdau:433.9},
-{date:"2026-01-05",dau:28493,iap:85792268,d2c:11788761,ratio:0.1374,pu:151,arppu:78071,arpdau:413.7},
-{date:"2026-01-04",dau:29055,iap:114544717,d2c:21010458,ratio:0.1834,pu:174,arppu:120750,arpdau:723.1},
-{date:"2026-01-03",dau:28769,iap:96050009,d2c:13025400,ratio:0.1356,pu:140,arppu:93039,arpdau:452.8},
-{date:"2026-01-02",dau:28680,iap:110184916,d2c:13591598,ratio:0.1234,pu:185,arppu:73468,arpdau:473.9},
-{date:"2026-01-01",dau:26800,iap:157278780,d2c:24687507,ratio:0.157,pu:291,arppu:84837,arpdau:921.2}
-];
+const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 방식, 브라우저 localStorage에만 저장)
 
 /* ================= 상태 ================= */
 const LS_KEY = "d2c-dashboard-v2";
@@ -612,8 +430,8 @@ function loadState() {
       return;
     }
   } catch (e) {}
-  games = { [DEFAULT_GAME]: [...DEFAULT_DATA] };
-  activeGame = DEFAULT_GAME;
+  games = DEFAULT_DATA.length ? { [DEFAULT_GAME]: [...DEFAULT_DATA] } : {};
+  activeGame = Object.keys(games)[0] || "ALL";
 }
 function saveState() {
   try {
@@ -905,6 +723,14 @@ function attachEventClicks(chart) {
 /* ================= KPI 카드 ================= */
 function renderCards() {
   const s = currentSorted();
+  if (!s.length) {
+    document.getElementById("cards").innerHTML = `
+      <div class="card hero" style="grid-column:1/-1;text-align:center;padding:28px">
+        <div class="value" style="font-size:18px">📂 우측 상단 <b>데이터 업로드</b> 버튼으로 게임 KPI 엑셀(.xlsx)을 올려주세요</div>
+        <div class="delta flat" style="margin-top:8px">업로드한 데이터는 이 브라우저(localStorage)에만 저장되며 서버로 전송되지 않습니다 · 여러 게임 파일을 한 번에 드래그해도 됩니다</div>
+      </div>`;
+    return;
+  }
   const cur = rangeDays > 0 ? s.slice(-rangeDays) : s;
   const n = cur.length;
   const prev = rangeDays > 0 ? s.slice(-2 * n, -n) : []; // 직전 동일 기간
@@ -1379,11 +1205,8 @@ function renderTabs() {
       const g = el.dataset.del;
       if (!confirm(`${g} 데이터를 삭제할까요?`)) return;
       delete games[g];
-      if (!Object.keys(games).length) {
-        games = { [DEFAULT_GAME]: [...DEFAULT_DATA] };
-      }
-      if (activeGame === g || (activeGame === "ALL" && Object.keys(games).length === 1)) {
-        activeGame = Object.keys(games)[0];
+      if (activeGame === g || (activeGame === "ALL" && Object.keys(games).length <= 1)) {
+        activeGame = Object.keys(games)[0] || "ALL";
       }
       saveState();
       renderAll();
@@ -1676,12 +1499,12 @@ window.addEventListener("drop", e => {
 
 /* 초기화 */
 document.getElementById("resetBtn").addEventListener("click", () => {
-  if (!confirm("업로드한 모든 게임 데이터를 지우고 기본 데이터(GBTW)로 돌아갑니다.\n(이벤트 시트 연결은 유지됩니다)")) return;
-  games = { [DEFAULT_GAME]: [...DEFAULT_DATA] };
-  activeGame = DEFAULT_GAME;
+  if (!confirm("업로드한 모든 게임 데이터를 지웁니다.\n(이벤트 시트 연결은 유지됩니다)")) return;
+  games = DEFAULT_DATA.length ? { [DEFAULT_GAME]: [...DEFAULT_DATA] } : {};
+  activeGame = Object.keys(games)[0] || "ALL";
   saveState();
   renderAll();
-  toast("기본 데이터로 초기화했습니다");
+  toast("게임 데이터를 초기화했습니다");
 });
 
 /* 기간 필터 */
