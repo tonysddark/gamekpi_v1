@@ -813,16 +813,47 @@ const extremePlugin = {
     if (!cfg || !cfg.items || !cfg.items.length) return;
     const ctx = chart.ctx;
     const xScale = chart.scales.x, yScale = chart.scales.y;
+    const area = chart.chartArea;
     ctx.save();
     ctx.textAlign = "center";
-    cfg.items.forEach(t => {
+    const placed = []; // 이미 배치된 라벨 박스 (충돌 회피)
+    const overlaps = box => placed.some(p =>
+      box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0);
+    const H = 25;
+    [...cfg.items].sort((a, b) => a.i - b.i).forEach(t => {
       const x = xScale.getPixelForValue(t.i);
-      const y = yScale.getPixelForValue(t.y);
+      const yv = Math.min(Math.max(yScale.getPixelForValue(t.y), area.top), area.bottom);
+      ctx.font = "600 9.5px 'Pretendard','Malgun Gothic',sans-serif";
+      const w = Math.max(ctx.measureText(t.text).width, 14) + 10;
+      // 후보 위치: 포인트 위로 층층이 → 공간 없으면 포인트 아래
+      let top = null;
+      for (let k = 0; k < 6 && top == null; k++) {
+        const cand = yv - 30 - k * (H + 2);
+        if (cand < area.top + 2) break;
+        if (!overlaps({ x0: x - w / 2, x1: x + w / 2, y0: cand, y1: cand + H })) top = cand;
+      }
+      for (let k = 0; k < 4 && top == null; k++) {
+        const cand = yv + 8 + k * (H + 2);
+        if (cand + H > area.bottom) break;
+        if (!overlaps({ x0: x - w / 2, x1: x + w / 2, y0: cand, y1: cand + H })) top = cand;
+      }
+      if (top == null) top = Math.max(area.top + 2, yv - 30);
+      placed.push({ x0: x - w / 2, x1: x + w / 2, y0: top, y1: top + H });
+      // 포인트와 떨어져 있으면 연결선
+      if (yv - (top + H) > 6) {
+        ctx.strokeStyle = t.color + "55"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, top + H); ctx.lineTo(x, yv - 2); ctx.stroke();
+      }
+      // 배경 박스 (라인·막대 위에서도 읽히도록)
+      ctx.fillStyle = cssVar("--panel") + "e6";
+      ctx.strokeStyle = t.color + "88"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(x - w / 2, top, w, H, 6);
+      ctx.fill(); ctx.stroke();
       ctx.fillStyle = t.color;
-      ctx.font = "bold 13px 'Pretendard','Malgun Gothic',sans-serif";
-      ctx.fillText(t.mark, x, y - 18);
-      ctx.font = "600 10px 'Pretendard','Malgun Gothic',sans-serif";
-      ctx.fillText(t.text, x, y - 6);
+      ctx.font = "bold 11px 'Pretendard','Malgun Gothic',sans-serif";
+      ctx.fillText(t.mark, x, top + 11);
+      ctx.font = "600 9.5px 'Pretendard','Malgun Gothic',sans-serif";
+      ctx.fillText(t.text, x, top + 21);
     });
     ctx.restore();
   }
