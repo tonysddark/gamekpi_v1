@@ -220,6 +220,7 @@
   <span class="period-label" id="periodLabel"></span>
   <div class="spacer"></div>
   <button class="btn icon" id="themeBtn" title="다크/라이트 모드 전환">🌙</button>
+  <button class="btn" id="gameSheetBtn" title="구글시트로 게임 KPI 데이터 관리">🎮 게임 시트</button>
   <button class="btn" id="sheetBtn" title="구글시트로 이벤트/프로모션 관리">📅 이벤트 시트</button>
   <button class="btn primary" onclick="document.getElementById('fileInput').click()">📂 데이터 업로드 (.xlsx)</button>
   <button class="btn" id="resetBtn" title="업로드 데이터를 모두 지우고 기본 데이터로 돌아갑니다">초기화</button>
@@ -292,8 +293,8 @@
 </div>
 
 <p class="footer-note">
-  엑셀 파일을 화면에 드래그하거나 <b>데이터 업로드</b> 버튼으로 게임 추가/갱신 (여러 파일 동시 가능) ·
-  파일명 앞부분(gbtw, potc…)으로 게임을 자동 구분 · 데이터는 이 브라우저(localStorage)에만 저장됩니다
+  🎮 <b>게임 시트</b>: 구글시트로 KPI 데이터 관리 (열 때마다 자동 동기화) · 📂 xlsx 드래그 업로드도 가능 (파일명으로 게임 자동 구분) ·
+  데이터는 이 브라우저(localStorage)에만 저장됩니다
 </p>
 
 <div id="dropOverlay">엑셀 파일을 여기에 놓으세요 (여러 개 가능)</div>
@@ -378,6 +379,41 @@
   </div>
 </div>
 
+<!-- 게임 KPI 시트 관리 모달 -->
+<div class="modal-overlay" id="gameSheetModal">
+  <div class="modal">
+    <div class="m-head">
+      <h3>🎮 게임 데이터 시트 관리</h3>
+      <div class="file">게임별 KPI 데이터를 구글시트로 관리합니다 · 대시보드를 열 때마다 자동 동기화</div>
+    </div>
+    <div class="m-body">
+      <div class="m-sec">
+        <h4>등록된 게임 <span class="sub">동기화하면 해당 게임 데이터가 시트 내용으로 교체됩니다</span></h4>
+        <div id="gsList"></div>
+      </div>
+      <div class="m-sec">
+        <h4>신규 게임 추가</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="gsName" placeholder="게임명 (예: GBTW)"
+            style="width:140px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px">
+          <input id="gsUrl" placeholder="구글시트 URL"
+            style="flex:1;min-width:220px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px">
+          <button class="btn primary" id="gsAdd">추가 &amp; 동기화</button>
+        </div>
+        <div class="m-empty" style="line-height:1.8">
+          · 시트 1행 헤더(엑셀 내보내기와 동일): <b>datekey | DAU | 전체 IAP 매출 | 자체 결제 매출 | 자체 결제 매출 비중 | 자체 결제 PU | 자체 결제 ARPPU | 자체 결제 ARPDAU</b><br>
+          · datekey는 날짜(2026-06-30)와 엑셀 숫자값 모두 인식 · 공유: "링크가 있는 모든 사용자 - 뷰어"<br>
+          · 팁: 엑셀 파일을 구글시트에서 열어 그대로 두면 됩니다 (파일 &gt; 가져오기)
+        </div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn" id="gsSyncAll" style="margin-right:auto">🔄 전체 동기화</button>
+      <button class="btn primary" id="gsClose">닫기</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ================= 기본 데이터 (GBTW 2026-01-01 ~ 2026-06-30) ================= */
 const DEFAULT_GAME = "GBTW";
@@ -395,6 +431,7 @@ let events = [];          // [{game,start,end,type,title,memo}]
 let eventSheetUrl = "";
 let lastSync = "";
 let viewMode = "dash";    // dash | events
+let gameSheets = {};      // { 게임명: 구글시트 URL } — KPI 데이터 소스
 
 const GAME_COLORS = ["#4f8cff", "#34d399", "#c084fc", "#fbbf24", "#f87171", "#22d3ee", "#fb923c", "#a3e635"];
 const RANK_MARKS = ["①", "②", "③", "④", "⑤"];
@@ -425,6 +462,7 @@ function loadState() {
       events = saved.events || [];
       eventSheetUrl = saved.eventSheetUrl || "";
       lastSync = saved.lastSync || "";
+      gameSheets = saved.gameSheets || {};
       activeGame = saved.activeGame && (saved.activeGame === "ALL" || games[saved.activeGame])
         ? saved.activeGame : Object.keys(games)[0];
       return;
@@ -435,7 +473,7 @@ function loadState() {
 }
 function saveState() {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ games, target: targetPct, theme, activeGame, events, eventSheetUrl, lastSync }));
+    localStorage.setItem(LS_KEY, JSON.stringify({ games, target: targetPct, theme, activeGame, events, eventSheetUrl, lastSync, gameSheets }));
   } catch (e) {}
 }
 function toast(msg) {
@@ -726,8 +764,8 @@ function renderCards() {
   if (!s.length) {
     document.getElementById("cards").innerHTML = `
       <div class="card hero" style="grid-column:1/-1;text-align:center;padding:28px">
-        <div class="value" style="font-size:18px">📂 우측 상단 <b>데이터 업로드</b> 버튼으로 게임 KPI 엑셀(.xlsx)을 올려주세요</div>
-        <div class="delta flat" style="margin-top:8px">업로드한 데이터는 이 브라우저(localStorage)에만 저장되며 서버로 전송되지 않습니다 · 여러 게임 파일을 한 번에 드래그해도 됩니다</div>
+        <div class="value" style="font-size:18px">🎮 <b>게임 시트</b> 버튼으로 구글시트를 연결하거나, 📂 <b>데이터 업로드</b>로 엑셀(.xlsx)을 올려주세요</div>
+        <div class="delta flat" style="margin-top:8px">구글시트 연결 시 열 때마다 자동 동기화 · 데이터는 이 브라우저(localStorage)에만 저장됩니다</div>
       </div>`;
     return;
   }
@@ -1234,8 +1272,9 @@ function renderTabs() {
     el.addEventListener("click", e => {
       e.stopPropagation();
       const g = el.dataset.del;
-      if (!confirm(`${g} 데이터를 삭제할까요?`)) return;
+      if (!confirm(`${g} 데이터를 삭제할까요?${gameSheets[g] ? "\n(구글시트 등록도 함께 해제됩니다)" : ""}`)) return;
       delete games[g];
+      delete gameSheets[g];
       if (activeGame === g || (activeGame === "ALL" && Object.keys(games).length <= 1)) {
         activeGame = Object.keys(games)[0] || "ALL";
       }
@@ -1337,12 +1376,9 @@ document.getElementById("themeBtn").addEventListener("click", () => {
 function excelDate(serial) {
   return new Date(Date.UTC(1899, 11, 30) + serial * 86400000).toISOString().slice(0, 10);
 }
-function parseWorkbook(buf, fileName) {
-  const wb = XLSX.read(buf, { type: "array" });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+/* KPI 그리드 공용 파서: xlsx(sheet_to_json)와 구글시트 CSV 모두 처리 */
+function parseKpiGrid(grid) {
   if (!grid.length) throw new Error("빈 시트입니다.");
-
   const header = grid[0].map(h => String(h || "").trim());
   const idx = {};
   header.forEach((h, i) => {
@@ -1357,26 +1393,32 @@ function parseWorkbook(buf, fileName) {
     else if (n.includes("자체") && n.includes("매출")) idx.d2c = i;
   });
   if (idx.date == null || idx.iap == null || idx.d2c == null)
-    throw new Error("필수 컬럼(datekey / 전체 IAP 매출 / 자체 결제 매출)을 찾지 못했습니다.\n인식된 헤더: " + header.join(", "));
+    throw new Error("필수 컬럼(datekey / 전체 IAP 매출 / 자체 결제 매출)을 찾지 못했습니다. 인식된 헤더: " + header.join(", "));
 
+  const toNum = v => {
+    if (v == null || v === "") return null;
+    if (typeof v === "number") return isNaN(v) ? null : v;
+    const n = Number(String(v).replace(/[,%₩원\s]/g, ""));
+    return isNaN(n) ? null : n;
+  };
   const rows = [];
   for (let i = 1; i < grid.length; i++) {
     const g = grid[i];
     if (!g || g[idx.date] == null || g[idx.date] === "") continue;
-    let date;
     const dv = g[idx.date];
+    let date = null;
     if (typeof dv === "number") date = excelDate(dv);
     else {
-      const m = String(dv).match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})/);
-      if (!m) continue;
-      date = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+      date = normDate(dv);
+      if (!date) { const n = toNum(dv); if (n && n > 20000 && n < 80000) date = excelDate(n); }
     }
-    const num = j => (j == null || g[j] == null || g[j] === "") ? null : Number(g[j]);
+    if (!date) continue;
+    const num = j => j == null ? null : toNum(g[j]);
     const iap = num(idx.iap), d2c = num(idx.d2c);
     if (iap == null || d2c == null) continue;
     let ratio = num(idx.ratio);
     if (ratio == null) ratio = iap ? d2c / iap : 0;
-    if (ratio > 1.5) ratio = ratio / 100;
+    if (ratio > 1.5) ratio = ratio / 100; // % 표기(33.8) 대응
     rows.push({
       date, dau: num(idx.dau), iap: Math.round(iap), d2c: Math.round(d2c),
       ratio: Math.round(ratio * 10000) / 10000,
@@ -1385,9 +1427,70 @@ function parseWorkbook(buf, fileName) {
     });
   }
   if (!rows.length) throw new Error("유효한 데이터 행이 없습니다.");
+  return rows;
+}
 
+function parseWorkbook(buf, fileName) {
+  const wb = XLSX.read(buf, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+  const rows = parseKpiGrid(grid);
   const gm = fileName.match(/^([a-zA-Z0-9]+)[_\-]/);
   return { rows, game: gm ? gm[1].toUpperCase() : null };
+}
+
+/* ---- 게임 KPI 구글시트 동기화 ---- */
+async function syncGameSheet(name) {
+  const csv = sheetCsvUrl(gameSheets[name]);
+  if (!csv) throw new Error("시트 URL 형식을 인식하지 못했습니다.");
+  const res = await fetch(csv);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const rows = parseKpiGrid(parseCsv(await res.text()));
+  games[name] = rows;
+  return rows.length;
+}
+async function syncAllGameSheets(silent) {
+  const names = Object.keys(gameSheets);
+  if (!names.length) return;
+  const ok = [], fail = [];
+  for (const n of names) {
+    try { ok.push(`${n} ${await syncGameSheet(n)}일`); }
+    catch (e) { fail.push(`${n}(${e.message})`); }
+  }
+  if (ok.length) { saveState(); renderAll(); }
+  if (!silent) {
+    if (ok.length) toast(`🔄 시트 동기화: ${ok.join(" · ")}${fail.length ? " / 실패: " + fail.join(", ") : ""}`);
+    else if (fail.length) alert("시트 동기화 실패: " + fail.join(", ") +
+      '\n\n시트 공유가 "링크가 있는 모든 사용자: 뷰어"인지, 헤더가 엑셀 포맷과 같은지 확인하세요.');
+  }
+}
+function renderGsList() {
+  const el = document.getElementById("gsList");
+  const names = Object.keys(gameSheets);
+  el.innerHTML = names.length ? names.map(n => `
+    <div class="ev-item" style="display:flex;align-items:center;gap:10px;padding:9px 12px">
+      <b style="min-width:56px">${n}</b>
+      <span style="flex:1;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${gameSheets[n]}</span>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap">${games[n] ? games[n].length + "일" : "-"}</span>
+      <button class="btn" data-gssync="${n}" style="padding:4px 10px;font-size:12px">동기화</button>
+      <button class="btn" data-gsdel="${n}" style="padding:4px 10px;font-size:12px">삭제</button>
+    </div>`).join("") : '<div class="m-empty">등록된 게임 시트가 없습니다. 아래에서 추가하세요.</div>';
+  el.querySelectorAll("[data-gssync]").forEach(b => b.addEventListener("click", async () => {
+    b.textContent = "…";
+    try {
+      const days = await syncGameSheet(b.dataset.gssync);
+      saveState(); renderAll(); renderGsList();
+      toast(`🔄 ${b.dataset.gssync} ${days}일 동기화 완료`);
+    } catch (e) { alert(`${b.dataset.gssync} 동기화 실패: ` + e.message); b.textContent = "동기화"; }
+  }));
+  el.querySelectorAll("[data-gsdel]").forEach(b => b.addEventListener("click", () => {
+    const n = b.dataset.gsdel;
+    if (!confirm(`${n} 시트 등록과 데이터를 삭제할까요?`)) return;
+    delete gameSheets[n];
+    delete games[n];
+    if (activeGame === n) activeGame = Object.keys(games)[0] || "ALL";
+    saveState(); renderAll(); renderGsList();
+  }));
 }
 
 /* ---- 병합 계획: 신규 / 중복(동일) / 중복(값 다름) 분류 ---- */
@@ -1530,7 +1633,7 @@ window.addEventListener("drop", e => {
 
 /* 초기화 */
 document.getElementById("resetBtn").addEventListener("click", () => {
-  if (!confirm("업로드한 모든 게임 데이터를 지웁니다.\n(이벤트 시트 연결은 유지됩니다)")) return;
+  if (!confirm("모든 게임 데이터를 지웁니다.\n(게임 시트 등록·이벤트 시트 연결은 유지되며, 등록된 시트는 다음 동기화 때 다시 불러옵니다)")) return;
   games = DEFAULT_DATA.length ? { [DEFAULT_GAME]: [...DEFAULT_DATA] } : {};
   activeGame = Object.keys(games)[0] || "ALL";
   saveState();
@@ -1595,6 +1698,39 @@ document.getElementById("sheetModal").addEventListener("click", e => {
   if (e.target.id === "sheetModal") e.target.classList.remove("show");
 });
 
+/* 게임 KPI 시트 모달 */
+document.getElementById("gameSheetBtn").addEventListener("click", () => {
+  renderGsList();
+  document.getElementById("gameSheetModal").classList.add("show");
+});
+document.getElementById("gsClose").addEventListener("click", () =>
+  document.getElementById("gameSheetModal").classList.remove("show"));
+document.getElementById("gameSheetModal").addEventListener("click", e => {
+  if (e.target.id === "gameSheetModal") e.target.classList.remove("show");
+});
+document.getElementById("gsSyncAll").addEventListener("click", async () => {
+  await syncAllGameSheets(false);
+  renderGsList();
+});
+document.getElementById("gsAdd").addEventListener("click", async () => {
+  const name = document.getElementById("gsName").value.trim().toUpperCase();
+  const url = document.getElementById("gsUrl").value.trim();
+  if (!name || !url) { alert("게임명과 시트 URL을 모두 입력하세요."); return; }
+  gameSheets[name] = url;
+  try {
+    const days = await syncGameSheet(name);
+    activeGame = name;
+    saveState(); renderAll(); renderGsList();
+    document.getElementById("gsName").value = "";
+    document.getElementById("gsUrl").value = "";
+    toast(`✅ ${name} ${days}일 데이터 연결 완료`);
+  } catch (e) {
+    delete gameSheets[name];
+    alert(`${name} 연결 실패: ` + e.message +
+      '\n\n확인할 것:\n1) 시트 공유가 "링크가 있는 모든 사용자: 뷰어"인지\n2) 1행 헤더가 엑셀 포맷(datekey, DAU, 전체 IAP 매출...)과 같은지\n3) 브라우저에서 직접 열었는지 (미리보기 패널은 외부 요청 차단 가능)');
+  }
+});
+
 /* 이벤트 상세 모달 닫기 */
 document.getElementById("evClose").addEventListener("click", () =>
   document.getElementById("eventModal").classList.remove("show"));
@@ -1608,6 +1744,7 @@ applyTheme();
 document.getElementById("targetInput").value = targetPct;
 renderAll();
 if (eventSheetUrl) syncEvents(true); // 시트 연결되어 있으면 자동 동기화
+if (Object.keys(gameSheets).length) syncAllGameSheets(true); // 게임 KPI 시트 자동 동기화
 </script>
 </body>
 </html>
