@@ -226,7 +226,7 @@
   <div class="cards" id="dailyStats" style="margin-bottom:14px"></div>
   <div class="chart-box" style="height:300px"><canvas id="chDaily"></canvas></div>
   <div id="dailyTable" style="max-height:320px;overflow:auto;margin-top:12px"></div>
-  <div style="color:var(--muted);font-size:12px;margin-top:8px">막대=선택 채널 일매출 / 초록선=누적 실적 / 노란 점선=누적 목표. 채널 선택 시 목표는 "월 목표 × 최근 30일 그 채널의 매출 비중"으로 배분되고, 목표 PU·ARPPU도 그 채널의 최근 30일 실적을 기준으로 계산됩니다.</div>
+  <div style="color:var(--muted);font-size:12px;margin-top:8px">막대=선택 채널 일매출 / 초록선=누적 실적 / 노란 점선=누적 목표. 채널 선택 시 목표는 "월 목표 × <b>기준 월</b> 그 채널의 매출 비중"으로 배분되고, 목표 PU·ARPPU도 <b>기준 월(상단 📅)</b> 그 채널 실적을 기준으로 계산됩니다 — 시뮬레이터와 동일 기준.</div>
 </div>
 
 <!-- 과거 최고 실적일 TOP10 -->
@@ -255,11 +255,11 @@
 <!-- 차트 -->
 <div class="grid2">
   <div class="panel">
-    <h2>자체결제 비중 추이 <span>일별 + 7일 이동평균 + 목표선 (최근 30일)</span></h2>
+    <h2>자체결제 비중 추이 <span>일별 + 7일 이동평균 + 목표선 (최근 45일)</span></h2>
     <div class="chart-box"><canvas id="chRatio"></canvas></div>
   </div>
   <div class="panel">
-    <h2>자체결제 PU & ARPPU <span>일별 (최근 30일)</span></h2>
+    <h2>자체결제 PU & ARPPU <span>일별 (최근 45일)</span></h2>
     <div class="chart-box"><canvas id="chPu"></canvas></div>
   </div>
   <div class="panel">
@@ -746,12 +746,17 @@ function renderDaily(){
   const days = H2DAYS[m] || 31;
   const chRev = r => dChannel==="all" ? r.web_rev+r.apk_rev+r.pc_rev : r[dChannel+"_rev"];
   const chPu  = r => dChannel==="all" ? r.web_pu+r.apk_pu+r.pc_pu : r[dChannel+"_pu"];
-  // 채널 기준선(최근 30일)과 채널 목표 배분 (월 목표 × 채널 매출 비중)
-  const last30 = CHANNEL.slice(-30);
-  const b30rev = sum(last30,chRev), b30pu = sum(last30,chPu);
-  const all30rev = sum(last30, r=>r.web_rev+r.apk_rev+r.pc_rev);
-  const share = dChannel==="all" ? 1 : (all30rev ? b30rev/all30rev : 0);
-  const BASE30 = { puDay: last30.length?b30pu/last30.length:0, arppu: b30pu?b30rev/b30pu:0, d2cDay: last30.length?b30rev/last30.length:0 };
+  // 채널 기준선: 시뮬레이터와 동일하게 '기준 월'(curBase) 사용
+  const cb = curBase;
+  const baseLabel = MLABEL[cb.month];
+  let BASE30;
+  if(dChannel==="all"){
+    const pu = cb.web.pu + cb.apk.pu + cb.pc.pu; // 일평균 채널합 PU
+    BASE30 = { puDay: pu, arppu: pu ? cb.d2cDay/pu : 0, dayRev: cb.d2cDay };
+  } else {
+    BASE30 = { puDay: cb[dChannel].pu, arppu: cb[dChannel].arppu, dayRev: cb[dChannel].dayRev };
+  }
+  const share = dChannel==="all" ? 1 : (cb.d2cDay ? BASE30.dayRev/cb.d2cDay : 0);
   const monthTargetAll = Number($("dTarget").value)*1e8;
   const monthTarget = monthTargetAll * share;
   const dayT = monthTarget/days;
@@ -782,7 +787,7 @@ function renderDaily(){
   if(dScenario==="pu"){ tgtPu = BASE30.puDay; tgtArppu = tgtPu?dayT/tgtPu:0; }
   else if(dScenario==="bal"){ const s=Math.sqrt(Math.max(factor,0.01)); tgtArppu=BASE30.arppu*s; tgtPu=BASE30.puDay*s; }
   else { tgtArppu = BASE30.arppu; tgtPu = tgtArppu?dayT/tgtArppu:0; } // ARPPU 유지
-  const shareTxt = dChannel==="all" ? "" : ` · 채널 목표 = 월 목표 ${억(monthTargetAll)} × 최근 30일 ${CH_LABEL[dChannel]} 비중 ${(share*100).toFixed(0)}% = ${억(monthTarget)}`;
+  const shareTxt = dChannel==="all" ? "" : ` · 채널 목표 = 월 목표 ${억(monthTargetAll)} × ${baseLabel} ${CH_LABEL[dChannel]} 비중 ${(share*100).toFixed(0)}% = ${억(monthTarget)}`;
   const statsEl = document.getElementById("dailyStats");
   const el = document.getElementById("dailyTable");
   if(!rows.length){
@@ -817,7 +822,7 @@ function renderDaily(){
   el.innerHTML = `<table>
     <thead><tr><th>날짜</th><th>${CH_LABEL[dChannel]} 일매출</th><th>누적</th><th>PU (달성률)</th><th>ARPPU (달성률)</th><th>목표 누적</th><th>매출 달성률</th></tr></thead>
     <tbody>${body}</tbody></table>
-    <div style="font-size:12px;color:var(--muted);margin-top:6px">${rows.length}일 경과 · 현 페이스 월말 착지 ${억(actRev/rows.length*days)} · 시나리오: ${SCEN_LABEL[dScenario]} (기준 최근 30일 ${CH_LABEL[dChannel]} PU ${N(BASE30.puDay)}명·ARPPU ${만(BASE30.arppu)}원)${shareTxt}</div>`;
+    <div style="font-size:12px;color:var(--muted);margin-top:6px">${rows.length}일 경과 · 현 페이스 월말 착지 ${억(actRev/rows.length*days)} · 시나리오: ${SCEN_LABEL[dScenario]} (기준 ${baseLabel} ${CH_LABEL[dChannel]} PU ${N(BASE30.puDay)}명·ARPPU ${만(BASE30.arppu)}원)${shareTxt}</div>`;
 }
 const SCEN_LABEL = { arppu:"ARPPU 유지·PU 성장", pu:"PU 유지·ARPPU 성장", bal:"균형(둘 다 성장)" };
 
