@@ -321,7 +321,7 @@ async function fetchGrid(url, tab, tq) {
   if (!res.ok) throw new Error("HTTP " + res.status);
   return parseCsvText(await res.text());
 }
-const KNOWN_CODES = ["POTC","GBTW","IMGN","RESU"]; // index 탭 없을 때 프로빙 후보 풀
+const KNOWN_CODES = ["POTC","GBTW","IMGN","RESU","WWM","DS"]; // index 탭 없을 때 프로빙 후보 풀
 const headerOf = grid => (grid[0]||[]).map(h=>String(h||"").trim().toLowerCase());
 const isDetailGrid = grid => headerOf(grid).some(h=>h.includes("market_name"));
 
