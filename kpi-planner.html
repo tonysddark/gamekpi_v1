@@ -204,7 +204,7 @@
     </select>
   </h2>
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
-    <label style="font-size:13px;color:var(--muted)">월 목표 자체결제 <input type="number" id="dTarget" step="0.5" min="0" style="width:80px"> 억</label>
+    <label style="font-size:13px;color:var(--muted)">월 목표 자체결제 <input type="number" id="dTarget" readonly title="하반기 월별 목표 표의 해당 월 값과 자동 연동됩니다" style="width:80px;background:var(--panel);opacity:.75;cursor:not-allowed"> 억 <span id="dTargetSrc" style="font-size:11px;color:var(--accent)"></span></label>
     <div style="display:flex;align-items:center;gap:8px">
       <b style="font-size:12px;color:var(--muted)">채널(복수)</b>
       <span style="display:inline-flex;gap:10px;font-size:13px">
@@ -794,7 +794,9 @@ function renderDaily(){
   const chPu  = r => chs.reduce((s,k)=>s+r[k+"_pu"],0);
   const base = chanBase();
   const share = chanShare();
-  const monthTargetAll = Number($("dTarget").value)*1e8;
+  const monthTargetAll = targetOf(m).tD2c; // 하반기 목표표의 해당 월 목표 자체결제와 연동
+  $("dTarget").value = (monthTargetAll/1e8).toFixed(1);
+  $("dTargetSrc").textContent = `(하반기 목표 ${(+m.slice(5))}월 연동)`;
   const monthTarget = monthTargetAll * share;
   const dayT = monthTarget/days;
 
@@ -879,8 +881,7 @@ document.querySelectorAll("#bestSeg button").forEach(b=>b.addEventListener("clic
   document.querySelectorAll("#bestSeg button").forEach(x=>x.classList.remove("active"));
   b.classList.add("active"); bestMode=b.dataset.b; renderBest();
 }));
-$("trackMonth").addEventListener("change",()=>{ $("dTarget").value=(targetOf($("trackMonth").value).tD2c/1e8).toFixed(1); renderDaily(); });
-$("dTarget").addEventListener("input",renderDaily);
+$("trackMonth").addEventListener("change", renderDaily); // 월 목표는 renderDaily가 하반기 목표에서 자동 반영
 /* 채널·시나리오 공유 컨트롤 — 두 패널 동기화 후 관련 뷰 재렌더 */
 function rerenderPlanning(){ renderDaily(); updateTargetCells(); drawTargetChart(); drawTrendChart(); }
 document.querySelectorAll(".chanChk").forEach(chk=>chk.addEventListener("change",()=>{
@@ -1050,8 +1051,7 @@ function initRender(){
   renderTargets();
   drawBaseCharts();
   drawTrendChart();
-  $("dTarget").value = (targetOf($("trackMonth").value).tD2c/1e8).toFixed(1);
-  renderDaily();
+  renderDaily(); // 월 목표 자체결제는 하반기 목표표에서 자동 반영
   renderBest();
   renderSim();
 }
