@@ -314,13 +314,14 @@ function normDate(s) {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
   return null;
 }
-async function fetchGrid(url, tab) {
+async function fetchGrid(url, tab, tq) {
   const u = sheetTabCsvUrl(url, tab);
   if (!u) throw new Error("시트 URL 형식을 인식하지 못했습니다.");
-  const res = await fetch(u + "&_t=" + Date.now(), { cache: "no-store" });
+  const res = await fetch(u + (tq ? "&tq=" + encodeURIComponent(tq) : "") + "&_t=" + Date.now(), { cache: "no-store" });
   if (!res.ok) throw new Error("HTTP " + res.status);
   return parseCsvText(await res.text());
 }
+const KNOWN_CODES = ["POTC","GBTW","IMGN","RESU"]; // index 탭 없을 때 프로빙 후보 풀
 const headerOf = grid => (grid[0]||[]).map(h=>String(h||"").trim().toLowerCase());
 const isDetailGrid = grid => headerOf(grid).some(h=>h.includes("market_name"));
 
@@ -336,17 +337,23 @@ async function loadGames(url) {
       if (codes.length) return [...new Set(codes)];
     }
   } catch(e) {}
-  // 폴백: events(첫 탭)의 game 열에서 게임코드 수집
-  const grid = await fetchGrid(url, "events");
-  const h = headerOf(grid);
-  const gi = Math.max(0, h.findIndex(x=>x.includes("game")||x.includes("게임")));
-  const codes = new Set();
-  for (let i=1;i<grid.length;i++){
-    const g=String(grid[i][gi]||"").trim().toUpperCase();
-    if (g && g!=="ALL") codes.add(g);
-  }
-  if (!codes.size) throw new Error("index 탭이 없고 events에서도 게임코드를 찾지 못했습니다.");
-  return [...codes];
+  // 폴백: 후보 풀(events 게임 ∪ 알려진 코드)에서 `코드-kpi` 탭 존재를 가볍게 프로빙
+  const pool = new Set(KNOWN_CODES);
+  try {
+    const grid = await fetchGrid(url, "events");
+    const gi = Math.max(0, headerOf(grid).findIndex(x=>x.includes("game")||x.includes("게임")));
+    for (let i=1;i<grid.length;i++){
+      const g=String(grid[i][gi]||"").trim().toUpperCase();
+      if (g && g!=="ALL") pool.add(g);
+    }
+  } catch(e) {}
+  const checks = await Promise.all([...pool].map(async c => {
+    try { return isDetailGrid(await fetchGrid(url, c + "-kpi", "limit 1")) ? c : null; }
+    catch(e){ return null; }
+  }));
+  const codes = checks.filter(Boolean).sort();
+  if (!codes.length) throw new Error("게임 상세(-kpi) 탭을 찾지 못했습니다. index 탭(game 열에 게임코드 나열)을 만들면 정확히 인식됩니다.");
+  return codes;
 }
 /* 상세 탭(`코드-kpi`) 로드 */
 async function loadDetail(url, code) {
@@ -1021,6 +1028,11 @@ async function boot(url){
     }
     if (!loaded) throw new Error("상세(-kpi) 탭을 가진 게임이 없습니다.<br>" + errs.join("<br>"));
     localStorage.setItem("kpiplanner-sheet", url);
+    // 메인 대시보드와 시트 URL 공유 (masterSheetUrl)
+    try {
+      const s = JSON.parse(localStorage.getItem(DASH_LS)) || {};
+      if (s.masterSheetUrl !== url) { s.masterSheetUrl = url; localStorage.setItem(DASH_LS, JSON.stringify(s)); }
+    } catch(e) {}
   } catch(e) {
     showSetup("❌ " + e.message + '<br><br>시트 공유("링크가 있는 모든 사용자: 뷰어")와 <b>코드-kpi</b> 탭 존재 여부를 확인한 뒤 다시 연결하세요.');
   }
@@ -1035,9 +1047,14 @@ document.getElementById("setupGo").addEventListener("click", ()=>{
   boot(url);
 });
 
-/* 시작 */
+/* 시작 — ?sheet= 파라미터 > 저장된 URL 순서 */
 (function(){
-  const url = getMasterUrl();
+  let url = "";
+  try {
+    const p = new URLSearchParams(location.search).get("sheet");
+    if (p) { url = p.trim(); history.replaceState(null, "", location.pathname); }
+  } catch(e) {}
+  if (!url) url = getMasterUrl();
   if (url) { document.getElementById("setupUrl") && (document.getElementById("setupUrl").value = url); boot(url); }
   else showSetup("연결된 시트가 없습니다. 메인 대시보드의 🎮 게임 시트에서 <b>메인 시트</b>를 연결했다면 자동으로 이어지며, 아니면 아래에 시트 URL을 직접 입력하세요.");
 })();
