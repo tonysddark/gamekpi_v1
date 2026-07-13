@@ -643,8 +643,8 @@ function drawBaseCharts(){
     plugins:{tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}}}}});
 
   puChart = upsertChart(puChart, "chPu", {data:{labels,datasets:[
-    {type:"line",label:"ARPPU(원)",data:KPI.map(r=>r.arppu),yAxisID:"y2",borderColor:"#c084fc",borderWidth:2,pointRadius:0,tension:.3},
-    {type:"bar",label:"PU(명)",data:KPI.map(r=>r.pu),yAxisID:"y",backgroundColor:"rgba(79,140,255,.7)",borderRadius:2},
+    {type:"line",label:"ARPPU(원)",data:KPI.map(r=>r.arppu),yAxisID:"y2",borderColor:"#c084fc",borderWidth:2,pointRadius:0,tension:.3,order:0},
+    {type:"bar",label:"PU(명)",data:KPI.map(r=>r.pu),yAxisID:"y",backgroundColor:"rgba(79,140,255,.7)",borderRadius:2,order:1},
   ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
     scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12}},y:{grid:{color:grid}},y2:{position:"right",grid:{display:false},ticks:{callback:v=>Math.round(v/1e4)+"만"}}},
     plugins:{tooltip:{callbacks:{label:c=>c.dataset.yAxisID==="y2"?` ARPPU: ${N(c.parsed.y)}원`:` PU: ${c.parsed.y}명`}}}}});
@@ -749,11 +749,11 @@ function drawTargetChart(){
   const lineAct = [...actRatio, ...H2.map(()=>null)];
   const lineTgt = [...actRatio.map((v,i)=>i===actRatio.length-1?v:null), ...tgtRatio];
   const data = { labels, datasets:[
-    {type:"bar",label:"실적 자체결제",data:barAct,backgroundColor:"#4f8cff",yAxisID:"y",borderRadius:2},
-    {type:"bar",label:"목표 자체결제",data:barTgt,backgroundColor:"rgba(192,132,252,.75)",yAxisID:"y",borderRadius:2},
-    {type:"line",label:"실적 비중",data:lineAct,borderColor:"#34d399",borderWidth:2.5,pointRadius:3,tension:.3,yAxisID:"y2"},
-    {type:"line",label:"목표 비중",data:lineTgt,borderColor:"#fbbf24",borderWidth:2.5,borderDash:[6,4],pointRadius:3,tension:.3,yAxisID:"y2"},
-    {type:"line",label:"50% 안착선",data:labels.map(()=>50),borderColor:"#f87171",borderWidth:1.5,borderDash:[3,3],pointRadius:0,yAxisID:"y2"},
+    {type:"bar",label:"실적 자체결제",data:barAct,backgroundColor:"#4f8cff",yAxisID:"y",borderRadius:2,order:1},
+    {type:"bar",label:"목표 자체결제",data:barTgt,backgroundColor:"rgba(192,132,252,.75)",yAxisID:"y",borderRadius:2,order:1},
+    {type:"line",label:"실적 비중",data:lineAct,borderColor:"#34d399",borderWidth:2.5,pointRadius:3,tension:.3,yAxisID:"y2",order:0},
+    {type:"line",label:"목표 비중",data:lineTgt,borderColor:"#fbbf24",borderWidth:2.5,borderDash:[6,4],pointRadius:3,tension:.3,yAxisID:"y2",order:0},
+    {type:"line",label:"50% 안착선",data:labels.map(()=>50),borderColor:"#f87171",borderWidth:1.5,borderDash:[3,3],pointRadius:0,yAxisID:"y2",order:0},
   ]};
   const opts = { responsive:true, maintainAspectRatio:false, interaction:{mode:"index",intersect:false},
     scales:{ x:{grid:{display:false}}, y:{grid:{color:grid},ticks:{callback:v=>(v/1e8).toFixed(1)+"억"}},
@@ -808,9 +808,9 @@ function renderDaily(){
   const cumAct = labels.map((_,i)=>i<rows.length?cumArr[i]:null);
   const cumTgt = labels.map((_,i)=>dayT*(i+1));
   const data = {labels,datasets:[
-    {type:"bar",label:`${lbl} 일매출`,data:dailyRev,backgroundColor:chanColor(),yAxisID:"y",borderRadius:2},
-    {type:"line",label:"누적 실적",data:cumAct,borderColor:"#34d399",borderWidth:2.5,pointRadius:0,tension:.2,yAxisID:"y2"},
-    {type:"line",label:"누적 목표",data:cumTgt,borderColor:"#fbbf24",borderWidth:2,borderDash:[6,4],pointRadius:0,yAxisID:"y2"},
+    {type:"bar",label:`${lbl} 일매출`,data:dailyRev,backgroundColor:chanColor(),yAxisID:"y",borderRadius:2,order:1},
+    {type:"line",label:"누적 실적",data:cumAct,borderColor:"#34d399",borderWidth:2.5,pointRadius:0,tension:.2,yAxisID:"y2",order:0},
+    {type:"line",label:"누적 목표",data:cumTgt,borderColor:"#fbbf24",borderWidth:2,borderDash:[6,4],pointRadius:0,yAxisID:"y2",order:0},
   ]};
   const opts = {responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
     scales:{x:{grid:{display:false},ticks:{maxTicksLimit:16}},
@@ -1011,6 +1011,7 @@ function drawTrendChart(){
     if(anyT) datasets.push({type:"line",label:"자체결제 비중(목표)",data:R.tgt,borderColor:"#fbbf24",borderWidth:2.5,borderDash:[6,4],pointRadius:3,tension:.3,yAxisID:"y2"});
   }
   const hasRatio = datasets.some(d=>d.yAxisID==="y2");
+  datasets.forEach(d=>d.order = d.type==="line" ? 0 : 1); // 선을 막대 위로
   const data = {labels,datasets};
   const opts = {responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
     scales:{x:{grid:{display:false},stacked:true,ticks:{maxTicksLimit:trendPeriod==="all"?18:12,autoSkip:true}},
