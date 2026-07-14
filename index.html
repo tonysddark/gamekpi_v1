@@ -6,6 +6,7 @@
 <title>자체결제 KPI 대시보드</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="assets/gsheet.js"></script>
 <style>
   :root {
     --bg: #0f1420;
@@ -527,8 +528,12 @@ const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 �
 
 /* ================= 버전 ================= */
 /* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
-const APP_VERSION = "1.11.0";
+const APP_VERSION = "1.12.0";
 const VERSION_HISTORY = [
+  { ver: "1.12.0", date: "2026-07-13", type: "기능", changes: [
+    "공통 데이터 계층 분리 (assets/gsheet.js) — 시트 접근·CSV·날짜/숫자 파싱·게임코드를 한 곳에서 관리(대시보드·플래너 공유)",
+    "버그 수정: 일별 트래킹 NaN 방어, 주별 그룹 타임존 -1일, 채널 0나눗셈, 엑셀 시리얼 날짜 지원, 스냅샷 모달 부트 경쟁",
+  ]},
   { ver: "1.11.0", date: "2026-07-13", type: "기능", changes: [
     "플래너 일별 차트(비중 추이·PU & ARPPU) 기간 선택 추가 (30/45/90/180일/전체)",
   ]},
@@ -712,7 +717,8 @@ function movingAvg(arr, w) {
 function weekKey(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
   d.setDate(d.getDate() - (d.getDay() + 6) % 7); // 월요일로
-  return d.toISOString().slice(0, 10);
+  // 로컬 기준으로 포맷 (toISOString은 UTC 변환으로 KST에서 하루 앞당겨짐)
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 function weeklyAgg(rows) {
   const weeks = {};
@@ -748,59 +754,11 @@ function typeColor(t) {
   if (t.includes("점검") || t.includes("이슈") || t.includes("장애")) return "#f87171";
   return "#8b96ad";
 }
-function sheetCsvUrl(url) {
-  url = String(url).trim();
-  // 이미 CSV 엔드포인트면 그대로 사용 (탭 이름 지정 URL 등)
-  if (/gviz\/tq|output=csv/.test(url)) return url;
-  // "파일 > 공유 > 웹에 게시" 링크 (CORS 가장 안정적)
-  if (url.includes("/d/e/2PACX")) {
-    if (/output=csv/.test(url)) return url;
-    const base = url.split(/[?#]/)[0].replace(/\/pubhtml.*$/, "/pub").replace(/\/pub\/?$/, "/pub");
-    const gid = (url.match(/[#&?]gid=(\d+)/) || [])[1];
-    return `${base.endsWith("/pub") ? base : base + "/pub"}?output=csv${gid ? `&gid=${gid}` : ""}`;
-  }
-  const m = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
-  if (!m) return null;
-  const gid = (url.match(/[#&?]gid=(\d+)/) || [])[1];
-  return `https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv${gid ? `&gid=${gid}` : ""}`;
-}
-/* 스프레드시트 URL + 탭 이름 → 해당 탭의 CSV URL */
-function sheetTabCsvUrl(url, tab) {
-  const m = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
-  if (!m) return null;
-  return `https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
-}
-function parseCsv(text) {
-  const rows = []; let row = [], field = "", q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) {
-      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
-      else field += c;
-    }
-    else if (c === '"') q = true;
-    else if (c === ",") { row.push(field); field = ""; }
-    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
-    else if (c !== "\r") field += c;
-  }
-  if (field !== "" || row.length) { row.push(field); rows.push(row); }
-  return rows;
-}
-function normDate(s) {
-  const str = String(s || "").trim();
-  // 2026-06-30 / 2026.6.30 / 2026/06/30
-  let m = str.match(/(\d{4})[.\-\/\s]+(\d{1,2})[.\-\/\s]+(\d{1,2})/);
-  if (m) return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
-  // 06/30/2026 (미국식 MM/DD/YYYY)
-  m = str.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{4})$/);
-  if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
-  // "June 30, 2026" 등 영문 날짜: Date 파서 폴백
-  const d = new Date(str);
-  if (!isNaN(d) && d.getFullYear() > 2000 && d.getFullYear() < 2100) {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
-  return null;
-}
+/* 공통 데이터 계층(assets/gsheet.js) 별칭 — 한 곳에서 관리 */
+const sheetCsvUrl    = GSheet.csvUrl;
+const sheetTabCsvUrl = GSheet.tabCsvUrl;
+const parseCsv       = GSheet.parseCsv;
+const normDate       = GSheet.normDate;
 async function syncEvents(silent) {
   if (!eventSheetUrl) return;
   const url = sheetCsvUrl(eventSheetUrl);
@@ -1667,14 +1625,8 @@ async function syncGameSheet(name) {
 }
 
 /* ---- 게임코드 발견: index 탭 → 폴백: 후보 풀에서 요약 탭 존재 프로빙 ---- */
-const KNOWN_CODES = ["POTC","GBTW","IMGN","RESU","WWM","DS"];
-async function fetchTabGrid(url, tab, tq) {
-  const u = sheetTabCsvUrl(url, tab);
-  if (!u) throw new Error("시트 URL 형식을 인식하지 못했습니다.");
-  const res = await fetch(u + (tq ? "&tq=" + encodeURIComponent(tq) : "") + "&_t=" + Date.now(), { cache: "no-store" });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  return parseCsv(await res.text());
-}
+const KNOWN_CODES = GSheet.KNOWN_CODES;           // 공통 모듈에서 관리
+const fetchTabGrid = GSheet.fetchTab;             // (url, tab, tq) → grid
 async function readIndexTab(url) {
   // 1) index 탭 시도
   try {
@@ -2166,9 +2118,11 @@ async function checkServerSnapshot() {
     serverSnap = await res.json();
     if (!serverSnap || !serverSnap.ct) { serverSnap = null; return; }
     updateSnapStatus();
+    // 시트 로딩이 진행 중이면(마스터/개별 시트 연결됨) 스냅샷 자동 안내를 띄우지 않음 (부트 경쟁 방지)
+    const sheetPending = !!masterSheetUrl || Object.keys(gameSheets).length > 0;
     const hasData = Object.keys(games).length > 0;
-    if (!hasData) {
-      document.getElementById("snapModal").classList.add("show"); // 빈 화면이면 바로 불러오기 안내
+    if (!hasData && !sheetPending) {
+      document.getElementById("snapModal").classList.add("show"); // 데이터원 없고 빈 화면이면 불러오기 안내
     } else if (lastSnapshotLoaded && serverSnap.publishedAt !== lastSnapshotLoaded) {
       toast("📦 새 스냅샷이 게시되어 있습니다 — 헤더의 📦 스냅샷에서 불러오세요");
     }
