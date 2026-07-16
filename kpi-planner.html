@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>자체결제 안착 KPI 플래너</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="assets/gsheet.js"></script>
 <style>
   :root {
     --bg:#0f1420; --panel:#1a2132; --panel-2:#212a40; --border:#2c3752;
@@ -323,49 +324,14 @@ let GAMES = [];    // 게임코드 목록
 let CUR_GAME = "";
 let SHEET_URL = "";
 
-function sheetTabCsvUrl(url, tab) {
-  const m = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
-  if (!m) return null;
-  return `https://docs.google.com/spreadsheets/d/${m[1]}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(tab)}`;
-}
-function parseCsvText(text) {
-  const rows = []; let row = [], field = "", q = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (q) { if (c === '"') { if (text[i+1] === '"') { field += '"'; i++; } else q = false; } else field += c; }
-    else if (c === '"') q = true;
-    else if (c === ",") { row.push(field); field = ""; }
-    else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
-    else if (c !== "\r") field += c;
-  }
-  if (field !== "" || row.length) { row.push(field); rows.push(row); }
-  return rows;
-}
-function toNum(v) {
-  if (v == null || v === "") return null;
-  const n = Number(String(v).replace(/[,%₩원\s]/g, ""));
-  return isNaN(n) ? null : n;
-}
-function normDate(s) {
-  const str = String(s || "").trim();
-  let m = str.match(/(\d{4})[.\-\/\s]+(\d{1,2})[.\-\/\s]+(\d{1,2})/);
-  if (m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
-  m = str.match(/^(\d{1,2})[.\-\/](\d{1,2})[.\-\/](\d{4})$/);
-  if (m) return `${m[3]}-${m[1].padStart(2,"0")}-${m[2].padStart(2,"0")}`;
-  const d = new Date(str);
-  if (!isNaN(d) && d.getFullYear() > 2000 && d.getFullYear() < 2100)
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  return null;
-}
-async function fetchGrid(url, tab, tq) {
-  const u = sheetTabCsvUrl(url, tab);
-  if (!u) throw new Error("시트 URL 형식을 인식하지 못했습니다.");
-  const res = await fetch(u + (tq ? "&tq=" + encodeURIComponent(tq) : "") + "&_t=" + Date.now(), { cache: "no-store" });
-  if (!res.ok) throw new Error("HTTP " + res.status);
-  return parseCsvText(await res.text());
-}
-const KNOWN_CODES = ["POTC","GBTW","IMGN","RESU","WWM","DS"]; // index 탭 없을 때 프로빙 후보 풀
-const headerOf = grid => (grid[0]||[]).map(h=>String(h||"").trim().toLowerCase());
+/* 공통 데이터 계층(assets/gsheet.js) 별칭 — 한 곳에서 관리 */
+const sheetTabCsvUrl = GSheet.tabCsvUrl;
+const parseCsvText   = GSheet.parseCsv;
+const toNum          = GSheet.toNum;
+const normDate       = GSheet.normDate;
+const fetchGrid      = GSheet.fetchTab;
+const KNOWN_CODES    = GSheet.KNOWN_CODES;
+const headerOf       = GSheet.headerOf;
 const isDetailGrid = grid => headerOf(grid).some(h=>h.includes("market_name"));
 
 /* 게임코드 목록: index 탭 → 폴백: events 탭의 game 열 */
@@ -556,9 +522,9 @@ function renderCards(){
   <div class="card hero"><div class="l">자체결제 비중 (${MLABEL[b.month]})</div><div class="v">${P(b.ratio)}</div><div class="s">목표 50%까지 ${((0.5-b.ratio)*100).toFixed(1)}%p</div></div>
   <div class="card"><div class="l">자체결제 매출 (${MLABEL[b.month]})</div><div class="v">${억(b.d2c)}</div><div class="s">일평균 ${만(b.d2cDay)}원</div></div>
   <div class="card"><div class="l">전체 매출 (${MLABEL[b.month]})</div><div class="v">${억(b.total)}</div><div class="s">일평균 ${만(b.totalDay)}원</div></div>
-  <div class="card web"><div class="l">WEB상점 매출 (${MLABEL[b.month]})</div><div class="v">${억(w.rev)}</div><div class="s">자체결제의 ${(w.rev/b.d2c*100).toFixed(0)}%</div></div>
+  <div class="card web"><div class="l">WEB상점 매출 (${MLABEL[b.month]})</div><div class="v">${억(w.rev)}</div><div class="s">자체결제의 ${b.d2c?(w.rev/b.d2c*100).toFixed(0):"-"}%</div></div>
   <div class="card web"><div class="l">WEB상점 PU (일평균)</div><div class="v">${w.pu.toFixed(1)}<small> 명/일</small></div><div class="s">ARPPU ${만(w.arppu)}원</div></div>
-  <div class="card web"><div class="l">WEB상점 ARPPU</div><div class="v">${만(w.arppu)}<small> 원</small></div><div class="s">인게임(${만(apk.arppu)})의 ${(w.arppu/apk.arppu).toFixed(1)}배</div></div>
+  <div class="card web"><div class="l">WEB상점 ARPPU</div><div class="v">${만(w.arppu)}<small> 원</small></div><div class="s">인게임(${만(apk.arppu)})의 ${apk.arppu?(w.arppu/apk.arppu).toFixed(1):"-"}배</div></div>
 `;
 }
 
@@ -620,17 +586,20 @@ $("baseMonth").addEventListener("change", ()=>{
 
 /* ===== 7월 트래킹 ===== */
 function renderTrack(s){
-  const jul = KPI.filter(r=>r.date.startsWith("2026-07"));
+  const jul = KPI_ALL.filter(r=>r.date.startsWith("2026-07")); // 기간 슬라이스와 무관하게 전체에서 7월
   const elapsed = jul.length;
+  if(!elapsed){ $("track").innerHTML = `<div style="color:var(--muted);font-size:13px;padding:8px 2px">7월 실적 데이터가 아직 없습니다.</div>`; return; }
   const actD2c = sum(jul,r=>r.d2c), actIap = sum(jul,r=>r.iap);
   const paceTarget = s.tMonth/s.days*elapsed;      // 지금까지 왔어야 할 목표
   const landing = actD2c/elapsed*s.days;           // 현재 페이스 월말 착지 전망
-  const pct = Math.min(100, actD2c/paceTarget*100);
+  const pct = paceTarget ? Math.min(100, actD2c/paceTarget*100) : 0;
+  const ratioTxt = actIap ? P(actD2c/actIap) : "-";
+  const landPct = s.tMonth ? (landing/s.tMonth*100).toFixed(0) : "0";
   $("track").innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px">
-      <div class="card"><div class="l">7월 누적 자체결제 (${elapsed}일)</div><div class="v">${억(actD2c)}</div><div class="s">누적 비중 ${P(actD2c/actIap)}</div></div>
+      <div class="card"><div class="l">7월 누적 자체결제 (${elapsed}일)</div><div class="v">${억(actD2c)}</div><div class="s">누적 비중 ${ratioTxt}</div></div>
       <div class="card"><div class="l">목표 페이스 (${elapsed}일 기준)</div><div class="v">${억(paceTarget)}</div><div class="s">월목표 ${억(s.tMonth)} × ${elapsed}/${s.days}일</div></div>
-      <div class="card ${landing>=s.tMonth?"hero":""}"><div class="l">월말 착지 전망 (현 페이스)</div><div class="v">${억(landing)}</div><div class="s">목표 대비 ${(landing/s.tMonth*100).toFixed(0)}%</div></div>
+      <div class="card ${landing>=s.tMonth?"hero":""}"><div class="l">월말 착지 전망 (현 페이스)</div><div class="v">${억(landing)}</div><div class="s">목표 대비 ${landPct}%</div></div>
     </div>
     <div class="gauge-wrap">
       <div class="gauge"><div class="fill" style="width:${pct}%"></div><div class="mark" style="left:100%"></div></div>
@@ -690,7 +659,7 @@ function renderChannelTable(){
   <table>
     <thead><tr><th>채널 (자체PG)</th><th>${MLABEL[b.month]} 매출</th><th>일평균 PU</th><th>ARPPU</th><th>비고</th></tr></thead>
     <tbody>
-      <tr><td>🛒 WEB상점</td><td>${억(w.rev)}</td><td>${w.pu.toFixed(1)}명</td><td><b style="color:var(--purple)">${만(w.arppu)}원</b></td><td style="text-align:left;color:var(--muted)">자체결제의 ${(w.rev/b.d2c*100).toFixed(0)}% — 주력 채널</td></tr>
+      <tr><td>🛒 WEB상점</td><td>${억(w.rev)}</td><td>${w.pu.toFixed(1)}명</td><td><b style="color:var(--purple)">${만(w.arppu)}원</b></td><td style="text-align:left;color:var(--muted)">자체결제의 ${b.d2c?(w.rev/b.d2c*100).toFixed(0):"-"}% — 주력 채널</td></tr>
       <tr><td>🎮 인게임(APK)</td><td>${억(apk.rev)}</td><td>${apk.pu.toFixed(1)}명</td><td>${만(apk.arppu)}원</td><td style="text-align:left;color:var(--muted)">소액·고빈도 결제</td></tr>
       <tr><td>💻 PC</td><td>${억(pc.rev)}</td><td>${pc.pu.toFixed(1)}명</td><td>${만(pc.arppu)}원</td><td style="text-align:left;color:var(--muted)"></td></tr>
     </tbody>
