@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>자체결제 안착 KPI 플래너</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="assets/gsheet.js"></script>
+<style>
+  :root {
+    --bg:#0f1420; --panel:#1a2132; --panel-2:#212a40; --border:#2c3752;
+    --text:#e8ecf5; --muted:#8b96ad; --accent:#4f8cff; --green:#34d399;
+    --peak:#fbbf24; --down:#f87171; --purple:#c084fc;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Pretendard','Malgun Gothic',sans-serif; padding:20px clamp(12px,3vw,36px) 60px; }
+  h1 { font-size:20px; margin-bottom:4px; }
+  h1 .draft { color:var(--peak); font-size:13px; font-weight:600; margin-left:8px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:16px; }
+  .banner {
+    background:var(--panel-2); border:1px solid var(--border); border-left:3px solid var(--peak);
+    border-radius:10px; padding:12px 16px; font-size:13px; line-height:1.8; margin-bottom:18px; color:var(--muted);
+  }
+  .banner b { color:var(--text); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:18px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:13px 15px; }
+  .card .l { font-size:12px; color:var(--muted); margin-bottom:5px; }
+  .card .v { font-size:21px; font-weight:700; }
+  .card .v small { font-size:12px; color:var(--muted); font-weight:500; }
+  .card .s { font-size:11px; color:var(--muted); margin-top:4px; }
+  .card.hero { border-color:var(--accent); background:linear-gradient(135deg,#1a2540,#1a2132); }
+  .card.hero .v { color:var(--accent); }
+  .card.web { border-color:var(--purple); }
+  .card.web .v { color:var(--purple); }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+  .panel h2 { font-size:15px; margin-bottom:14px; }
+  .panel h2 span { color:var(--muted); font-size:12px; font-weight:400; margin-left:8px; }
+  /* 시뮬레이터 */
+  .sim-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:18px; }
+  .sim-box { background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+  .sim-box h3 { font-size:13px; color:var(--muted); margin-bottom:12px; font-weight:600; }
+  .in-row { display:flex; align-items:center; gap:10px; margin-bottom:12px; font-size:13px; flex-wrap:wrap; }
+  .in-row label { min-width:110px; color:var(--muted); }
+  input[type=number], select {
+    background:var(--panel); border:1px solid var(--border); color:var(--text);
+    padding:7px 10px; border-radius:8px; font-size:14px; width:110px;
+  }
+  input[type=range] { flex:1; min-width:120px; accent-color:var(--accent); }
+  .range-val { min-width:74px; text-align:right; font-weight:700; font-size:15px; }
+  .result-big { font-size:15px; line-height:2.1; }
+  .result-big b { font-size:20px; color:var(--accent); }
+  .result-big .g { color:var(--green); } .result-big .r { color:var(--down); } .result-big .y { color:var(--peak); }
+  .scen-btns { display:flex; gap:8px; margin:10px 0; flex-wrap:wrap; }
+  .scen-btns button {
+    background:var(--panel); border:1px solid var(--border); color:var(--text);
+    padding:7px 12px; border-radius:8px; font-size:12px; cursor:pointer;
+  }
+  .scen-btns button:hover { border-color:var(--accent); color:var(--accent); }
+  .seg { background:var(--panel-2); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .seg button { background:transparent; border:none; color:var(--muted); padding:6px 13px; font-size:12px; cursor:pointer; }
+  .seg button.active { background:var(--accent); color:#fff; font-weight:600; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { padding:8px 10px; text-align:right; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; }
+  td:first-child, th:first-child { text-align:left; }
+  .gauge-wrap { margin:8px 0 4px; }
+  .gauge { height:22px; background:var(--panel); border:1px solid var(--border); border-radius:11px; overflow:hidden; position:relative; }
+  .gauge .fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); border-radius:11px; transition:width .3s; }
+  .gauge .mark { position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--peak); }
+  .gauge-label { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:4px; }
+  .chart-box { position:relative; height:280px; }
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(460px,100%),1fr)); gap:16px; }
+  .qa { font-size:13px; line-height:2; color:var(--muted); }
+  .qa b { color:var(--text); }
+</style>
+</head>
+<body>
+
+<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px">
+  <h1 style="margin:0">🎯 <span id="plGame">-</span> 자체결제 안착 KPI 플래너</h1>
+  <select id="gameSel" style="width:110px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:8px;font-size:14px"></select>
+  <span style="flex:1"></span>
+  <a href="index.html" style="color:var(--accent);text-decoration:none;font-size:13px;border:1px solid var(--border);padding:7px 14px;border-radius:8px;background:var(--panel)">📊 메인 대시보드</a>
+</div>
+<div class="sub" id="dataRange">구글시트에서 데이터를 불러오는 중…</div>
+
+<div class="banner">
+  ✅ <b>지표 정의</b> — <b>자체결제 = 결제수단(PG)이 다날·엑솔라·페이레터·페이레터 PPAY인 매출</b> (마켓 라벨 무관).
+  마켓 라벨(Google/Apple)은 유저의 원 소속 마켓을 뜻하며, 자체결제 여부와 무관 · PU는 채널 합산 기준.
+</div>
+
+<!-- 로딩/설정 안내 -->
+<div class="panel" id="setupPanel" style="display:none">
+  <h2>🔗 데이터 시트 연결</h2>
+  <div class="qa" id="setupMsg" style="margin-bottom:12px"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <input id="setupUrl" placeholder="구글 스프레드시트 URL (메인 대시보드와 동일 시트)"
+      style="flex:1;min-width:240px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px">
+    <button class="btn-primary" id="setupGo" style="background:var(--accent);border:none;color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;cursor:pointer">연결</button>
+  </div>
+  <div style="color:var(--muted);font-size:12px;margin-top:10px">필요 탭: <b>코드-kpi</b> (datekey·market_name_KR·platform_device_name_KR·pg_id·pg_name_KR·PU·revenue) · 공유: "링크가 있는 모든 사용자 - 뷰어"</div>
+</div>
+
+<div id="mainContent" style="display:none">
+<!-- 기준 월 선택 -->
+<div class="panel" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 18px">
+  <b style="font-size:14px">📅 기준 월</b>
+  <select id="baseMonth" style="width:150px"></select>
+  <span style="color:var(--muted);font-size:12px">선택한 월의 실적이 현황 카드·시뮬레이터·하반기 목표 계산의 기준선이 됩니다</span>
+</div>
+
+<!-- 현황 카드 -->
+<div class="cards" id="cards"></div>
+
+<!-- 매출 추이 -->
+<div class="panel">
+  <h2>📊 매출 추이 <span>기간과 지표를 선택해서 보세요 (2021~2026 · 결제사 파일 기준)</span></h2>
+  <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <b style="font-size:12px;color:var(--muted)">기간</b>
+      <span class="seg" id="periodSeg">
+        <button data-p="all" class="active">전체</button>
+        <button data-p="year">연간</button>
+        <button data-p="month">월별</button>
+      </span>
+      <select id="trendYear" style="width:100px;display:none"></select>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <b style="font-size:12px;color:var(--muted)">지표</b>
+      <span class="seg" id="metricSeg">
+        <button data-m="total" class="active">전체 매출</button>
+        <button data-m="market">마켓별</button>
+        <button data-m="d2c">자체결제</button>
+      </span>
+      <span id="chanChk" style="display:none;gap:10px;font-size:13px">
+        <label style="cursor:pointer"><input type="checkbox" id="ck_web" checked style="accent-color:var(--purple)"> WEB</label>
+        <label style="cursor:pointer"><input type="checkbox" id="ck_apk" checked style="accent-color:var(--accent)"> APK</label>
+        <label style="cursor:pointer"><input type="checkbox" id="ck_pc" checked style="accent-color:var(--green)"> PC</label>
+      </span>
+    </div>
+  </div>
+  <div class="chart-box" style="height:340px"><canvas id="chTrend"></canvas></div>
+  <div style="color:var(--muted);font-size:12px;margin-top:8px" id="trendNote"></div>
+</div>
+
+<!-- KPI 시뮬레이터 -->
+<div class="panel">
+  <h2>📐 KPI 시뮬레이터 <span>예상 총매출 × 목표 비중 → 필요 PU · ARPPU 역산 (일 기준)</span></h2>
+  <div class="sim-grid">
+    <div class="sim-box">
+      <h3>① 목표 설정</h3>
+      <div class="in-row">
+        <label>대상 월</label>
+        <select id="simMonth">
+          <option value="31" selected>2026년 7월 (31일)</option>
+          <option value="31">2026년 8월 (31일)</option>
+        </select>
+      </div>
+      <div class="in-row">
+        <label>예상 월 총매출</label>
+        <input type="number" id="simTotal" step="0.1" min="1"> <span>억원</span>
+      </div>
+      <div class="in-row">
+        <label>목표 자체결제 비중</label>
+        <input type="range" id="simRatio" min="20" max="70" step="1" value="50">
+        <span class="range-val" id="simRatioVal">50%</span>
+      </div>
+      <div class="result-big" id="simTarget"></div>
+    </div>
+    <div class="sim-box">
+      <h3>② 웹상점 PU × ARPPU 조합 — 어떻게 달성할까 <span style="font-weight:400">(인게임·PC는 현상 유지 가정)</span></h3>
+      <div class="in-row">
+        <label>기타 채널 일매출<br><span style="font-size:11px">(인게임+PC 유지분)</span></label>
+        <input type="number" id="simOther" step="10" min="0" style="width:90px"> <span>만원/일</span>
+      </div>
+      <div class="scen-btns">
+        <button id="scArppu">시나리오A: ARPPU 유지</button>
+        <button id="scPu">시나리오B: PU 유지</button>
+        <button id="scBal">시나리오C: 균형 (반반)</button>
+      </div>
+      <div class="in-row">
+        <label>가정 웹상점 ARPPU</label>
+        <input type="range" id="simArppu" min="30000" max="300000" step="1000">
+        <span class="range-val" id="simArppuVal"></span>
+      </div>
+      <div class="result-big" id="simCombo"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 7월 진척 트래킹 -->
+<div class="panel">
+  <h2>🏁 7월 진척 트래킹 <span>실적(7/1~7/7) vs 목표 페이스 — 시뮬레이터의 목표를 따라갑니다</span></h2>
+  <div id="track"></div>
+</div>
+
+<!-- 일별 목표 트래킹 -->
+<div class="panel">
+  <h2 style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">📅 일별 목표 트래킹
+    <span>선택 월의 일별 자체결제 매출·PU·ARPPU + 목표 페이스 대비 누적</span>
+    <span style="flex:1"></span>
+    <select id="trackMonth" style="width:120px">
+      <option value="2026-07" selected>2026년 7월</option>
+      <option value="2026-08">2026년 8월</option>
+    </select>
+  </h2>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+    <label style="font-size:13px;color:var(--muted)">월 목표 자체결제 <input type="number" id="dTarget" readonly title="하반기 월별 목표 표의 해당 월 값과 자동 연동됩니다" style="width:80px;background:var(--panel);opacity:.75;cursor:not-allowed"> 억 <span id="dTargetSrc" style="font-size:11px;color:var(--accent)"></span></label>
+    <div style="display:flex;align-items:center;gap:8px">
+      <b style="font-size:12px;color:var(--muted)">채널(복수)</b>
+      <span style="display:inline-flex;gap:10px;font-size:13px">
+        <label style="cursor:pointer"><input type="checkbox" class="chanChk" data-ch="web" checked style="accent-color:var(--purple)"> WEB</label>
+        <label style="cursor:pointer"><input type="checkbox" class="chanChk" data-ch="apk" checked style="accent-color:var(--accent)"> APK</label>
+        <label style="cursor:pointer"><input type="checkbox" class="chanChk" data-ch="pc" checked style="accent-color:var(--green)"> PC</label>
+      </span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <b style="font-size:12px;color:var(--muted)">시나리오</b>
+      <span class="seg">
+        <button class="scenBtn active" data-s="arppu">ARPPU 유지</button>
+        <button class="scenBtn" data-s="pu">PU 유지</button>
+        <button class="scenBtn" data-s="bal">균형</button>
+      </span>
+    </div>
+  </div>
+  <div class="cards" id="dailyStats" style="margin-bottom:14px"></div>
+  <div class="chart-box" style="height:300px"><canvas id="chDaily"></canvas></div>
+  <div id="dailyTable" style="max-height:320px;overflow:auto;margin-top:12px"></div>
+  <div style="color:var(--muted);font-size:12px;margin-top:8px">막대=선택 채널 일매출 / 초록선=누적 실적 / 노란 점선=누적 목표. 채널 선택 시 목표는 "월 목표 × <b>기준 월</b> 그 채널의 매출 비중"으로 배분되고, 목표 PU·ARPPU도 <b>기준 월(상단 📅)</b> 그 채널 실적을 기준으로 계산됩니다 — 시뮬레이터와 동일 기준.</div>
+</div>
+
+<!-- 과거 최고 실적일 TOP10 -->
+<div class="panel">
+  <h2 style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">🏆 과거 최고 실적일 TOP10
+    <span>목표 설정 참고 — 자체결제가 가장 잘 나온 날 (2021~2026)</span>
+    <span style="flex:1"></span>
+    <span class="seg" id="bestSeg">
+      <button data-b="rev" class="active">매출순</button>
+      <button data-b="arppu">ARPPU순</button>
+      <button data-b="pu">PU순</button>
+    </span>
+  </h2>
+  <div id="bestTable" style="overflow:auto"></div>
+  <div style="color:var(--muted);font-size:12px;margin-top:8px">이 날들의 PU·ARPPU가 "실제로 달성 가능했던 수준"입니다. 일별 목표 트래킹의 목표 PU/ARPPU를 이 사례와 비교해 현실성을 가늠하세요. (PU는 채널 합산 기준, ARPPU순은 소수 결제 이상치 제외 위해 PU 30명 이상만 집계)</div>
+</div>
+
+<!-- 하반기 월별 목표 -->
+<div class="panel">
+  <h2>📈 2026 하반기 월별 목표 <span>월별 예상 총매출·목표 비중 입력 → 선택 채널의 목표 매출·PU·ARPPU 자동 계산 (기준 월·시나리오 연동)</span></h2>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <b style="font-size:12px;color:var(--muted)">채널(복수)</b>
+      <span style="display:inline-flex;gap:10px;font-size:13px">
+        <label style="cursor:pointer"><input type="checkbox" class="chanChk" data-ch="web" checked style="accent-color:var(--purple)"> WEB</label>
+        <label style="cursor:pointer"><input type="checkbox" class="chanChk" data-ch="apk" checked style="accent-color:var(--accent)"> APK</label>
+        <label style="cursor:pointer"><input type="checkbox" class="chanChk" data-ch="pc" checked style="accent-color:var(--green)"> PC</label>
+      </span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <b style="font-size:12px;color:var(--muted)">시나리오</b>
+      <span class="seg">
+        <button class="scenBtn active" data-s="arppu">ARPPU 유지</button>
+        <button class="scenBtn" data-s="pu">PU 유지</button>
+        <button class="scenBtn" data-s="bal">균형</button>
+      </span>
+    </div>
+    <span style="color:var(--muted);font-size:12px">채널·시나리오는 일별 트래킹과 공유됩니다</span>
+  </div>
+  <div id="targetInputs" style="overflow-x:auto;margin-bottom:16px"></div>
+  <div class="chart-box" style="height:320px"><canvas id="chTargets"></canvas></div>
+  <div style="color:var(--muted);font-size:12px;margin-top:8px">표: 선택 채널의 목표 매출·PU·ARPPU (기준 월 비중으로 배분, 시나리오로 PU↔ARPPU 분해) · 막대: 자체결제 매출(파랑=실적 / 보라=목표) · 선: 비중(초록=실적 / 노랑=목표 / 빨강=50% 안착선). ×배수는 기준 월 대비 필요 성장.</div>
+</div>
+
+<!-- 일별 차트 기간 선택 -->
+<div class="panel" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 18px">
+  <b style="font-size:13px">📆 일별 차트 기간</b>
+  <span class="seg" id="chartRangeSeg">
+    <button data-d="30">30일</button>
+    <button data-d="45" class="active">45일</button>
+    <button data-d="90">90일</button>
+    <button data-d="180">180일</button>
+    <button data-d="0">전체</button>
+  </span>
+  <span style="color:var(--muted);font-size:12px">아래 <b>비중 추이 · PU & ARPPU</b> 차트에 적용</span>
+</div>
+
+<!-- 차트 -->
+<div class="grid2">
+  <div class="panel">
+    <h2>자체결제 비중 추이 <span id="chRatioSub">일별 + 7일 이동평균 + 목표선</span></h2>
+    <div class="chart-box"><canvas id="chRatio"></canvas></div>
+  </div>
+  <div class="panel">
+    <h2>자체결제 PU & ARPPU <span id="chPuSub">일별</span></h2>
+    <div class="chart-box"><canvas id="chPu"></canvas></div>
+  </div>
+  <div class="panel">
+    <h2>채널별 자체결제 매출 <span>월별 · WEB상점/인게임(APK)/PC</span></h2>
+    <div class="chart-box"><canvas id="chChannel"></canvas></div>
+  </div>
+  <div class="panel">
+    <h2>채널별 자체결제 PU · ARPPU <span id="chTableTitle">6월 기준 현황</span></h2>
+    <div style="padding-top:6px" id="chTable"></div>
+  </div>
+</div>
+
+<p style="color:var(--muted);font-size:12px;text-align:center;margin-top:8px">
+  데이터: 구글시트 <b>코드-kpi</b> 탭 (열 때마다 자동 로드, 이 브라우저 밖으로 전송되지 않음) · 자체결제 = PG 4종(다날·엑솔라·페이레터·PPAY) · PU는 채널 합산 기준
+</p>
+</div><!-- /mainContent -->
+
+<script>
+/* ===== 데이터 로더 (구글시트 `코드-kpi` 상세 탭) ===== */
+const D2C_PGS = ["다날","엑솔라","페이레터","페이레터 PPAY"]; // 자체결제 = 이 결제수단(PG)
+const MK_COLS = ["Google","Apple","One Store","Joycity"];    // 마켓 슬롯 (그 외 = 기타)
+const DASH_LS = "d2c-dashboard-v2"; // 메인 대시보드 localStorage (masterSheetUrl 공유)
+let RAW = [];      // 상세 행 {date, market, platform, pg, pu, rev}
+let KPI = [];      // 일별 요약(선택 기간) {date, iap, d2c, ratio, pu, arppu}
+let KPI_ALL = [];  // 일별 요약 전 기간
+let chartDays = 45; // 대시보드 일별 차트 표시 기간(일), 0=전체
+function refreshKPI(){ KPI = chartDays>0 ? KPI_ALL.slice(-chartDays) : KPI_ALL.slice(); }
+let CHANNEL = [];  // 일별 자체결제 채널 {date, web_pu, web_rev, apk_pu, apk_rev, pc_pu, pc_rev}
+let GAMES = [];    // 게임코드 목록
+let CUR_GAME = "";
+let SHEET_URL = "";
+
+/* 공통 데이터 계층(assets/gsheet.js) 별칭 — 한 곳에서 관리 */
+const sheetTabCsvUrl = GSheet.tabCsvUrl;
+const parseCsvText   = GSheet.parseCsv;
+const toNum          = GSheet.toNum;
+const normDate       = GSheet.normDate;
+const fetchGrid      = GSheet.fetchTab;
+const KNOWN_CODES    = GSheet.KNOWN_CODES;
+const headerOf       = GSheet.headerOf;
+const isDetailGrid = grid => headerOf(grid).some(h=>h.includes("market_name"));
+
+/* 게임코드 목록: index 탭 → 폴백: events 탭의 game 열 */
+async function loadGames(url) {
+  try {
+    const grid = await fetchGrid(url, "index");
+    const h = headerOf(grid);
+    if (!h.some(x=>/start|end|title|memo|market_name|datekey/.test(x))) { // index가 맞음
+      const gi = Math.max(0, h.findIndex(x=>x.includes("game")||x.includes("게임")||x.includes("project")));
+      const codes = [];
+      for (let i=1;i<grid.length;i++){ const g=String(grid[i][gi]||"").trim(); if(g) codes.push(g.toUpperCase()); }
+      if (codes.length) return [...new Set(codes)];
+    }
+  } catch(e) {}
+  // 폴백: 후보 풀(events 게임 ∪ 알려진 코드)에서 `코드-kpi` 탭 존재를 가볍게 프로빙
+  const pool = new Set(KNOWN_CODES);
+  try {
+    const grid = await fetchGrid(url, "events");
+    const gi = Math.max(0, headerOf(grid).findIndex(x=>x.includes("game")||x.includes("게임")));
+    for (let i=1;i<grid.length;i++){
+      const g=String(grid[i][gi]||"").trim().toUpperCase();
+      if (g && g!=="ALL") pool.add(g);
+    }
+  } catch(e) {}
+  const checks = await Promise.all([...pool].map(async c => {
+    try { return isDetailGrid(await fetchGrid(url, c + "-kpi", "limit 1")) ? c : null; }
+    catch(e){ return null; }
+  }));
+  const codes = checks.filter(Boolean).sort();
+  if (!codes.length) throw new Error("게임 상세(-kpi) 탭을 찾지 못했습니다. index 탭(game 열에 게임코드 나열)을 만들면 정확히 인식됩니다.");
+  return codes;
+}
+/* 상세 탭(`코드-kpi`) 로드 */
+async function loadDetail(url, code) {
+  const grid = await fetchGrid(url, code + "-kpi");
+  if (!isDetailGrid(grid)) throw new Error(`'${code}-kpi' 탭을 찾지 못했거나 상세 포맷(market_name_KR...)이 아닙니다.`);
+  const h = headerOf(grid);
+  const ci = {
+    date: h.findIndex(x=>x.includes("datekey")||x.includes("date")||x.includes("날짜")),
+    market: h.findIndex(x=>x.includes("market")),
+    platform: h.findIndex(x=>x.includes("platform")||x.includes("device")),
+    pg: h.findIndex(x=>x.includes("pg_name")),
+    pu: h.findIndex(x=>x==="pu"||x.includes("pu")),
+    rev: h.findIndex(x=>x.includes("revenue")||x.includes("매출"))
+  };
+  if (ci.date<0||ci.pg<0||ci.rev<0) throw new Error("상세 탭 헤더(datekey/pg_name_KR/revenue)를 찾지 못했습니다.");
+  const rows = [];
+  for (let i=1;i<grid.length;i++){
+    const g = grid[i];
+    const date = normDate(g[ci.date]);
+    const rev = toNum(g[ci.rev]);
+    if (!date || rev==null) continue;
+    rows.push({ date,
+      market: String(g[ci.market]||"").trim(),
+      platform: String(g[ci.platform]||"").trim().toUpperCase(),
+      pg: String(g[ci.pg]||"").trim(),
+      pu: toNum(g[ci.pu]) || 0,
+      rev });
+  }
+  if (!rows.length) throw new Error(`'${code}-kpi' 탭에 유효한 데이터가 없습니다.`);
+  return rows;
+}
+
+/* ===== RAW → 전 지표 계산 ===== */
+function computeAll() {
+  const isD2C = r => D2C_PGS.includes(r.pg);
+  // 일별 집계
+  const byDate = {};
+  for (const r of RAW) {
+    const o = byDate[r.date] = byDate[r.date] || { total:0, d2c:0, pu:0, web_pu:0, web_rev:0, apk_pu:0, apk_rev:0, pc_pu:0, pc_rev:0 };
+    o.total += r.rev;
+    if (isD2C(r)) {
+      o.d2c += r.rev; o.pu += r.pu;
+      const k = r.platform==="WEB"?"web":r.platform==="PC"?"pc":"apk";
+      o[k+"_rev"] += r.rev; o[k+"_pu"] += r.pu;
+    }
+  }
+  const dates = Object.keys(byDate).sort();
+  CHANNEL = dates.map(d=>({ date:d, web_pu:byDate[d].web_pu, web_rev:byDate[d].web_rev,
+    apk_pu:byDate[d].apk_pu, apk_rev:byDate[d].apk_rev, pc_pu:byDate[d].pc_pu, pc_rev:byDate[d].pc_rev }));
+  // 월별 MDATA / MONTHLY / MLABEL
+  MDATA = {}; MONTHLY = {}; MLABEL = {};
+  for (const r of RAW) {
+    const m = r.date.slice(0,7);
+    const a = MDATA[m] = MDATA[m] || new Array(9).fill(0);
+    a[0] += r.rev;
+    const mi = MK_COLS.indexOf(r.market);
+    a[mi>=0 ? mi+1 : 5] += r.rev;
+    if (isD2C(r)) {
+      const k = r.platform==="WEB"?6:r.platform==="PC"?8:7;
+      a[k] += r.rev;
+    }
+  }
+  for (const d of dates) {
+    const m = d.slice(0,7);
+    const o = MONTHLY[m] = MONTHLY[m] || { total:0, d2c:0, days:0 };
+    o.total += byDate[d].total; o.d2c += byDate[d].d2c; o.days++;
+  }
+  Object.keys(MONTHLY).forEach(m=>MLABEL[m] = (+m.slice(5,7))+"월");
+  // 연간
+  const yrs = {};
+  Object.keys(MONTHLY).sort().forEach(m=>{
+    const y = m.slice(0,4);
+    const o = yrs[y] = yrs[y] || { y, d2c:0, total:0, months:0 };
+    o.d2c += MONTHLY[m].d2c; o.total += MONTHLY[m].total; o.months++;
+  });
+  YEARLY = Object.values(yrs).sort((a,b)=>a.y.localeCompare(b.y))
+    .map(o=>o.months>=12?{y:o.y,d2c:o.d2c,total:o.total}:{y:o.y,d2c:o.d2c,total:o.total,months:o.months});
+  // 일별 요약 KPI (전 기간 저장 → 차트는 선택 기간만 표시)
+  KPI_ALL = dates.map(d=>{
+    const o = byDate[d];
+    return { date:d, iap:o.total, d2c:o.d2c, ratio:o.total?o.d2c/o.total:0, pu:o.pu, arppu:o.pu?o.d2c/o.pu:0 };
+  });
+  refreshKPI();
+  const k30 = KPI_ALL.slice(-30); // TOP10 '현재 대비'는 항상 최근 30일 기준
+  KPI30 = { puDay: avg(k30,r=>r.pu), arppu: sum(k30,r=>r.d2c)/(sum(k30,r=>r.pu)||1), d2cDay: avg(k30,r=>r.d2c) };
+  // TOP10
+  const dayArr = dates.map(d=>({ d, rev:byDate[d].d2c, pu:byDate[d].pu, arppu:byDate[d].pu?Math.round(byDate[d].d2c/byDate[d].pu):0 }));
+  const topN = (arr,key,n)=>[...arr].sort((a,b)=>b[key]-a[key]).slice(0,n);
+  BEST = { rev: topN(dayArr,"rev",10), pu: topN(dayArr,"pu",10),
+    arppu: topN(dayArr.filter(r=>r.pu>=30),"arppu",10) };
+  // 기준 월: 최근 완결 월(25일 이상), 셀렉터 채우기 (최근 8개월)
+  const months = Object.keys(MONTHLY).sort();
+  const full = months.filter(m=>MONTHLY[m].days>=25);
+  const baseM = full[full.length-1] || months[months.length-1];
+  const sel = document.getElementById("baseMonth");
+  sel.innerHTML = months.slice(-8).map(m=>`<option value="${m}" ${m===baseM?"selected":""}>${m.replace("-","년 ")}월${MONTHLY[m].days<25?" (진행중)":""}</option>`).join("");
+  curBase = computeBase(baseM);
+  // 연도 셀렉터
+  const ys = [...new Set(months.map(m=>m.slice(0,4)))];
+  const ty = document.getElementById("trendYear");
+  ty.innerHTML = ys.map(y=>`<option ${y===ys[ys.length-1]?"selected":""}>${y}</option>`).join("");
+  // 데이터 범위 표기
+  document.getElementById("dataRange").textContent =
+    `${CUR_GAME} · ${dates[0]} ~ ${dates[dates.length-1]} (${dates.length}일) · 자체결제 = ${D2C_PGS.join("·")}`;
+}
+
+/* ===== 유틸 ===== */
+const sum = (a,f)=>a.reduce((s,x)=>s+f(x),0);
+const avg = (a,f)=>a.length?sum(a,f)/a.length:0;
+const 억 = v=>(v/1e8).toFixed(v>=1e9?1:2)+"억";
+const 만 = v=>Math.round(v/1e4).toLocaleString()+"만";
+const N = v=>Math.round(v).toLocaleString();
+const P = v=>(v*100).toFixed(1)+"%";
+let MLABEL = {};
+
+/* ===== 월별 집계 (전체매출·자체결제·일수) ===== */
+let MONTHLY = {};
+
+/* ===== 연간 집계 (시트에서 계산) ===== */
+let YEARLY = [];
+
+/* ===== 과거 최고 실적일 TOP10 (매출/ARPPU/PU 기준) ===== */
+let BEST = {rev:[],pu:[],arppu:[]};
+
+/* ===== 전 기간 월별 [total,google,apple,onestore,joycity,etc,web,apk,pc] ===== */
+let MDATA = {};
+
+/* ===== 월별 기준값 계산 ===== */
+function chSum(rows,k){ return { rev:sum(rows,r=>r[k+"_rev"]), pu:sum(rows,r=>r[k+"_pu"]) }; }
+function computeBase(month){
+  const rows = CHANNEL.filter(r=>r.date.startsWith(month));
+  const m = MONTHLY[month] || {};
+  const days = m.days || rows.length || 30;
+  const web = chSum(rows,"web"), apk = chSum(rows,"apk"), pc = chSum(rows,"pc");
+  const d2c = m.d2c ?? (web.rev+apk.rev+pc.rev);
+  const total = m.total ?? 0;
+  return {
+    month, days, total, d2c,
+    ratio: total? d2c/total : 0,
+    d2cDay: d2c/days,
+    totalDay: total/days,
+    web:{ rev:web.rev, dayRev:web.rev/days, pu:web.pu/days, arppu:web.pu?web.rev/web.pu:0 },
+    apk:{ rev:apk.rev, dayRev:apk.rev/days, pu:apk.pu/days, arppu:apk.pu?apk.rev/apk.pu:0 },
+    pc :{ rev:pc.rev,  dayRev:pc.rev/days,  pu:pc.pu/days,  arppu:pc.pu?pc.rev/pc.pu:0 },
+    otherDay:(apk.rev+pc.rev)/days
+  };
+}
+const $ = id=>document.getElementById(id);
+let curBase = null;
+/* KPI 파일(자체결제 total) 최근 30일 기준: TOP10 '현재 대비' 비교용 */
+let KPI30 = { puDay:0, arppu:0, d2cDay:0 };
+
+/* ===== 현황 카드 ===== */
+function renderCards(){
+  const b = curBase, w = b.web, apk = b.apk;
+  document.getElementById("cards").innerHTML = `
+  <div class="card hero"><div class="l">자체결제 비중 (${MLABEL[b.month]})</div><div class="v">${P(b.ratio)}</div><div class="s">목표 50%까지 ${((0.5-b.ratio)*100).toFixed(1)}%p</div></div>
+  <div class="card"><div class="l">자체결제 매출 (${MLABEL[b.month]})</div><div class="v">${억(b.d2c)}</div><div class="s">일평균 ${만(b.d2cDay)}원</div></div>
+  <div class="card"><div class="l">전체 매출 (${MLABEL[b.month]})</div><div class="v">${억(b.total)}</div><div class="s">일평균 ${만(b.totalDay)}원</div></div>
+  <div class="card web"><div class="l">WEB상점 매출 (${MLABEL[b.month]})</div><div class="v">${억(w.rev)}</div><div class="s">자체결제의 ${b.d2c?(w.rev/b.d2c*100).toFixed(0):"-"}%</div></div>
+  <div class="card web"><div class="l">WEB상점 PU (일평균)</div><div class="v">${w.pu.toFixed(1)}<small> 명/일</small></div><div class="s">ARPPU ${만(w.arppu)}원</div></div>
+  <div class="card web"><div class="l">WEB상점 ARPPU</div><div class="v">${만(w.arppu)}<small> 원</small></div><div class="s">인게임(${만(apk.arppu)})의 ${apk.arppu?(w.arppu/apk.arppu).toFixed(1):"-"}배</div></div>
+`;
+}
+
+/* ===== 시뮬레이터 ===== */
+function applyBaseDefaults(){
+  const b = curBase;
+  $("simTotal").value = (b.totalDay*Number($("simMonth").value)/1e8).toFixed(1);
+  $("simOther").value = Math.round(b.otherDay/1e4);
+  $("simArppu").value = Math.round(b.web.arppu/1000)*1000;
+}
+function simState(){
+  const b = curBase;
+  const days = Number($("simMonth").value);
+  const total = Number($("simTotal").value)*1e8;
+  const ratio = Number($("simRatio").value)/100;
+  const arppu = Number($("simArppu").value);
+  const other = Number($("simOther").value)*1e4;
+  const tMonth = total*ratio, tDay = tMonth/days;
+  const webDay = Math.max(0, tDay - other); // 웹상점이 채워야 할 일매출
+  return { days, total, ratio, arppu, other, tMonth, tDay, webDay,
+    needPu: webDay/arppu,
+    factor: tDay/b.d2cDay,
+    webFactor: webDay/b.web.dayRev };
+}
+function renderSim(){
+  const s = simState(), wb = curBase.web;
+  $("simRatioVal").textContent = Math.round(s.ratio*100)+"%";
+  $("simArppuVal").textContent = 만(s.arppu)+"원";
+  $("simTarget").innerHTML = `
+    자체결제 목표 매출: <b>${억(s.tMonth)}</b> /월 &nbsp;=&nbsp; <b style="font-size:16px">${만(s.tDay)}원</b> /일<br>
+    <span style="color:var(--muted)">└ 기타 채널(인게임+PC) ${만(s.other)}원 유지 가정 시</span><br>
+    🛒 웹상점 목표: <b style="color:var(--purple)">${만(s.webDay)}원</b> /일 (월 ${억(s.webDay*s.days)})<br>
+    <span class="${s.webFactor>2?"r":s.webFactor>1.3?"y":"g"}">${MLABEL[curBase.month]} 웹상점 일평균(${만(wb.dayRev)}원)의 ${s.webFactor.toFixed(1)}배 필요</span>`;
+  const puMult = s.needPu/wb.pu, arMult = s.arppu/wb.arppu;
+  $("simCombo").innerHTML = `
+    웹상점 ARPPU <b style="font-size:16px">${만(s.arppu)}원</b> 가정 시 →
+    필요 웹상점 일평균 PU <b>${N(s.needPu)}명</b><br>
+    <span class="${puMult>2?"r":puMult>1.2?"y":"g"}">PU: ${MLABEL[curBase.month]} ${N(wb.pu)}명 → ×${puMult.toFixed(2)}</span> ·
+    <span class="${arMult>2?"r":arMult>1.2?"y":arMult<0.95?"g":"y"}">ARPPU: ${MLABEL[curBase.month]} ${만(wb.arppu)}원 → ×${arMult.toFixed(2)}</span><br>
+    <span style="color:var(--muted);font-size:12px">기준: ${MLABEL[curBase.month]} 웹상점 = 일평균 ${만(wb.dayRev)}원 · PU ${N(wb.pu)}명 · ARPPU ${만(wb.arppu)}원</span>`;
+  renderTrack(s);
+}
+$("scArppu").onclick = ()=>{ $("simArppu").value = Math.round(curBase.web.arppu/1000)*1000; renderSim(); };
+$("scPu").onclick = ()=>{ const s=simState(); $("simArppu").value = Math.min(300000, Math.max(30000, Math.round(s.webDay/curBase.web.pu/1000)*1000)); renderSim(); };
+$("scBal").onclick = ()=>{ const s=simState(); $("simArppu").value = Math.min(300000, Math.max(30000, Math.round(curBase.web.arppu*Math.sqrt(Math.max(s.webFactor,0.01))/1000)*1000)); renderSim(); };
+["simMonth","simTotal","simRatio","simArppu","simOther"].forEach(id=>$(id).addEventListener("input",renderSim));
+
+/* 기준 월 변경 */
+$("baseMonth").addEventListener("change", ()=>{
+  curBase = computeBase($("baseMonth").value);
+  renderCards();
+  applyBaseDefaults();
+  renderChannelTable();
+  renderSim();
+  renderTargets();
+  drawTrendChart();
+  renderDaily();
+});
+
+/* ===== 7월 트래킹 ===== */
+function renderTrack(s){
+  const jul = KPI_ALL.filter(r=>r.date.startsWith("2026-07")); // 기간 슬라이스와 무관하게 전체에서 7월
+  const elapsed = jul.length;
+  if(!elapsed){ $("track").innerHTML = `<div style="color:var(--muted);font-size:13px;padding:8px 2px">7월 실적 데이터가 아직 없습니다.</div>`; return; }
+  const actD2c = sum(jul,r=>r.d2c), actIap = sum(jul,r=>r.iap);
+  const paceTarget = s.tMonth/s.days*elapsed;      // 지금까지 왔어야 할 목표
+  const landing = actD2c/elapsed*s.days;           // 현재 페이스 월말 착지 전망
+  const pct = paceTarget ? Math.min(100, actD2c/paceTarget*100) : 0;
+  const ratioTxt = actIap ? P(actD2c/actIap) : "-";
+  const landPct = s.tMonth ? (landing/s.tMonth*100).toFixed(0) : "0";
+  $("track").innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px">
+      <div class="card"><div class="l">7월 누적 자체결제 (${elapsed}일)</div><div class="v">${억(actD2c)}</div><div class="s">누적 비중 ${ratioTxt}</div></div>
+      <div class="card"><div class="l">목표 페이스 (${elapsed}일 기준)</div><div class="v">${억(paceTarget)}</div><div class="s">월목표 ${억(s.tMonth)} × ${elapsed}/${s.days}일</div></div>
+      <div class="card ${landing>=s.tMonth?"hero":""}"><div class="l">월말 착지 전망 (현 페이스)</div><div class="v">${억(landing)}</div><div class="s">목표 대비 ${landPct}%</div></div>
+    </div>
+    <div class="gauge-wrap">
+      <div class="gauge"><div class="fill" style="width:${pct}%"></div><div class="mark" style="left:100%"></div></div>
+      <div class="gauge-label"><span>목표 페이스 달성률 ${pct.toFixed(0)}%</span><span>페이스 기준 100%</span></div>
+    </div>`;
+}
+
+/* ===== 차트 (데이터 로드 후 drawBaseCharts로 그림) ===== */
+Chart.defaults.color = "#8b96ad";
+Chart.defaults.font.family = "'Pretendard','Malgun Gothic',sans-serif";
+Chart.defaults.font.size = 11;
+const grid = "rgba(139,150,173,.12)";
+const ma7 = a=>a.map((_,i)=>{const w=a.slice(Math.max(0,i-6),i+1);return w.reduce((s,x)=>s+x,0)/w.length;});
+let ratioChart=null, puChart=null, channelChart=null;
+function upsertChart(inst, canvasId, cfg){
+  if (inst) { inst.data = cfg.data; inst.options = cfg.options; inst.update(); return inst; }
+  return new Chart(document.getElementById(canvasId), cfg);
+}
+function drawBaseCharts(){
+  const rangeTxt = chartDays>0 ? `최근 ${KPI.length}일` : `전체 ${KPI.length}일`;
+  const rs=$("chRatioSub"), ps=$("chPuSub");
+  if(rs) rs.textContent = `일별 + 7일 이동평균 + 목표선 (${rangeTxt})`;
+  if(ps) ps.textContent = `일별 (${rangeTxt})`;
+  const labels = KPI.map(r=>r.date.slice(5).replace("-","/"));
+  ratioChart = upsertChart(ratioChart, "chRatio", {type:"line",data:{labels,datasets:[
+    {label:"일별 비중",data:KPI.map(r=>r.ratio*100),borderColor:"rgba(79,140,255,.5)",borderWidth:1.5,pointRadius:0,tension:.25},
+    {label:"7일 이동평균",data:ma7(KPI.map(r=>r.ratio*100)),borderColor:"#34d399",borderWidth:2.5,pointRadius:0,tension:.3},
+    {label:"목표 50%",data:labels.map(()=>50),borderColor:"#f87171",borderWidth:1.5,borderDash:[6,4],pointRadius:0},
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12}},y:{grid:{color:grid},min:0,ticks:{callback:v=>v+"%"}}},
+    plugins:{tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}}}}});
+
+  puChart = upsertChart(puChart, "chPu", {data:{labels,datasets:[
+    {type:"line",label:"ARPPU(원)",data:KPI.map(r=>r.arppu),yAxisID:"y2",borderColor:"#c084fc",borderWidth:2,pointRadius:0,tension:.3,order:0},
+    {type:"bar",label:"PU(명)",data:KPI.map(r=>r.pu),yAxisID:"y",backgroundColor:"rgba(79,140,255,.7)",borderRadius:2,order:1},
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:12}},y:{grid:{color:grid}},y2:{position:"right",grid:{display:false},ticks:{callback:v=>Math.round(v/1e4)+"만"}}},
+    plugins:{tooltip:{callbacks:{label:c=>c.dataset.yAxisID==="y2"?` ARPPU: ${N(c.parsed.y)}원`:` PU: ${c.parsed.y}명`}}}}});
+
+  // 채널 월별 스택 (최근 18개월)
+  const months = [...new Set(CHANNEL.map(r=>r.date.slice(0,7)))].sort().slice(-18);
+  const mAgg = k => months.map(m=>sum(CHANNEL.filter(r=>r.date.startsWith(m)),r=>r[k+"_rev"]));
+  channelChart = upsertChart(channelChart, "chChannel", {type:"bar",data:{labels:months.map(m=>m.slice(2).replace("-","년 ")+"월"),datasets:[
+    {label:"WEB상점",data:mAgg("web"),backgroundColor:"#c084fc",stack:"s",borderRadius:2},
+    {label:"인게임(APK)",data:mAgg("apk"),backgroundColor:"#4f8cff",stack:"s",borderRadius:2},
+    {label:"PC",data:mAgg("pc"),backgroundColor:"#34d399",stack:"s",borderRadius:2},
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    scales:{x:{grid:{display:false},stacked:true},y:{grid:{color:grid},stacked:true,ticks:{callback:v=>(v/1e8).toFixed(1)+"억"}}},
+    plugins:{tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${N(c.parsed.y)}원`}}}}});
+}
+
+/* 채널 테이블 (기준 월 연동) */
+function renderChannelTable(){
+  const b = curBase, w=b.web, apk=b.apk, pc=b.pc;
+  document.getElementById("chTableTitle").textContent = MLABEL[b.month]+" 기준 현황";
+  document.getElementById("chTable").innerHTML = `
+  <table>
+    <thead><tr><th>채널 (자체PG)</th><th>${MLABEL[b.month]} 매출</th><th>일평균 PU</th><th>ARPPU</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td>🛒 WEB상점</td><td>${억(w.rev)}</td><td>${w.pu.toFixed(1)}명</td><td><b style="color:var(--purple)">${만(w.arppu)}원</b></td><td style="text-align:left;color:var(--muted)">자체결제의 ${b.d2c?(w.rev/b.d2c*100).toFixed(0):"-"}% — 주력 채널</td></tr>
+      <tr><td>🎮 인게임(APK)</td><td>${억(apk.rev)}</td><td>${apk.pu.toFixed(1)}명</td><td>${만(apk.arppu)}원</td><td style="text-align:left;color:var(--muted)">소액·고빈도 결제</td></tr>
+      <tr><td>💻 PC</td><td>${억(pc.rev)}</td><td>${pc.pu.toFixed(1)}명</td><td>${만(pc.arppu)}원</td><td style="text-align:left;color:var(--muted)"></td></tr>
+    </tbody>
+  </table>`;
+}
+
+/* ===== 하반기(7~12월) 월별 목표 ===== */
+const H2 = ["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
+const H2LABEL = {"2026-07":"7월","2026-08":"8월","2026-09":"9월","2026-10":"10월","2026-11":"11월","2026-12":"12월"};
+const H2DAYS = {"2026-07":31,"2026-08":31,"2026-09":30,"2026-10":31,"2026-11":30,"2026-12":31};
+const DEFAULT_RATIO = {"2026-07":42,"2026-08":50,"2026-09":50,"2026-10":50,"2026-11":50,"2026-12":50};
+const H1TOTAL_AVG = 20; // 억, 예상 총매출 기본값
+let targetChart = null;
+
+function renderTargetInputs(){
+  document.getElementById("targetInputs").innerHTML = `
+    <table>
+      <thead><tr><th>월</th><th>예상 총매출(억)</th><th>목표 비중(%)</th><th>목표 자체결제</th>
+        <th>목표 <span class="tChLbl">웹상점</span> 매출</th>
+        <th>목표 <span class="tChLbl">웹상점</span> PU/일</th>
+        <th>목표 <span class="tChLbl">웹상점</span> ARPPU</th></tr></thead>
+      <tbody id="targetRows"></tbody>
+    </table>`;
+}
+function buildTargetRows(){ // 최초 1회: 입력창 포함 행 생성
+  document.getElementById("targetRows").innerHTML = H2.map(m=>`
+    <tr>
+      <td><b>${H2LABEL[m]}</b></td>
+      <td><input type="number" id="t_total_${m}" value="${H1TOTAL_AVG}" step="0.5" min="0" style="width:72px"></td>
+      <td><input type="number" id="t_ratio_${m}" value="${DEFAULT_RATIO[m]}" step="1" min="0" max="80" style="width:64px"></td>
+      <td id="t_d2c_${m}"></td>
+      <td id="t_ch_${m}" style="color:var(--purple)"></td>
+      <td id="t_pu_${m}"></td>
+      <td id="t_arppu_${m}"></td>
+    </tr>`).join("");
+  H2.forEach(m=>["t_total_"+m,"t_ratio_"+m].forEach(id=>{
+    const el=$(id); if(el) el.addEventListener("input",()=>{ updateTargetCells(); drawTargetChart(); drawTrendChart(); renderDaily(); });
+  }));
+}
+function targetOf(m){ // 한 달 목표 계산 (선택 채널 + 시나리오 연동)
+  const total = Number(($("t_total_"+m)||{}).value ?? H1TOTAL_AVG)*1e8;
+  const ratio = Number(($("t_ratio_"+m)||{}).value ?? DEFAULT_RATIO[m])/100;
+  const tD2c = total*ratio;
+  const base = chanBase();
+  const share = chanShare();
+  const chMonth = tD2c*share;              // 선택 채널 목표 매출(월)
+  const dayT = chMonth/H2DAYS[m];
+  const sp = splitTarget(dayT, base);
+  return { total, ratio, tD2c, chMonth, dayT, needPu: sp.pu, tgtArppu: sp.arppu,
+    puMult: base.puDay?sp.pu/base.puDay:0, arMult: base.arppu?sp.arppu/base.arppu:0 };
+}
+function updateTargetCells(){ // 파생 셀만 갱신 (입력 focus 유지)
+  document.querySelectorAll(".tChLbl").forEach(e=>e.textContent = chanLabel());
+  H2.forEach(m=>{
+    const t = targetOf(m);
+    if($("t_d2c_"+m)) $("t_d2c_"+m).textContent = 억(t.tD2c);
+    if($("t_ch_"+m)) $("t_ch_"+m).textContent = 억(t.chMonth);
+    if($("t_pu_"+m)){ $("t_pu_"+m).innerHTML = `${N(t.needPu)}명 <span style="color:var(--muted);font-size:11px">×${t.puMult.toFixed(2)}</span>`;
+      $("t_pu_"+m).style.color = t.puMult>2?"var(--down)":t.puMult>1.3?"var(--peak)":"var(--green)"; }
+    if($("t_arppu_"+m)){ $("t_arppu_"+m).innerHTML = `${만(t.tgtArppu)}원 <span style="color:var(--muted);font-size:11px">×${t.arMult.toFixed(2)}</span>`;
+      $("t_arppu_"+m).style.color = t.arMult>2?"var(--down)":t.arMult>1.3?"var(--peak)":"var(--green)"; }
+  });
+}
+function renderTargetRows(){ updateTargetCells(); }
+function drawTargetChart(){
+  const b = curBase;
+  // 2026 상반기 실적(데이터에 있는 완결 월) + 하반기 목표(7~12월)
+  const h1 = Object.keys(MONTHLY).sort().filter(m=>m.startsWith("2026-") && m < H2[0] && MONTHLY[m].days >= 25);
+  const labels = [...h1.map(m=>MLABEL[m]), ...H2.map(m=>H2LABEL[m])];
+  const actD2c = h1.map(m=>MONTHLY[m].d2c);
+  const actRatio = h1.map(m=>MONTHLY[m].d2c/MONTHLY[m].total*100);
+  const tgtD2c=[], tgtRatio=[];
+  H2.forEach(m=>{ const t=targetOf(m); tgtD2c.push(t.tD2c); tgtRatio.push(t.ratio*100); });
+  const barAct = [...actD2c, ...H2.map(()=>null)];
+  const barTgt = [...h1.map(()=>null), ...tgtD2c];
+  // 비중 라인: 실적 + 마지막 실적월 앵커로 목표 연결
+  const lineAct = [...actRatio, ...H2.map(()=>null)];
+  const lineTgt = [...actRatio.map((v,i)=>i===actRatio.length-1?v:null), ...tgtRatio];
+  const data = { labels, datasets:[
+    {type:"bar",label:"실적 자체결제",data:barAct,backgroundColor:"#4f8cff",yAxisID:"y",borderRadius:2,order:1},
+    {type:"bar",label:"목표 자체결제",data:barTgt,backgroundColor:"rgba(192,132,252,.75)",yAxisID:"y",borderRadius:2,order:1},
+    {type:"line",label:"실적 비중",data:lineAct,borderColor:"#34d399",borderWidth:2.5,pointRadius:3,tension:.3,yAxisID:"y2",order:0},
+    {type:"line",label:"목표 비중",data:lineTgt,borderColor:"#fbbf24",borderWidth:2.5,borderDash:[6,4],pointRadius:3,tension:.3,yAxisID:"y2",order:0},
+    {type:"line",label:"50% 안착선",data:labels.map(()=>50),borderColor:"#f87171",borderWidth:1.5,borderDash:[3,3],pointRadius:0,yAxisID:"y2",order:0},
+  ]};
+  const opts = { responsive:true, maintainAspectRatio:false, interaction:{mode:"index",intersect:false},
+    scales:{ x:{grid:{display:false}}, y:{grid:{color:grid},ticks:{callback:v=>(v/1e8).toFixed(1)+"억"}},
+      y2:{position:"right",grid:{display:false},min:0,max:70,ticks:{callback:v=>v+"%"}} },
+    plugins:{ tooltip:{callbacks:{label:c=>c.dataset.yAxisID==="y2"?` ${c.dataset.label}: ${c.parsed.y==null?"-":c.parsed.y.toFixed(1)+"%"}`:` ${c.dataset.label}: ${c.parsed.y==null?"-":N(c.parsed.y)+"원"}`}}} };
+  if(targetChart){ targetChart.data=data; targetChart.options=opts; targetChart.update(); }
+  else targetChart = new Chart(document.getElementById("chTargets"),{data,options:opts});
+}
+function renderTargets(){ renderTargetRows(); drawTargetChart(); }
+
+/* ===== 채널·시나리오 공유 상태 & 헬퍼 (일별 트래킹 + 하반기 목표 공용) ===== */
+let dChans = { web:true, apk:true, pc:true };
+let dScenario = "arppu";
+const CH_NAME = { web:"WEB상점", apk:"인게임(APK)", pc:"PC" };
+const SCEN_LABEL = { arppu:"ARPPU 유지·PU 성장", pu:"PU 유지·ARPPU 성장", bal:"균형(둘 다 성장)" };
+function selChans(){ const s=["web","apk","pc"].filter(k=>dChans[k]); return s.length?s:["web","apk","pc"]; }
+function chanLabel(){ const s=selChans(); return s.length===3?"전체":s.map(k=>CH_NAME[k]).join("+"); }
+function chanColor(){ const s=selChans(); return s.length===1?(s[0]==="web"?"#c084fc":s[0]==="pc"?"#34d399":"#4f8cff"):"#4f8cff"; }
+/* 선택 채널의 기준월(curBase) 일평균 기준선 */
+function chanBase(){ const cb=curBase, s=selChans(); let pu=0,rev=0; s.forEach(k=>{pu+=cb[k].pu; rev+=cb[k].dayRev;}); return { puDay:pu, dayRev:rev, arppu:pu?rev/pu:0 }; }
+/* 선택 채널 비중 (전체 자체결제 대비) */
+function chanShare(){ const cb=curBase, b=chanBase(); return cb.d2cDay?b.dayRev/cb.d2cDay:0; }
+/* 목표 일매출 → 시나리오에 따라 PU·ARPPU 분해 */
+function splitTarget(dayT, base){
+  const factor = base.dayRev ? dayT/base.dayRev : 1;
+  if(dScenario==="pu"){ const pu=base.puDay; return { pu, arppu:pu?dayT/pu:0, factor }; }
+  if(dScenario==="bal"){ const s=Math.sqrt(Math.max(factor,0.01)); return { pu:base.puDay*s, arppu:base.arppu*s, factor }; }
+  const arppu=base.arppu; return { pu:arppu?dayT/arppu:0, arppu, factor }; // ARPPU 유지
+}
+
+/* ===== 일별 목표 트래킹 (선택 채널 합산) ===== */
+let dailyChart = null;
+function renderDaily(){
+  const m = $("trackMonth").value;
+  const days = H2DAYS[m] || 31;
+  const chs = selChans(), lbl = chanLabel(), baseLabel = MLABEL[curBase.month];
+  const chRev = r => chs.reduce((s,k)=>s+r[k+"_rev"],0);
+  const chPu  = r => chs.reduce((s,k)=>s+r[k+"_pu"],0);
+  const base = chanBase();
+  const share = chanShare();
+  const monthTargetAll = targetOf(m).tD2c; // 하반기 목표표의 해당 월 목표 자체결제와 연동
+  $("dTarget").value = (monthTargetAll/1e8).toFixed(1);
+  $("dTargetSrc").textContent = `(하반기 목표 ${(+m.slice(5))}월 연동)`;
+  const monthTarget = monthTargetAll * share;
+  const dayT = monthTarget/days;
+
+  const rows = CHANNEL.filter(r=>r.date.startsWith(m)).sort((a,b)=>a.date.localeCompare(b.date))
+    .map(r=>({ date:r.date, d2c:chRev(r), pu:chPu(r), arppu: chPu(r)?chRev(r)/chPu(r):0 }));
+  const labels = Array.from({length:days},(_,i)=>(i+1)+"일");
+  let cum=0; const cumArr = rows.map(r=>{cum+=r.d2c; return cum;});
+  const dailyRev = labels.map((_,i)=>rows[i]?rows[i].d2c:null);
+  const cumAct = labels.map((_,i)=>i<rows.length?cumArr[i]:null);
+  const cumTgt = labels.map((_,i)=>dayT*(i+1));
+  const data = {labels,datasets:[
+    {type:"bar",label:`${lbl} 일매출`,data:dailyRev,backgroundColor:chanColor(),yAxisID:"y",borderRadius:2,order:1},
+    {type:"line",label:"누적 실적",data:cumAct,borderColor:"#34d399",borderWidth:2.5,pointRadius:0,tension:.2,yAxisID:"y2",order:0},
+    {type:"line",label:"누적 목표",data:cumTgt,borderColor:"#fbbf24",borderWidth:2,borderDash:[6,4],pointRadius:0,yAxisID:"y2",order:0},
+  ]};
+  const opts = {responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    scales:{x:{grid:{display:false},ticks:{maxTicksLimit:16}},
+      y:{grid:{color:grid},ticks:{callback:v=>만(v)}},
+      y2:{position:"right",grid:{display:false},ticks:{callback:v=>억(v)}}},
+    plugins:{tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y==null?"-":N(c.parsed.y)+"원"}`}}}};
+  if(dailyChart){ dailyChart.data=data; dailyChart.options=opts; dailyChart.update(); }
+  else dailyChart = new Chart(document.getElementById("chDaily"),{data,options:opts});
+
+  const sp = splitTarget(dayT, base);
+  const tgtPu = sp.pu, tgtArppu = sp.arppu;
+  const shareTxt = chs.length===3 ? "" : ` · 채널 목표 = 월 목표 ${억(monthTargetAll)} × ${baseLabel} ${lbl} 비중 ${(share*100).toFixed(0)}% = ${억(monthTarget)}`;
+  const statsEl = document.getElementById("dailyStats");
+  const el = document.getElementById("dailyTable");
+  if(!rows.length){
+    statsEl.innerHTML = `<div class="card" style="grid-column:1/-1"><div class="l">${(+m.slice(5))}월 ${lbl} 목표</div><div class="v" style="font-size:16px">일 매출 ${만(dayT)}원 · 목표 PU ${N(tgtPu)}명 · 목표 ARPPU ${만(tgtArppu)}원</div><div class="s">실적 데이터가 들어오면 달성률이 표시됩니다${shareTxt}</div></div>`;
+    el.innerHTML = ""; return;
+  }
+  const actRev = sum(rows,r=>r.d2c);
+  const avgPu = avg(rows,r=>r.pu);
+  const avgArppu = sum(rows,r=>r.pu) ? actRev/sum(rows,r=>r.pu) : 0;
+  const revRate = actRev/(dayT*rows.length)*100;
+  const puRate = tgtPu?avgPu/tgtPu*100:0, arRate = tgtArppu?avgArppu/tgtArppu*100:0;
+  const rateColor = v=>v>=100?"var(--green)":v>=85?"var(--peak)":"var(--down)";
+  const rateCard = (label,cur,tgt,rate,unit)=>`
+    <div class="card"><div class="l">${label} 달성률</div>
+      <div class="v" style="color:${rateColor(rate)}">${rate.toFixed(0)}<small>%</small></div>
+      <div class="s">실적 ${cur} / 목표 ${tgt}${unit||""}</div></div>`;
+  statsEl.innerHTML =
+    rateCard(`매출(누적·${lbl})`, 억(actRev), 억(dayT*rows.length), revRate) +
+    rateCard(`평균 PU (${lbl})`, N(avgPu)+"명", N(tgtPu)+"명", puRate) +
+    rateCard(`평균 ARPPU (${lbl})`, 만(avgArppu)+"원", 만(tgtArppu)+"원", arRate);
+
+  let cc=0;
+  const body = rows.map((r,i)=>{ cc+=r.d2c; const ct=dayT*(i+1); const rate=ct?cc/ct*100:0;
+    return `<tr>
+      <td>${r.date.slice(5)}</td><td>${N(r.d2c)}</td><td>${N(cc)}</td>
+      <td style="color:${rateColor(tgtPu?r.pu/tgtPu*100:0)}">${r.pu}명 <span style="color:var(--muted);font-size:11px">${(tgtPu?r.pu/tgtPu*100:0).toFixed(0)}%</span></td>
+      <td style="color:${rateColor(tgtArppu?r.arppu/tgtArppu*100:0)}">${N(r.arppu)} <span style="color:var(--muted);font-size:11px">${(tgtArppu?r.arppu/tgtArppu*100:0).toFixed(0)}%</span></td>
+      <td>${N(ct)}</td>
+      <td style="color:${rateColor(rate)};font-weight:600">${rate.toFixed(0)}%</td>
+    </tr>`; }).join("");
+  el.innerHTML = `<table>
+    <thead><tr><th>날짜</th><th>${lbl} 일매출</th><th>누적</th><th>PU (달성률)</th><th>ARPPU (달성률)</th><th>목표 누적</th><th>매출 달성률</th></tr></thead>
+    <tbody>${body}</tbody></table>
+    <div style="font-size:12px;color:var(--muted);margin-top:6px">${rows.length}일 경과 · 현 페이스 월말 착지 ${억(actRev/rows.length*days)} · 시나리오: ${SCEN_LABEL[dScenario]} (기준 ${baseLabel} ${lbl} PU ${N(base.puDay)}명·ARPPU ${만(base.arppu)}원)${shareTxt}</div>`;
+}
+
+/* ===== 과거 최고 실적일 TOP10 ===== */
+let bestMode = "rev";
+function renderBest(){
+  const list = BEST[bestMode] || [];
+  const hi = bestMode; // 강조 컬럼
+  const cell = (v,key,txt)=> key===hi ? `<td style="color:var(--peak);font-weight:700">${txt}</td>` : `<td>${txt}</td>`;
+  const body = list.map((r,i)=>`<tr>
+    <td><b>${i+1}</b></td>
+    <td>${r.d}</td>
+    ${cell(r.rev,"rev",억(r.rev))}
+    ${cell(r.pu,"pu",N(r.pu)+"명")}
+    ${cell(r.arppu,"arppu",만(r.arppu)+"원")}
+    <td style="color:var(--muted);font-size:11px">현재 ARPPU 대비 ×${(r.arppu/KPI30.arppu).toFixed(1)} · PU ×${(r.pu/KPI30.puDay).toFixed(1)}</td>
+  </tr>`).join("");
+  document.getElementById("bestTable").innerHTML = `<table>
+    <thead><tr><th>순위</th><th>날짜</th><th>자체결제 매출</th><th>PU</th><th>ARPPU</th><th>현재(최근30일) 대비</th></tr></thead>
+    <tbody>${body}</tbody></table>`;
+}
+document.querySelectorAll("#bestSeg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#bestSeg button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); bestMode=b.dataset.b; renderBest();
+}));
+$("trackMonth").addEventListener("change", renderDaily); // 월 목표는 renderDaily가 하반기 목표에서 자동 반영
+/* 채널·시나리오 공유 컨트롤 — 두 패널 동기화 후 관련 뷰 재렌더 */
+function rerenderPlanning(){ renderDaily(); updateTargetCells(); drawTargetChart(); drawTrendChart(); }
+document.querySelectorAll(".chanChk").forEach(chk=>chk.addEventListener("change",()=>{
+  const ch = chk.dataset.ch; dChans[ch] = chk.checked;
+  document.querySelectorAll(`.chanChk[data-ch="${ch}"]`).forEach(e=>e.checked = chk.checked);
+  rerenderPlanning();
+}));
+document.querySelectorAll(".scenBtn").forEach(btn=>btn.addEventListener("click",()=>{
+  dScenario = btn.dataset.s;
+  document.querySelectorAll(".scenBtn").forEach(e=>e.classList.toggle("active", e.dataset.s===dScenario));
+  rerenderPlanning();
+}));
+/* 일별 차트 기간 선택 */
+document.querySelectorAll("#chartRangeSeg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#chartRangeSeg button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); chartDays = Number(b.dataset.d); refreshKPI(); drawBaseCharts();
+}));
+
+/* ===== 매출 추이 차트 (기간 × 지표 선택) ===== */
+/* MDATA 배열 인덱스: [0]전체 [1]Google [2]Apple [3]OneStore [4]Joycity [5]기타 [6]WEB [7]APK [8]PC */
+/* 목표 막대 점선 테두리 플러그인 */
+const dashedBarsPlugin = { id:"dashedBars", afterDatasetsDraw(chart){
+  const ctx = chart.ctx;
+  chart.data.datasets.forEach((ds,di)=>{
+    if(!ds.dashed) return;
+    const meta = chart.getDatasetMeta(di); if(meta.hidden) return;
+    ctx.save(); ctx.strokeStyle = ds.borderColor||"#4f8cff"; ctx.lineWidth = 1.5; ctx.setLineDash([4,3]);
+    meta.data.forEach((bar,i)=>{ if(ds.data[i]==null) return;
+      const p = bar.getProps(["x","y","base","width"],true);
+      ctx.strokeRect(p.x-p.width/2, Math.min(p.y,p.base), p.width, Math.abs(p.base-p.y));
+    });
+    ctx.restore();
+  });
+}};
+let trendChart = null, trendPeriod = "all", trendMetric = "total";
+/* 2026 하반기 월별 목표 → MDATA 형식 배열 [total,g,a,o,j,etc,web,apk,pc] */
+function targetArr(m){
+  const t = targetOf(m);
+  const apkV = curBase.apk.dayRev*H2DAYS[m];
+  const pcV  = curBase.pc.dayRev*H2DAYS[m];
+  const web  = Math.max(0, t.tD2c - apkV - pcV);
+  return [t.total,0,0,0,0,0,web,apkV,pcV];
+}
+const TGT_YEAR = H2[0].slice(0,4); // 목표 연도 (2026)
+function aggUnits(){
+  // 기간에 따라 {label, arr[9], isT} 목록 반환. isT=목표(점선/반투명)
+  const MKEYS = Object.keys(MDATA).sort();
+  const withT = (trendMetric==="total"||trendMetric==="d2c"); // 마켓별은 목표 미정의
+  const lastM = MKEYS[MKEYS.length-1] || "";
+  if(trendPeriod==="year"){
+    const ys = {};
+    MKEYS.forEach(m=>{ const y=m.slice(0,4); (ys[y]=ys[y]||new Array(9).fill(0)); MDATA[m].forEach((v,i)=>ys[y][i]+=v); });
+    const units = Object.keys(ys).sort().map(y=>({
+      label: y.slice(2)+"년"+(y===lastM.slice(0,4) && MKEYS.filter(m=>m.startsWith(y)).length<12 ? `(~${+lastM.slice(5,7)}월)` : ""),
+      arr: ys[y] }));
+    if(withT && ys[TGT_YEAR]){ // 목표연도 연간 전망 = 완결 실적월 + 하반기 목표
+      const full = new Array(9).fill(0);
+      MKEYS.filter(m=>m.startsWith(TGT_YEAR) && m < H2[0]).forEach(m=>MDATA[m].forEach((v,i)=>full[i]+=v));
+      H2.forEach(m=>targetArr(m).forEach((v,i)=>full[i]+=v));
+      units.push({label:TGT_YEAR.slice(2)+"목표", arr:full, isT:true});
+    }
+    return units;
+  }
+  if(trendPeriod==="month"){
+    const y = $("trendYear").value;
+    const units = MKEYS.filter(m=>m.startsWith(y)).map(m=>({label:(+m.slice(5))+"월", arr:MDATA[m]}));
+    if(withT && y===TGT_YEAR) H2.forEach(m=>units.push({label:(+m.slice(5))+"월", arr:targetArr(m), isT:true}));
+    return units;
+  }
+  // 전체: 전 기간 월별 + 목표연도 하반기 목표
+  const units = MKEYS.map(m=>({label:m.slice(2), arr:MDATA[m]})); // "21-01"
+  if(withT) H2.forEach(m=>units.push({label:m.slice(2), arr:targetArr(m), isT:true}));
+  return units;
+}
+function drawTrendChart(){
+  const units = aggUnits();
+  const labels = units.map(u=>u.label);
+  const A = units.map(u=>u.arr);
+  const isT = units.map(u=>!!u.isT);
+  const anyT = isT.some(Boolean);
+  const nAct = anyT ? isT.indexOf(true) : isT.length; // 첫 목표 인덱스 = 실적 개수
+  const col = (i)=>A.map(a=>a[i]);
+  const total = col(0);
+  const aMask = arr=>arr.map((v,i)=>isT[i]?null:v);          // 실적만
+  const tMask = arr=>arr.map((v,i)=>isT[i]?v:null);          // 목표만
+  const ratioLine = (vals)=>{ // 실적선/목표선 분리 (마지막 실적점에서 연결)
+    const rt = vals.map((t,i)=>total[i]?vals[i]/total[i]*100:0);
+    const act = rt.map((v,i)=>i<nAct?v:null);
+    const tgt = rt.map((v,i)=>(i===nAct-1||isT[i])?v:null);
+    return {act,tgt,anyT};
+  };
+  let datasets=[], note="", ratioVals=null;
+  const chans = {web:$("ck_web").checked, apk:$("ck_apk").checked, pc:$("ck_pc").checked};
+
+  if(trendMetric==="total"){
+    const d2c = A.map(a=>a[6]+a[7]+a[8]);
+    const etc = A.map((a,i)=>total[i]-d2c[i]);
+    datasets = [
+      {type:"bar",label:"자체결제",data:aMask(d2c),backgroundColor:"#4f8cff",stack:"s",yAxisID:"y",borderRadius:2},
+      {type:"bar",label:"기타(마켓)",data:aMask(etc),backgroundColor:"rgba(139,150,173,.35)",stack:"s",yAxisID:"y",borderRadius:2},
+    ];
+    if(anyT) datasets.push(
+      {type:"bar",label:"자체결제(목표)",data:tMask(d2c),backgroundColor:"rgba(79,140,255,.18)",borderColor:"#4f8cff",dashed:true,stack:"s",yAxisID:"y",borderRadius:2},
+      {type:"bar",label:"기타(목표)",data:tMask(etc),backgroundColor:"rgba(139,150,173,.1)",borderColor:"#8b96ad",dashed:true,stack:"s",yAxisID:"y",borderRadius:2});
+    ratioVals = d2c;
+    note = "막대: 자체결제+기타=전체 매출 (연한 막대=26년 목표) · 선: 자체결제 비중 (점선=목표)";
+  } else if(trendMetric==="market"){
+    datasets = [
+      {type:"bar",label:"Google",data:col(1),backgroundColor:"#4f8cff",stack:"s",yAxisID:"y",borderRadius:2},
+      {type:"bar",label:"Apple",data:col(2),backgroundColor:"#c084fc",stack:"s",yAxisID:"y",borderRadius:2},
+      {type:"bar",label:"One Store",data:col(3),backgroundColor:"#34d399",stack:"s",yAxisID:"y",borderRadius:2},
+      {type:"bar",label:"Joycity",data:col(4),backgroundColor:"#fbbf24",stack:"s",yAxisID:"y",borderRadius:2},
+      {type:"bar",label:"기타",data:col(5),backgroundColor:"rgba(139,150,173,.5)",stack:"s",yAxisID:"y",borderRadius:2},
+    ];
+    note = "마켓(결제 마켓)별 매출 스택 · Joycity=자체 마켓 결제, 나머지는 스토어 결제 (마켓별 목표는 미설정)";
+  } else { // d2c: WEB/APK/PC 선택
+    if(chans.web) datasets.push({type:"bar",label:"WEB상점",data:aMask(col(6)),backgroundColor:"#c084fc",stack:"s",yAxisID:"y",borderRadius:2});
+    if(chans.apk) datasets.push({type:"bar",label:"인게임(APK)",data:aMask(col(7)),backgroundColor:"#4f8cff",stack:"s",yAxisID:"y",borderRadius:2});
+    if(chans.pc)  datasets.push({type:"bar",label:"PC",data:aMask(col(8)),backgroundColor:"#34d399",stack:"s",yAxisID:"y",borderRadius:2});
+    if(anyT){
+      if(chans.web) datasets.push({type:"bar",label:"WEB(목표)",data:tMask(col(6)),backgroundColor:"rgba(192,132,252,.18)",borderColor:"#c084fc",dashed:true,stack:"s",yAxisID:"y",borderRadius:2});
+      if(chans.apk) datasets.push({type:"bar",label:"APK(목표)",data:tMask(col(7)),backgroundColor:"rgba(79,140,255,.18)",borderColor:"#4f8cff",dashed:true,stack:"s",yAxisID:"y",borderRadius:2});
+      if(chans.pc)  datasets.push({type:"bar",label:"PC(목표)",data:tMask(col(8)),backgroundColor:"rgba(52,211,153,.18)",borderColor:"#34d399",dashed:true,stack:"s",yAxisID:"y",borderRadius:2});
+    }
+    ratioVals = A.map(a=>(chans.web?a[6]:0)+(chans.apk?a[7]:0)+(chans.pc?a[8]:0));
+    note = "자체결제 채널(WEB/APK/PC) 스택 (연한 막대=26년 목표) · 체크박스로 채널 on/off · 선: 선택 채널 비중 (점선=목표)";
+  }
+  // 비중 라인 (목표 포함 지표에서만)
+  if(ratioVals){
+    const R = ratioLine(ratioVals);
+    datasets.push({type:"line",label:"자체결제 비중",data:R.act,borderColor:"#fbbf24",borderWidth:2.5,pointRadius:3,tension:.3,yAxisID:"y2"});
+    if(anyT) datasets.push({type:"line",label:"자체결제 비중(목표)",data:R.tgt,borderColor:"#fbbf24",borderWidth:2.5,borderDash:[6,4],pointRadius:3,tension:.3,yAxisID:"y2"});
+  }
+  const hasRatio = datasets.some(d=>d.yAxisID==="y2");
+  datasets.forEach(d=>d.order = d.type==="line" ? 0 : 1); // 선을 막대 위로
+  const data = {labels,datasets};
+  const opts = {responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    scales:{x:{grid:{display:false},stacked:true,ticks:{maxTicksLimit:trendPeriod==="all"?18:12,autoSkip:true}},
+      y:{grid:{color:grid},stacked:true,ticks:{callback:v=>(v/1e8).toFixed(0)+"억"}},
+      y2:{position:"right",display:hasRatio,grid:{display:false},min:0,ticks:{callback:v=>v+"%"}}},
+    plugins:{tooltip:{callbacks:{
+      label:c=>c.dataset.yAxisID==="y2"?` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`:` ${c.dataset.label}: ${N(c.parsed.y)}원`,
+      afterBody:items=>`전체 매출: ${N(total[items[0].dataIndex])}원`
+    }}}};
+  if(trendChart){ trendChart.data=data; trendChart.options=opts; trendChart.update(); }
+  else trendChart = new Chart(document.getElementById("chTrend"),{data,options:opts,plugins:[dashedBarsPlugin]});
+  $("trendNote").textContent = note;
+}
+document.querySelectorAll("#periodSeg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#periodSeg button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); trendPeriod=b.dataset.p;
+  $("trendYear").style.display = trendPeriod==="month"?"":"none";
+  drawTrendChart();
+}));
+document.querySelectorAll("#metricSeg button").forEach(b=>b.addEventListener("click",()=>{
+  document.querySelectorAll("#metricSeg button").forEach(x=>x.classList.remove("active"));
+  b.classList.add("active"); trendMetric=b.dataset.m;
+  $("chanChk").style.display = trendMetric==="d2c"?"inline-flex":"none";
+  drawTrendChart();
+}));
+$("trendYear").addEventListener("change",drawTrendChart);
+["ck_web","ck_apk","ck_pc"].forEach(id=>$(id).addEventListener("change",drawTrendChart));
+
+/* ===== 초기 렌더 (데이터 로드 후 호출) ===== */
+function initRender(){
+  document.getElementById("mainContent").style.display = "";
+  document.getElementById("setupPanel").style.display = "none";
+  renderCards();
+  applyBaseDefaults();
+  renderChannelTable();
+  renderTargetInputs();
+  buildTargetRows();
+  renderTargets();
+  drawBaseCharts();
+  drawTrendChart();
+  renderDaily(); // 월 목표 자체결제는 하반기 목표표에서 자동 반영
+  renderBest();
+  renderSim();
+}
+
+/* ===== 부트: 시트 URL 결정 → 게임 목록 → 상세 로드 ===== */
+function getMasterUrl(){
+  try {
+    const s = JSON.parse(localStorage.getItem(DASH_LS));
+    if (s && s.masterSheetUrl) return s.masterSheetUrl;
+  } catch(e) {}
+  return localStorage.getItem("kpiplanner-sheet") || "";
+}
+function showSetup(msg){
+  document.getElementById("setupPanel").style.display = "";
+  document.getElementById("setupMsg").innerHTML = msg;
+  document.getElementById("dataRange").textContent = "데이터 미연결";
+}
+async function loadGame(code){
+  document.getElementById("dataRange").textContent = `${code} 상세 데이터 불러오는 중…`;
+  RAW = await loadDetail(SHEET_URL, code);
+  CUR_GAME = code;
+  localStorage.setItem("kpiplanner-game", code);
+  document.getElementById("plGame").textContent = code;
+  computeAll();
+  initRender();
+}
+async function boot(url){
+  SHEET_URL = url;
+  try {
+    GAMES = await loadGames(url);
+    const gs = document.getElementById("gameSel");
+    const saved = localStorage.getItem("kpiplanner-game");
+    let pick = GAMES.includes(saved) ? saved : (GAMES.includes("POTC") ? "POTC" : GAMES[0]);
+    gs.innerHTML = GAMES.map(g=>`<option ${g===pick?"selected":""}>${g}</option>`).join("");
+    // 상세 탭이 있는 게임으로 로드 (없으면 다음 게임 시도)
+    let loaded = false, errs = [];
+    for (const cand of [pick, ...GAMES.filter(g=>g!==pick)]) {
+      try { await loadGame(cand); gs.value = cand; loaded = true; break; }
+      catch(e){ errs.push(`${cand}: ${e.message}`); }
+    }
+    if (!loaded) throw new Error("상세(-kpi) 탭을 가진 게임이 없습니다.<br>" + errs.join("<br>"));
+    localStorage.setItem("kpiplanner-sheet", url);
+    // 메인 대시보드와 시트 URL 공유 (masterSheetUrl)
+    try {
+      const s = JSON.parse(localStorage.getItem(DASH_LS)) || {};
+      if (s.masterSheetUrl !== url) { s.masterSheetUrl = url; localStorage.setItem(DASH_LS, JSON.stringify(s)); }
+    } catch(e) {}
+  } catch(e) {
+    showSetup("❌ " + e.message + '<br><br>시트 공유("링크가 있는 모든 사용자: 뷰어")와 <b>코드-kpi</b> 탭 존재 여부를 확인한 뒤 다시 연결하세요.');
+  }
+}
+document.getElementById("gameSel").addEventListener("change", async e=>{
+  try { await loadGame(e.target.value); }
+  catch(err){ alert(`${e.target.value} 로드 실패: ` + err.message); }
+});
+document.getElementById("setupGo").addEventListener("click", ()=>{
+  const url = document.getElementById("setupUrl").value.trim();
+  if (!url) { alert("시트 URL을 입력하세요."); return; }
+  boot(url);
+});
+
+/* 시작 — ?sheet= 파라미터 > 저장된 URL 순서 */
+(function(){
+  let url = "";
+  try {
+    const p = new URLSearchParams(location.search).get("sheet");
+    if (p) { url = p.trim(); history.replaceState(null, "", location.pathname); }
+  } catch(e) {}
+  if (!url) url = getMasterUrl();
+  if (url) { document.getElementById("setupUrl") && (document.getElementById("setupUrl").value = url); boot(url); }
+  else showSetup("연결된 시트가 없습니다. 메인 대시보드의 🎮 게임 시트에서 <b>메인 시트</b>를 연결했다면 자동으로 이어지며, 아니면 아래에 시트 URL을 직접 입력하세요.");
+})();
+</script>
+</body>
+</html>

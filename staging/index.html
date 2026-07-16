@@ -1,0 +1,2228 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>자체결제 KPI 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="assets/gsheet.js"></script>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #1a2132;
+    --panel-2: #212a40;
+    --border: #2c3752;
+    --text: #e8ecf5;
+    --muted: #8b96ad;
+    --accent: #4f8cff;
+    --accent-2: #34d399;
+    --peak: #fbbf24;
+    --down: #f87171;
+    --up: #34d399;
+    --hero-bg: linear-gradient(135deg, #1a2540, #1a2132);
+  }
+  [data-theme="light"] {
+    --bg: #f3f5f9;
+    --panel: #ffffff;
+    --panel-2: #eef1f6;
+    --border: #dbe1ec;
+    --text: #1c2333;
+    --muted: #5c6779;
+    --accent: #2f6fed;
+    --accent-2: #0f9d6e;
+    --peak: #d97706;
+    --down: #dc2626;
+    --up: #0f9d6e;
+    --hero-bg: linear-gradient(135deg, #eaf1ff, #ffffff);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Pretendard', 'Malgun Gothic', -apple-system, sans-serif;
+    min-height: 100vh;
+    padding: 20px clamp(12px, 3vw, 36px) 48px;
+    transition: background .25s, color .25s;
+  }
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    margin-bottom: 14px;
+  }
+  h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  h1 .game { color: var(--accent); }
+  .period-label { color: var(--muted); font-size: 13px; margin-left: 4px; }
+  .ver-badge {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all .15s;
+  }
+  .ver-badge:hover { border-color: var(--accent); color: var(--accent); }
+  .vh-item { display: flex; gap: 12px; padding: 12px 4px; border-bottom: 1px solid var(--border); }
+  .vh-item:last-child { border-bottom: none; }
+  .vh-ver { min-width: 64px; font-weight: 700; font-size: 14px; }
+  .vh-body { flex: 1; }
+  .vh-meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .vh-body ul { margin: 4px 0 0 16px; font-size: 13px; line-height: 1.7; }
+  .spacer { flex: 1; }
+  .btn {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+    transition: all .15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn.primary:hover { filter: brightness(1.1); color: #fff; }
+  .btn.icon { padding: 7px 10px; font-size: 15px; line-height: 1; }
+  /* game tabs */
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; align-items: center; }
+  .tab {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    padding: 7px 13px; border-radius: 20px; font-size: 13px; cursor: pointer;
+    transition: all .15s; user-select: none;
+  }
+  .tab:hover { border-color: var(--accent); color: var(--accent); }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .tab .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .tab .x {
+    display: none; font-size: 12px; opacity: .65; margin-left: 2px;
+  }
+  .tab:hover .x { display: inline; }
+  .tab .x:hover { opacity: 1; }
+  .tabs .hint { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .controls {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    margin-bottom: 18px;
+  }
+  .seg { display: flex; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button {
+    background: transparent; border: none; color: var(--muted);
+    padding: 7px 14px; font-size: 13px; cursor: pointer;
+  }
+  .seg button.active { background: var(--accent); color: #fff; font-weight: 600; }
+  .target-ctl { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .target-ctl input {
+    width: 56px; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    padding: 6px 8px; border-radius: 8px; font-size: 13px; text-align: right;
+  }
+  /* KPI cards */
+  .cards {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px; margin-bottom: 18px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .card .value { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .card .value small { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .card .delta { font-size: 12px; margin-top: 5px; }
+  .delta.up { color: var(--up); } .delta.down { color: var(--down); } .delta.flat { color: var(--muted); }
+  .card.hero { border-color: var(--accent); background: var(--hero-bg); }
+  .card.hero .value { color: var(--accent); font-size: 26px; }
+  /* charts */
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(480px, 100%), 1fr));
+    gap: 14px;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; position: relative;
+  }
+  /* 차트 패널 도구 (확대·드래그) */
+  .chart-panel h2 { padding-right: 76px; }
+  .p-tools { position: absolute; top: 12px; right: 12px; display: flex; gap: 4px; z-index: 5; }
+  .p-btn {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; padding: 3px 9px; font-size: 12px; cursor: pointer; line-height: 1.4;
+  }
+  .p-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .p-btn.drag { cursor: grab; }
+  .p-btn.drag:active { cursor: grabbing; }
+  .panel.dragging { opacity: .45; border-style: dashed; }
+  .panel.expanded {
+    position: fixed; inset: 14px; z-index: 150; overflow-y: auto;
+    box-shadow: 0 24px 80px rgba(0,0,0,.5);
+  }
+  .panel.expanded .chart-box { height: calc(100vh - 200px); min-height: 300px; }
+  .panel.expanded .p-btn.drag { display: none; }
+  .expand-backdrop {
+    position: fixed; inset: 0; background: rgba(10,14,24,.65); z-index: 140; display: none;
+  }
+  .expand-backdrop.show { display: block; }
+  .panel h2 { font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text); }
+  .panel h2 span { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .chart-box { position: relative; height: 300px; }
+  /* top5 chips */
+  .top5chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 14px; padding: 4px 10px; font-size: 12px; color: var(--text);
+  }
+  .chip b { color: var(--peak); }
+  .chip .pct { color: var(--muted); }
+  /* table */
+  .table-wrap { overflow-x: auto; margin-top: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+  th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); z-index: 1; }
+  td:first-child, th:first-child { text-align: left; }
+  tr:hover td { background: rgba(79,140,255,.06); }
+  td.ok { color: var(--up); font-weight: 600; }
+  td.no { color: var(--down); }
+  tr.peak td:first-child::after { content: " ★"; color: var(--peak); }
+  tr.low td:first-child::after { content: " ▼"; color: var(--down); }
+  .footer-note { color: var(--muted); font-size: 12px; margin-top: 20px; text-align: center; }
+  /* upload overlay */
+  #dropOverlay {
+    position: fixed; inset: 0; background: rgba(15,20,32,.85); z-index: 99;
+    display: none; align-items: center; justify-content: center;
+    border: 3px dashed var(--accent); font-size: 20px; color: var(--accent);
+  }
+  #dropOverlay.show { display: flex; }
+  #fileInput { display: none; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--panel-2); border: 1px solid var(--accent); color: var(--text);
+    padding: 10px 20px; border-radius: 10px; font-size: 13px; z-index: 100;
+    opacity: 0; transition: opacity .3s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  /* merge modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(10,14,24,.6); z-index: 200;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    width: min(640px, 100%); max-height: 86vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,.4);
+  }
+  .modal .m-head { padding: 16px 20px 12px; border-bottom: 1px solid var(--border); }
+  .modal .m-head h3 { font-size: 15px; }
+  .modal .m-head .file { font-size: 12px; color: var(--muted); margin-top: 4px; word-break: break-all; }
+  .modal .m-body { padding: 14px 20px; overflow-y: auto; }
+  .modal .m-sec { margin-bottom: 14px; }
+  .modal .m-sec h4 { font-size: 13px; margin-bottom: 8px; }
+  .modal .m-sec h4 .cnt { color: var(--accent); }
+  .modal .m-sec h4 .sub { font-weight: 400; font-size: 12px; color: var(--muted); margin-left: 6px; }
+  .m-list {
+    border: 1px solid var(--border); border-radius: 8px; max-height: 180px; overflow-y: auto;
+  }
+  .m-list table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .m-list th, .m-list td { padding: 5px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+  .m-list th { color: var(--muted); position: sticky; top: 0; background: var(--panel-2); }
+  .m-list td:first-child, .m-list th:first-child { text-align: left; }
+  .m-list .old { color: var(--muted); text-decoration: line-through; }
+  .m-list .new { color: var(--accent-2); font-weight: 600; }
+  .m-empty { color: var(--muted); font-size: 12px; padding: 8px 2px; }
+  .m-check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 8px; cursor: pointer; }
+  .m-check input { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  .modal .m-foot {
+    padding: 12px 20px; border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end; gap: 8px;
+  }
+  /* 이벤트 */
+  .ev-badge {
+    display: inline-block; padding: 2px 9px; border-radius: 10px;
+    font-size: 11px; font-weight: 600; color: #fff; vertical-align: middle;
+  }
+  .ev-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+  .ev-item .ev-t { font-size: 14px; font-weight: 600; margin: 6px 0 4px; }
+  .ev-item .ev-m { font-size: 12px; color: var(--muted); }
+  .ev-effect {
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 12px; font-size: 13px; line-height: 1.9;
+  }
+  .ev-effect b.up { color: var(--up); } .ev-effect b.down { color: var(--down); }
+  .ev-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%; color: #fff;
+    font-size: 11px; font-weight: 700; vertical-align: middle;
+  }
+  #eventsBody .m-empty { padding: 16px 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>💳 <span class="game" id="gameName">GBTW</span> 자체결제 KPI 대시보드</h1>
+  <span class="ver-badge" id="verBadge" title="버전 히스토리 보기"></span>
+  <span class="period-label" id="periodLabel"></span>
+  <div class="spacer"></div>
+  <button class="btn icon" id="themeBtn" title="다크/라이트 모드 전환">🌙</button>
+  <a class="btn" href="kpi-planner.html" style="text-decoration:none" title="자체결제 안착 KPI 플래너">🎯 KPI 플래너</a>
+  <button class="btn" id="snapBtn" title="암호화 스냅샷 게시/불러오기">📦 스냅샷</button>
+  <button class="btn" id="gameSheetBtn" title="구글시트로 게임 KPI 데이터 관리">🎮 게임 시트</button>
+  <button class="btn" id="sheetBtn" title="구글시트로 이벤트/프로모션 관리">📅 이벤트 시트</button>
+  <button class="btn primary" onclick="document.getElementById('fileInput').click()">📂 데이터 업로드 (.xlsx)</button>
+  <button class="btn" id="resetBtn" title="업로드 데이터를 모두 지우고 기본 데이터로 돌아갑니다">초기화</button>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple>
+</header>
+
+<div class="tabs" id="gameTabs"></div>
+
+<div class="controls">
+  <div class="seg" id="viewSeg">
+    <button data-view="dash" class="active">📊 대시보드</button>
+    <button data-view="events">🎯 이벤트 효과</button>
+  </div>
+  <div class="seg" id="rangeSeg">
+    <button data-days="7">7일</button>
+    <button data-days="14">14일</button>
+    <button data-days="30" class="active">30일</button>
+    <button data-days="90">90일</button>
+    <button data-days="0">전체</button>
+  </div>
+  <div class="target-ctl" id="targetCtl">
+    목표 비중 <input type="number" id="targetInput" value="32" min="0" max="100" step="1"> %
+  </div>
+</div>
+
+<div class="cards" id="cards"></div>
+
+<div class="grid" id="chartsGrid">
+  <div class="panel chart-panel" id="p-rev">
+    <div class="p-tools"><button class="p-btn drag" title="드래그로 순서 변경">⠿</button><button class="p-btn expand" title="확대 / 돌아가기">⛶</button></div>
+    <h2 id="chRevenueTitle">일별 매출 &amp; 자체결제 비중 <span>★ 피크 TOP5 강조 · 막대: 매출(원) / 선: 비중(%)</span></h2>
+    <div class="top5chips" id="top5Chips"></div>
+    <div class="chart-box"><canvas id="chRevenue"></canvas></div>
+  </div>
+  <div class="panel chart-panel" id="p-ratio">
+    <div class="p-tools"><button class="p-btn drag" title="드래그로 순서 변경">⠿</button><button class="p-btn expand" title="확대 / 돌아가기">⛶</button></div>
+    <h2 id="chRatioTitle">자체결제 비중 추이 <span>7일 이동평균 &amp; 목표선</span></h2>
+    <div class="chart-box"><canvas id="chRatio"></canvas></div>
+  </div>
+  <div class="panel chart-panel" id="p-puarppu">
+    <div class="p-tools"><button class="p-btn drag" title="드래그로 순서 변경">⠿</button><button class="p-btn expand" title="확대 / 돌아가기">⛶</button></div>
+    <h2>자체결제 PU &amp; ARPPU <span>막대: PU(명) / 선: ARPPU(원)</span></h2>
+    <div class="chart-box"><canvas id="chPu"></canvas></div>
+  </div>
+  <div class="panel chart-panel" id="p-weekly">
+    <div class="p-tools"><button class="p-btn drag" title="드래그로 순서 변경">⠿</button><button class="p-btn expand" title="확대 / 돌아가기">⛶</button></div>
+    <h2 id="chWeeklyTitle">주별 자체결제 매출 &amp; 비중 <span>월요일 시작 주 단위 합계</span></h2>
+    <div class="chart-box"><canvas id="chWeekly"></canvas></div>
+  </div>
+  <div class="panel chart-panel" id="p-putrend">
+    <div class="p-tools"><button class="p-btn drag" title="드래그로 순서 변경">⠿</button><button class="p-btn expand" title="확대 / 돌아가기">⛶</button></div>
+    <h2 id="chPuTrendTitle">자체결제 PU 추이 <span>7일 이동평균</span></h2>
+    <div class="top5chips" id="puChips"></div>
+    <div class="chart-box"><canvas id="chPuTrend"></canvas></div>
+  </div>
+</div>
+<div class="expand-backdrop" id="expandBackdrop"></div>
+
+<!-- 이벤트 효과 분석 페이지 -->
+<div class="panel" id="eventsPanel" style="display:none">
+  <h2>🎯 이벤트 효과 분석 <span>동기간 중복 이벤트는 기간 기준으로 묶어 분석 · 비교: 직전 동일 일수</span></h2>
+  <div id="eventsBody"></div>
+</div>
+
+<div class="panel" id="tablePanel" style="margin-top:14px">
+  <h2>일별 상세 <span>최근일부터, 선택 기간 · ★ = 피크 TOP5 / ▼ = 최저</span></h2>
+  <div class="table-wrap" style="max-height:420px; overflow-y:auto">
+    <table id="dataTable">
+      <thead><tr>
+        <th>날짜</th><th>DAU</th><th>전체 IAP 매출</th><th>자체결제 매출</th>
+        <th>비중</th><th>PU</th><th>ARPPU</th><th>ARPDAU</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<p class="footer-note">
+  🎮 <b>게임 시트</b>: 구글시트로 KPI 데이터 관리 (열 때마다 자동 동기화) · 📂 xlsx 드래그 업로드도 가능 (파일명으로 게임 자동 구분) ·
+  데이터는 이 브라우저(localStorage)에만 저장됩니다
+</p>
+
+<div id="dropOverlay">엑셀 파일을 여기에 놓으세요 (여러 개 가능)</div>
+<div class="toast" id="toast"></div>
+
+<!-- 업로드 병합 확인 모달 -->
+<div class="modal-overlay" id="mergeModal">
+  <div class="modal">
+    <div class="m-head">
+      <h3 id="mTitle">데이터 업데이트 확인</h3>
+      <div class="file" id="mFile"></div>
+    </div>
+    <div class="m-body">
+      <div class="m-sec">
+        <h4>🆕 신규 추가 <span class="cnt" id="mNewCnt"></span><span class="sub">기존에 없는 날짜 → 추가됩니다</span></h4>
+        <div id="mNewList"></div>
+      </div>
+      <div class="m-sec">
+        <h4>♻️ 중복 날짜 <span class="cnt" id="mDupCnt"></span><span class="sub">기존 값을 유지합니다</span></h4>
+        <div id="mDupList"></div>
+        <label class="m-check" id="mOverwriteWrap" style="display:none">
+          <input type="checkbox" id="mOverwrite">
+          <span>값이 달라진 중복 날짜(<b id="mDiffCnt"></b>일)를 새 값으로 덮어쓰기</span>
+        </label>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn" id="mCancel">취소</button>
+      <button class="btn primary" id="mApply">적용</button>
+    </div>
+  </div>
+</div>
+
+<!-- 이벤트 상세 모달 -->
+<div class="modal-overlay" id="eventModal">
+  <div class="modal">
+    <div class="m-head">
+      <h3 id="evTitle">이벤트 상세</h3>
+      <div class="file" id="evPeriod"></div>
+    </div>
+    <div class="m-body" id="evBody"></div>
+    <div class="m-foot">
+      <button class="btn primary" id="evClose">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 구글시트 연결 모달 -->
+<div class="modal-overlay" id="sheetModal">
+  <div class="modal">
+    <div class="m-head">
+      <h3>📅 이벤트 구글시트 연결</h3>
+      <div class="file" id="sheetStatus"></div>
+    </div>
+    <div class="m-body">
+      <div class="m-sec">
+        <h4>1. 구글시트 준비 <span class="sub">1행에 아래 헤더 그대로 입력</span></h4>
+        <div class="m-list"><table>
+          <thead><tr><th>game</th><th>start</th><th>end</th><th>type</th><th>title</th><th>memo</th></tr></thead>
+          <tbody>
+            <tr><td>GBTW</td><td>2026-06-24</td><td>2026-06-26</td><td>프로모션</td><td>웹상점 2배 이벤트</td><td>첫결제 보너스</td></tr>
+            <tr><td>GBTW</td><td>2026-05-20</td><td></td><td>점검</td><td>임시점검 6시간</td><td>매출 급락 원인</td></tr>
+            <tr><td>ALL</td><td>2026-06-01</td><td>2026-06-30</td><td>상점이벤트</td><td>D2C 마일리지 2배</td><td></td></tr>
+          </tbody>
+        </table></div>
+        <div class="m-empty">· end 비우면 하루짜리 · game에 ALL 입력 시 전 게임 공통 · 날짜는 2026-06-24 / 2026.6.24 형식 모두 인식</div>
+      </div>
+      <div class="m-sec">
+        <h4>2. 공유 설정 <span class="sub">우측 상단 공유 → "링크가 있는 모든 사용자: 뷰어"</span></h4>
+      </div>
+      <div class="m-sec">
+        <h4>3. 시트 URL 붙여넣기</h4>
+        <input type="text" id="sheetUrlInput" placeholder="https://docs.google.com/spreadsheets/d/..."
+          style="width:100%;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px">
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn" id="sheetDisconnect" style="margin-right:auto">연결 해제</button>
+      <button class="btn" id="sheetClose">닫기</button>
+      <button class="btn primary" id="sheetSync">연결 &amp; 동기화</button>
+    </div>
+  </div>
+</div>
+
+<!-- 암호화 스냅샷 모달 -->
+<div class="modal-overlay" id="snapModal">
+  <div class="modal">
+    <div class="m-head">
+      <h3>📦 암호화 스냅샷</h3>
+      <div class="file" id="snapStatus">게시된 스냅샷 확인 중…</div>
+    </div>
+    <div class="m-body">
+      <div class="m-sec">
+        <h4>스냅샷 불러오기 <span class="sub">게시된 데이터를 비밀번호로 열어 이 브라우저에 로드</span></h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="password" id="snapLoadPw" placeholder="비밀번호"
+            style="flex:1;min-width:160px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px">
+          <button class="btn primary" id="snapLoadBtn">🔓 불러오기</button>
+        </div>
+        <div class="m-empty">시트 접근 권한 없이도 게시 시점의 데이터·이벤트를 볼 수 있습니다.</div>
+      </div>
+      <div class="m-sec">
+        <h4>스냅샷 게시 — 관리자용 <span class="sub">현재 데이터+이벤트를 암호화한 파일 생성</span></h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="password" id="snapPubPw" placeholder="게시 비밀번호 (팀과 공유할 암호)"
+            style="flex:1;min-width:160px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px">
+          <button class="btn" id="snapPubBtn">🔐 암호화 파일 만들기</button>
+        </div>
+        <div class="m-empty" style="line-height:1.8">
+          · <b>snapshot.enc.json</b> 파일이 다운로드됩니다 → Claude에게 "스냅샷 배포해줘"라고 요청하거나 저장소 루트에 직접 커밋<br>
+          · 스냅샷에는 구글시트 URL이 <b>포함되지 않습니다</b> — 팀원은 시트에 접근할 수 없습니다<br>
+          · 저장소에는 암호화된 내용만 올라가므로 비밀번호 없이는 수치를 볼 수 없습니다
+        </div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn primary" id="snapClose">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 버전 히스토리 모달 -->
+<div class="modal-overlay" id="verModal">
+  <div class="modal">
+    <div class="m-head">
+      <h3>📋 버전 히스토리</h3>
+      <div class="file">버전 규칙: <b>리뉴얼 . 신규 기능 . 패치</b></div>
+    </div>
+    <div class="m-body" id="verBody"></div>
+    <div class="m-foot">
+      <button class="btn primary" id="verClose">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 게임 KPI 시트 관리 모달 -->
+<div class="modal-overlay" id="gameSheetModal">
+  <div class="modal">
+    <div class="m-head">
+      <h3>🎮 게임 데이터 시트 관리</h3>
+      <div class="file">게임별 KPI 데이터를 구글시트로 관리합니다 · 대시보드를 열 때마다 자동 동기화</div>
+    </div>
+    <div class="m-body">
+      <div class="m-sec">
+        <h4>🔗 메인 시트 연결 (권장) <span class="sub">스프레드시트 1개에 프로젝트별 탭 → 링크 하나로 전부 자동 등록</span></h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="gsMasterUrl" placeholder="메인 스프레드시트 URL"
+            style="flex:1;min-width:220px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px">
+          <button class="btn primary" id="gsMasterConnect">연결 &amp; 동기화</button>
+        </div>
+        <div class="m-empty" id="gsMasterStatus" style="line-height:1.8">
+          · <b>index</b> 탭에 <b>game</b> 열로 게임코드를 나열 (POTC, GBTW, IMGN…)<br>
+          · 게임코드와 <b>같은 이름의 탭</b>(예: POTC)에 일별 요약 KPI를 넣으세요 — 메인 대시보드는 이 탭들만 읽습니다<br>
+          · 상세용 <b>코드-kpi</b> 탭(예: POTC-kpi)은 KPI 플래너가 읽습니다 · 프로젝트 추가 = index 한 줄 + 탭 추가
+        </div>
+      </div>
+      <div class="m-sec">
+        <h4>등록된 게임 <span class="sub">개별 시트 URL로도 추가 가능 · 동기화 시 해당 게임 데이터가 교체됩니다</span></h4>
+        <div id="gsList"></div>
+      </div>
+      <div class="m-sec">
+        <h4>신규 게임 추가</h4>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="gsName" placeholder="게임명 (예: GBTW)"
+            style="width:140px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px">
+          <input id="gsUrl" placeholder="구글시트 URL"
+            style="flex:1;min-width:220px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px">
+          <button class="btn primary" id="gsAdd">추가 &amp; 동기화</button>
+        </div>
+        <div class="m-empty" style="line-height:1.8">
+          · 시트 1행 헤더(엑셀 내보내기와 동일): <b>datekey | DAU | 전체 IAP 매출 | 자체 결제 매출 | 자체 결제 매출 비중 | 자체 결제 PU | 자체 결제 ARPPU | 자체 결제 ARPDAU</b><br>
+          · datekey는 날짜(2026-06-30)와 엑셀 숫자값 모두 인식 · 공유: "링크가 있는 모든 사용자 - 뷰어"<br>
+          · 팁: 엑셀 파일을 구글시트에서 열어 그대로 두면 됩니다 (파일 &gt; 가져오기)
+        </div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn" id="gsSyncAll" style="margin-right:auto">🔄 전체 동기화</button>
+      <button class="btn primary" id="gsClose">닫기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= 기본 데이터 (GBTW 2026-01-01 ~ 2026-06-30) ================= */
+const DEFAULT_GAME = "GBTW";
+const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 방식, 브라우저 localStorage에만 저장)
+
+/* ================= 버전 ================= */
+/* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
+const APP_VERSION = "1.12.0";
+const VERSION_HISTORY = [
+  { ver: "1.12.0", date: "2026-07-13", type: "기능", changes: [
+    "공통 데이터 계층 분리 (assets/gsheet.js) — 시트 접근·CSV·날짜/숫자 파싱·게임코드를 한 곳에서 관리(대시보드·플래너 공유)",
+    "버그 수정: 일별 트래킹 NaN 방어, 주별 그룹 타임존 -1일, 채널 0나눗셈, 엑셀 시리얼 날짜 지원, 스냅샷 모달 부트 경쟁",
+  ]},
+  { ver: "1.11.0", date: "2026-07-13", type: "기능", changes: [
+    "플래너 일별 차트(비중 추이·PU & ARPPU) 기간 선택 추가 (30/45/90/180일/전체)",
+  ]},
+  { ver: "1.10.2", date: "2026-07-13", type: "패치", changes: [
+    "차트에서 선(누적 실적·목표·비중)이 막대 위에 그려지도록 레이어 순서 수정",
+  ]},
+  { ver: "1.10.1", date: "2026-07-13", type: "패치", changes: [
+    "일별 트래킹 '월 목표 자체결제'를 하반기 목표표의 해당 월 값과 자동 연동 (읽기 전용)",
+  ]},
+  { ver: "1.10.0", date: "2026-07-13", type: "기능", changes: [
+    "하반기 월별 목표를 시나리오 연동으로 전환, 목표 ARPPU 컬럼 추가",
+    "채널을 복수 선택(WEB·APK·PC 체크박스)으로 변경 — 일별 트래킹·하반기 목표 공유",
+    "선택 채널 목표 = 월 목표 × 기준월 채널 비중, 시나리오로 PU↔ARPPU 분해 (양 패널 일관)",
+  ]},
+  { ver: "1.9.1", date: "2026-07-13", type: "패치", changes: [
+    "일별 트래킹 기준 ARPPU/PU를 시뮬레이터와 통일 — '최근 30일' 대신 '기준 월(상단 📅)' 사용",
+    "채널 목표 배분·기준선이 기준 월 기준으로 일관되게 표시 (시뮬레이터 9만원 = 트래킹 목표 9만원)",
+  ]},
+  { ver: "1.9.0", date: "2026-07-13", type: "기능", changes: [
+    "플래너 일별 트래킹에 채널 선택(전체/WEB/APK/PC) 추가",
+    "채널 목표 = 월 목표 × 최근 30일 채널 매출 비중으로 자동 배분, 목표 PU·ARPPU도 채널 기준선으로 계산",
+  ]},
+  { ver: "1.8.1", date: "2026-07-13", type: "패치", changes: [
+    "프로젝트 자동 발견 후보에 WWM·DS 추가 (6개 게임 전부 인식)",
+  ]},
+  { ver: "1.8.0", date: "2026-07-13", type: "기능", changes: [
+    "index 탭 없이도 프로젝트 자동 발견 — 후보 코드의 탭 존재를 프로빙 (대시보드·플래너 공통, IMGN·RESU 자동 인식)",
+    "?sheet= 공유 링크 — 대시보드/플래너 URL에 시트 주소를 붙여 열면 자동 연결·저장",
+    "대시보드 ↔ 플래너 시트 URL 상호 공유 (한쪽만 연결해도 양쪽 동작)",
+  ]},
+  { ver: "1.7.0", date: "2026-07-13", type: "기능", changes: [
+    "🎯 KPI 플래너 페이지 추가 (kpi-planner.html) — 자체결제 안착 목표·시뮬레이터·일별 트래킹·TOP10",
+    "플래너는 구글시트 '코드-kpi' 상세 탭에서 전 지표를 실시간 계산 (실데이터 미내장)",
+    "헤더에 플래너 진입 버튼 추가, 메인 시트 연결(masterSheetUrl) 공유",
+  ]},
+  { ver: "1.6.1", date: "2026-07-13", type: "패치", changes: [
+    "메인 시트 연결 규칙 정리 — index 탭(게임코드 목록) 기준, 메인 대시보드는 '코드' 요약 탭만 로드('코드-kpi' 상세 탭은 제외)",
+    "없는 탭 요청 시 구글이 첫 탭을 반환하는 문제 방어 (index 탭 검증 추가)",
+  ]},
+  { ver: "1.6.0", date: "2026-07-13", type: "기능", changes: [
+    "메인 시트 연결 — 스프레드시트 1개(프로젝트별 탭)를 링크 하나로 전부 자동 등록",
+    "index 탭 목록을 읽어 각 프로젝트 탭을 이름으로 자동 로드",
+    "프로젝트 추가 = index 한 줄 + 탭 추가 → 링크 그대로 유지",
+  ]},
+  { ver: "1.5.0", date: "2026-07-09", type: "기능", changes: [
+    "📦 암호화 스냅샷 — 관리자가 데이터+이벤트를 AES-256으로 암호화해 게시, 팀원은 비밀번호만으로 열람",
+    "스냅샷에 구글시트 URL 미포함 → 팀원은 시트 접근 불필요·불가",
+    "접속 시 게시본 자동 감지 — 데이터 없으면 불러오기 안내, 새 게시본 있으면 알림",
+  ]},
+  { ver: "1.4.0", date: "2026-07-09", type: "기능", changes: [
+    "차트 확대 보기 — 패널 우측 상단 ⛶ 클릭 시 전체 화면 확대, ↩ 돌아가기/ESC/배경 클릭으로 복귀",
+    "차트 순서 변경 — ⠿ 핸들을 잡고 드래그하면 패널 순서 이동, 변경한 순서는 저장되어 유지",
+  ]},
+  { ver: "1.3.1", date: "2026-07-09", type: "패치", changes: [
+    '구글시트 날짜 인식 확대 — 영문 형식("June 30, 2026"), 미국식(06/30/2026) 지원',
+  ]},
+  { ver: "1.3.0", date: "2026-07-09", type: "기능", changes: [
+    "버전 히스토리 추가 (헤더 버전 배지 클릭)",
+  ]},
+  { ver: "1.2.0", date: "2026-07-09", type: "기능", changes: [
+    "게임 KPI 데이터 구글시트 연동 — 🎮 게임 시트에서 게임명+시트 URL 등록",
+    "대시보드를 열 때마다 등록된 게임 시트 자동 동기화 (시트가 데이터 원본)",
+    "게임별 개별/전체 동기화 및 등록 삭제",
+  ]},
+  { ver: "1.1.1", date: "2026-07-09", type: "패치", changes: [
+    "차트 피크/최저 라벨 겹침 수정 — 계단식 배치, 배경 박스, 연결선, 범례 침범 방지",
+  ]},
+  { ver: "1.1.0", date: "2026-07-09", type: "기능", changes: [
+    "이벤트/프로모션 구글시트 연동 (📅 이벤트 시트)",
+    "차트 하단 이벤트 번호 마크 + 클릭 시 상세 팝업 (기간 겹침은 한 그룹으로 묶음)",
+    "🎯 이벤트 효과 분석 페이지 — 이벤트별 기간 성과를 직전 동일 일수와 비교",
+  ]},
+  { ver: "1.0.0", date: "2026-07-09", type: "리뉴얼", changes: [
+    "자체결제 KPI 대시보드 최초 배포 (GitHub Pages)",
+    "멀티 게임 탭 — xlsx 업로드(파일명 자동 인식)·병합(중복 비교 확인창)",
+    "KPI 카드 — 선택 기간 연동, 직전 기간 대비, 성장률(시작 7일→마감 7일), 비중 카드 30일 고정",
+    "차트 5종 — 매출+비중(피크 TOP5/최저 강조), 비중 추이, PU&ARPPU, 주별, PU 추이",
+    "다크/라이트 테마, 목표 비중 설정, 일별 상세 테이블",
+  ]},
+];
+
+/* ================= 상태 ================= */
+const LS_KEY = "d2c-dashboard-v2";
+let games = {};          // { 게임명: rows[] }
+let activeGame = DEFAULT_GAME; // "ALL" = 전체
+let rangeDays = 30;
+let targetPct = 32;
+let theme = "dark";
+let charts = {};
+let events = [];          // [{game,start,end,type,title,memo}]
+let eventSheetUrl = "";
+let lastSync = "";
+let viewMode = "dash";    // dash | events
+let gameSheets = {};      // { 게임명: 구글시트 URL } — KPI 데이터 소스
+let masterSheetUrl = "";  // 메인 스프레드시트(멀티 탭) URL
+let chartOrder = [];      // 차트 패널 순서 (드래그로 변경)
+let lastSnapshotLoaded = ""; // 마지막으로 불러온 스냅샷 게시 시각
+
+const GAME_COLORS = ["#4f8cff", "#34d399", "#c084fc", "#fbbf24", "#f87171", "#22d3ee", "#fb923c", "#a3e635"];
+const RANK_MARKS = ["①", "②", "③", "④", "⑤"];
+
+/* ================= 유틸 ================= */
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmtWon = v => {
+  if (v == null || isNaN(v)) return "-";
+  const abs = Math.abs(v);
+  if (abs >= 1e8) return (v / 1e8).toFixed(abs >= 1e9 ? 0 : 1) + "억";
+  if (abs >= 1e4) return Math.round(v / 1e4).toLocaleString() + "만";
+  return Math.round(v).toLocaleString();
+};
+const fmtNum = v => v == null || isNaN(v) ? "-" : Math.round(v).toLocaleString();
+const fmtPct = v => v == null || isNaN(v) ? "-" : (v * 100).toFixed(1) + "%";
+const mmdd = d => d.slice(5).replace("-", "/");
+const avg = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN;
+const sum = a => a.reduce((s, x) => s + x, 0);
+const gameColor = name => GAME_COLORS[Object.keys(games).indexOf(name) % GAME_COLORS.length];
+
+function loadState() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LS_KEY));
+    if (saved && saved.games && Object.keys(saved.games).length) {
+      games = saved.games;
+      targetPct = saved.target || 32;
+      theme = saved.theme || "dark";
+      events = saved.events || [];
+      eventSheetUrl = saved.eventSheetUrl || "";
+      lastSync = saved.lastSync || "";
+      gameSheets = saved.gameSheets || {};
+      masterSheetUrl = saved.masterSheetUrl || "";
+      chartOrder = saved.chartOrder || [];
+      lastSnapshotLoaded = saved.lastSnapshotLoaded || "";
+      activeGame = saved.activeGame && (saved.activeGame === "ALL" || games[saved.activeGame])
+        ? saved.activeGame : Object.keys(games)[0];
+      return;
+    }
+  } catch (e) {}
+  games = DEFAULT_DATA.length ? { [DEFAULT_GAME]: [...DEFAULT_DATA] } : {};
+  activeGame = Object.keys(games)[0] || "ALL";
+}
+function saveState() {
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({ games, target: targetPct, theme, activeGame, events, eventSheetUrl, lastSync, gameSheets, chartOrder, lastSnapshotLoaded, masterSheetUrl }));
+  } catch (e) {}
+}
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+/* ================= 데이터 가공 ================= */
+function sortedRows(rows) { return [...rows].sort((a, b) => a.date.localeCompare(b.date)); }
+
+function aggregateAll() {
+  const byDate = {};
+  for (const rows of Object.values(games)) {
+    for (const r of rows) {
+      const o = byDate[r.date] = byDate[r.date] || { date: r.date, dau: 0, iap: 0, d2c: 0, pu: 0 };
+      o.dau += r.dau || 0; o.iap += r.iap || 0; o.d2c += r.d2c || 0; o.pu += r.pu || 0;
+    }
+  }
+  return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)).map(o => ({
+    ...o,
+    ratio: o.iap ? o.d2c / o.iap : 0,
+    arppu: o.pu ? o.d2c / o.pu : null,
+    arpdau: o.dau ? Math.round(o.d2c / o.dau * 10) / 10 : null
+  }));
+}
+
+function currentSorted() {
+  return activeGame === "ALL" ? aggregateAll() : sortedRows(games[activeGame] || []);
+}
+function ranged() {
+  const s = currentSorted();
+  return rangeDays > 0 ? s.slice(-rangeDays) : s;
+}
+function movingAvg(arr, w) {
+  return arr.map((_, i) => avg(arr.slice(Math.max(0, i - w + 1), i + 1)));
+}
+function weekKey(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() - (d.getDay() + 6) % 7); // 월요일로
+  // 로컬 기준으로 포맷 (toISOString은 UTC 변환으로 KST에서 하루 앞당겨짐)
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function weeklyAgg(rows) {
+  const weeks = {};
+  rows.forEach(r => {
+    const k = weekKey(r.date);
+    const o = weeks[k] = weeks[k] || { iap: 0, d2c: 0, days: 0 };
+    o.iap += r.iap; o.d2c += r.d2c; o.days++;
+  });
+  return weeks;
+}
+function topNOf(rows, val, n = 5) {
+  return rows.map((r, i) => ({ i, date: r.date, v: val(r), r }))
+    .filter(t => t.v != null && !isNaN(t.v))
+    .sort((a, b) => b.v - a.v).slice(0, n)
+    .map((t, k) => ({ ...t, rank: k + 1 }));
+}
+function minOf(rows, val) {
+  let best = null;
+  rows.forEach((r, i) => {
+    const v = val(r);
+    if (v == null || isNaN(v)) return;
+    if (!best || v < best.v) best = { i, date: r.date, v, r };
+  });
+  return best;
+}
+
+/* ================= 이벤트 (구글시트 연동) ================= */
+function typeColor(t) {
+  t = String(t || "").toLowerCase();
+  if (t.includes("프로모")) return "#4f8cff";
+  if (t.includes("상점") || t.includes("결제")) return "#34d399";
+  if (t.includes("업데이트") || t.includes("패치")) return "#c084fc";
+  if (t.includes("점검") || t.includes("이슈") || t.includes("장애")) return "#f87171";
+  return "#8b96ad";
+}
+/* 공통 데이터 계층(assets/gsheet.js) 별칭 — 한 곳에서 관리 */
+const sheetCsvUrl    = GSheet.csvUrl;
+const sheetTabCsvUrl = GSheet.tabCsvUrl;
+const parseCsv       = GSheet.parseCsv;
+const normDate       = GSheet.normDate;
+async function syncEvents(silent) {
+  if (!eventSheetUrl) return;
+  const url = sheetCsvUrl(eventSheetUrl);
+  if (!url) { alert("구글시트 URL 형식을 인식하지 못했습니다."); return; }
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const grid = parseCsv(await res.text());
+    if (!grid.length) throw new Error("시트가 비어 있습니다.");
+    const header = grid[0].map(h => String(h || "").trim().toLowerCase());
+    const col = names => header.findIndex(h => names.some(n => h.includes(n)));
+    const ci = {
+      game: col(["game", "게임"]), start: col(["start", "시작"]), end: col(["end", "종료"]),
+      type: col(["type", "유형", "분류"]), title: col(["title", "제목", "이벤트명", "내용"]), memo: col(["memo", "메모", "비고"])
+    };
+    if (ci.start < 0 || ci.title < 0)
+      throw new Error("필수 컬럼(start/시작, title/제목)을 찾지 못했습니다. 헤더: " + grid[0].join(", "));
+    const parsed = [];
+    for (let i = 1; i < grid.length; i++) {
+      const g = grid[i];
+      const start = normDate(g[ci.start]);
+      const title = String(g[ci.title] || "").trim();
+      if (!start || !title) continue;
+      parsed.push({
+        game: String(ci.game >= 0 ? g[ci.game] || "" : "").trim().toUpperCase() || "ALL",
+        start,
+        end: normDate(ci.end >= 0 ? g[ci.end] : null) || start,
+        type: String(ci.type >= 0 ? g[ci.type] || "" : "").trim() || "기타",
+        title,
+        memo: String(ci.memo >= 0 ? g[ci.memo] || "" : "").trim()
+      });
+    }
+    events = parsed;
+    lastSync = new Date().toLocaleString("ko-KR");
+    saveState();
+    renderAll();
+    if (!silent) toast(`📅 이벤트 ${events.length}건 동기화 완료`);
+  } catch (err) {
+    if (!silent) alert("이벤트 시트 불러오기 실패: " + err.message +
+      '\n\n확인할 것:\n' +
+      '1) 이 파일을 Chrome 등 실제 브라우저에서 열었는지 (미리보기 패널은 외부 요청이 차단될 수 있습니다)\n' +
+      '2) 시트 공유가 "링크가 있는 모든 사용자: 뷰어"인지\n' +
+      '3) 그래도 안 되면: 시트에서 파일 > 공유 > 웹에 게시 > CSV 선택 후 그 링크를 붙여넣으세요');
+  }
+}
+function visibleEvents() {
+  return events.filter(e => activeGame === "ALL" || e.game === "ALL" || e.game === activeGame);
+}
+/* 동기간(겹치는 기간) 이벤트를 하나의 그룹으로 병합 */
+function eventGroups(evts) {
+  const sorted = [...evts].sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+  const groups = [];
+  for (const e of sorted) {
+    const last = groups[groups.length - 1];
+    if (last && e.start <= last.end) {
+      last.events.push(e);
+      if (e.end > last.end) last.end = e.end;
+    } else {
+      groups.push({ start: e.start, end: e.end, events: [e] });
+    }
+  }
+  return groups;
+}
+/* 기간 효과: 기간 평균 vs 직전 동일 일수 평균 */
+function periodEffect(s, start, end) {
+  const inP = s.filter(r => r.date >= start && r.date <= end);
+  if (!inP.length) return null;
+  const n = inP.length;
+  const i0 = s.findIndex(r => r.date === inP[0].date);
+  const prev = s.slice(Math.max(0, i0 - n), i0);
+  const met = arr => ({
+    d2c: avg(arr.map(r => r.d2c)),
+    ratio: sum(arr.map(r => r.d2c)) / (sum(arr.map(r => r.iap)) || 1),
+    pu: avg(arr.map(r => r.pu).filter(v => v != null))
+  });
+  const cur = met(inP), prv = prev.length ? met(prev) : null;
+  return {
+    days: n, cur, prv, prevDays: prev.length,
+    d2cDelta: prv && prv.d2c ? (cur.d2c / prv.d2c - 1) * 100 : null,
+    ratioDelta: prv ? (cur.ratio - prv.ratio) * 100 : null,
+    puDelta: prv && prv.pu ? (cur.pu / prv.pu - 1) * 100 : null
+  };
+}
+/* 그룹의 데이터 컨텍스트: 특정 게임 이벤트만이면 그 게임, 아니면 현재 뷰/전체 */
+function groupRowsCtx(group) {
+  const gset = new Set(group.events.map(e => e.game));
+  if (gset.size === 1) {
+    const g = [...gset][0];
+    if (g !== "ALL" && games[g]) return { rows: sortedRows(games[g]), label: g };
+  }
+  if (activeGame !== "ALL" && games[activeGame]) return { rows: sortedRows(games[activeGame]), label: activeGame };
+  return { rows: aggregateAll(), label: "전체 게임" };
+}
+const evDelta = (v, suffix) => {
+  if (v == null || isNaN(v)) return "<b>-</b>";
+  const cls = v > 0.05 ? "up" : v < -0.05 ? "down" : "";
+  const arrow = v > 0.05 ? "▲" : v < -0.05 ? "▼" : "―";
+  return `<b class="${cls}">${arrow} ${Math.abs(v).toFixed(1)}${suffix}</b>`;
+};
+function effectHtml(eff, ctxLabel) {
+  if (!eff) return `<div class="ev-effect">데이터 기간과 겹치지 않아 효과를 계산할 수 없습니다.</div>`;
+  const cmp = eff.prv ? `직전 ${eff.prevDays}일 대비` : "직전 데이터 없음";
+  return `<div class="ev-effect">
+    <b>📊 기간 성과</b> <span style="color:var(--muted)">(${ctxLabel} · ${eff.days}일 · ${cmp})</span><br>
+    자체결제 일평균 <b>${fmtWon(eff.cur.d2c)}원</b> ${evDelta(eff.d2cDelta, "%")} ·
+    비중 <b>${fmtPct(eff.cur.ratio)}</b> ${evDelta(eff.ratioDelta, "%p")} ·
+    PU <b>${fmtNum(eff.cur.pu)}명</b> ${evDelta(eff.puDelta, "%")}
+  </div>`;
+}
+/* 이벤트 상세 모달 */
+function showEventDetail(group) {
+  const $ = id => document.getElementById(id);
+  $("evTitle").textContent = `이벤트 ${group.num ? group.num + "번" : ""} 상세 (${group.events.length}건)`;
+  $("evPeriod").textContent = `${group.start} ~ ${group.end}`;
+  const ctx = groupRowsCtx(group);
+  $("evBody").innerHTML =
+    effectHtml(periodEffect(ctx.rows, group.start, group.end), ctx.label) +
+    group.events.map(e => `
+      <div class="ev-item" style="border-left:3px solid ${typeColor(e.type)}">
+        <span class="ev-badge" style="background:${typeColor(e.type)}">${e.type}</span>
+        <span class="ev-badge" style="background:var(--panel-2);color:var(--muted);border:1px solid var(--border)">${e.game}</span>
+        <span style="font-size:12px;color:var(--muted);margin-left:4px">${e.start}${e.end !== e.start ? " ~ " + e.end : ""}</span>
+        <div class="ev-t">${e.title}</div>
+        ${e.memo ? `<div class="ev-m">${e.memo}</div>` : ""}
+      </div>`).join("");
+  $("eventModal").classList.add("show");
+}
+/* 차트 하단 이벤트 번호 마크 플러그인 */
+const eventMarkPlugin = {
+  id: "eventMarks",
+  afterDraw(chart) {
+    const cfg = chart.options.plugins.eventMarks;
+    chart.$evtHits = [];
+    if (!cfg || !cfg.groups || !cfg.groups.length) return;
+    const xScale = chart.scales.x, area = chart.chartArea;
+    const ctx = chart.ctx;
+    const y = chart.height - 13;
+    ctx.save();
+    cfg.groups.forEach(g => {
+      const x0 = xScale.getPixelForValue(g.i0), x1 = xScale.getPixelForValue(g.i1);
+      // 차트 영역 세로 음영
+      ctx.fillStyle = g.color + "14";
+      ctx.fillRect(x0 - 3, area.top, (x1 - x0) + 6, area.bottom - area.top);
+      // 기간 언더라인
+      ctx.strokeStyle = g.color; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(x0, y - 12); ctx.lineTo(x1 + 0.01, y - 12); ctx.stroke();
+      // 번호 배지
+      const cx = (x0 + x1) / 2;
+      ctx.beginPath(); ctx.arc(cx, y, 8.5, 0, 7);
+      ctx.fillStyle = g.color; ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 10px 'Pretendard','Malgun Gothic',sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(g.num, cx, y + 0.5);
+      chart.$evtHits.push({ x: cx, y, group: g });
+    });
+    ctx.restore();
+  }
+};
+function attachEventClicks(chart) {
+  chart.canvas.onclick = e => {
+    const rect = chart.canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const hit = (chart.$evtHits || []).find(h => Math.hypot(mx - h.x, my - h.y) <= 12);
+    if (hit) showEventDetail(hit.group);
+  };
+  chart.canvas.onmousemove = e => {
+    const rect = chart.canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    chart.canvas.style.cursor = (chart.$evtHits || []).some(h => Math.hypot(mx - h.x, my - h.y) <= 12) ? "pointer" : "";
+  };
+}
+
+/* ================= KPI 카드 ================= */
+function renderCards() {
+  const s = currentSorted();
+  if (!s.length) {
+    document.getElementById("cards").innerHTML = `
+      <div class="card hero" style="grid-column:1/-1;text-align:center;padding:28px">
+        <div class="value" style="font-size:18px">🎮 <b>게임 시트</b> 버튼으로 구글시트를 연결하거나, 📂 <b>데이터 업로드</b>로 엑셀(.xlsx)을 올려주세요</div>
+        <div class="delta flat" style="margin-top:8px">구글시트 연결 시 열 때마다 자동 동기화 · 데이터는 이 브라우저(localStorage)에만 저장됩니다</div>
+      </div>`;
+    return;
+  }
+  const cur = rangeDays > 0 ? s.slice(-rangeDays) : s;
+  const n = cur.length;
+  const prev = rangeDays > 0 ? s.slice(-2 * n, -n) : []; // 직전 동일 기간
+  const periodLabel = rangeDays > 0 ? `최근 ${n}일` : `전체 ${n}일`;
+  const prevLabel = rangeDays > 0 ? `직전 ${n}일` : "";
+
+  // 시작/마감 비교 창: 각 7일 평균 (기간이 짧으면 가능한 만큼)
+  const w = Math.max(1, Math.min(7, n));
+  const head = cur.slice(0, w), tail = cur.slice(-w);
+
+  const pick = (arr, f) => arr.map(f).filter(v => v != null && !isNaN(v));
+  const relDelta = (curArr, prvArr) => {
+    if (!curArr.length || !prvArr.length || !avg(prvArr)) return null;
+    return (avg(curArr) / avg(prvArr) - 1) * 100;
+  };
+  const line = (dv, suffix, tag) => {
+    if (dv == null || isNaN(dv)) return "";
+    const cls = dv > 0.05 ? "up" : dv < -0.05 ? "down" : "flat";
+    const arrow = dv > 0.05 ? "▲" : dv < -0.05 ? "▼" : "―";
+    return `<div class="delta ${cls}">${arrow} ${Math.abs(dv).toFixed(1)}${suffix} <span style="color:var(--muted)">${tag}</span></div>`;
+  };
+  // 성장률 = 마감 7일 평균 ÷ 시작 7일 평균 × 100 (예: 1% → 10% = 1000%)
+  const growthLine = (headV, tailV) => {
+    if (!headV.length || !tailV.length || !avg(headV)) return "";
+    const gv = avg(tailV) / avg(headV) * 100;
+    const cls = gv > 100.5 ? "up" : gv < 99.5 ? "down" : "flat";
+    const arrow = gv > 100.5 ? "▲" : gv < 99.5 ? "▼" : "―";
+    return `<div class="delta ${cls}">${arrow} 성장률 ${gv.toFixed(0)}% <span style="color:var(--muted)">시작 7일 → 마감 7일 평균</span></div>`;
+  };
+  const deltas = f => {
+    const vsPrev = relDelta(pick(cur, f), pick(prev, f));
+    return (prevLabel ? line(vsPrev, "%", "vs " + prevLabel) : "")
+         + growthLine(pick(head, f), pick(tail, f));
+  };
+
+  // 자체결제 비중 카드: 선택 기간과 무관하게 최근 30일 고정
+  const cur30 = s.slice(-30), prev30 = s.slice(-60, -30);
+  const w30 = Math.max(1, Math.min(7, cur30.length));
+  let ratioDeltas = "";
+  if (cur30.length && prev30.length) {
+    const pp = (sum(cur30.map(r => r.d2c)) / (sum(cur30.map(r => r.iap)) || 1)
+              - sum(prev30.map(r => r.d2c)) / (sum(prev30.map(r => r.iap)) || 1)) * 100;
+    ratioDeltas += line(pp, "%p", "vs 직전 30일");
+  }
+  ratioDeltas += growthLine(pick(cur30.slice(0, w30), r => r.ratio), pick(cur30.slice(-w30), r => r.ratio));
+
+  const items = [
+    { label: "자체결제 비중 (최근 30일 고정)", hero: true,
+      value: fmtPct(sum(cur30.map(r => r.d2c)) / (sum(cur30.map(r => r.iap)) || 1)),
+      deltas: ratioDeltas },
+    { label: `자체결제 매출 (일평균 · ${periodLabel})`,
+      value: fmtWon(avg(pick(cur, r => r.d2c))) + '<small> 원</small>',
+      deltas: deltas(r => r.d2c) },
+    { label: `전체 IAP 매출 (일평균 · ${periodLabel})`,
+      value: fmtWon(avg(pick(cur, r => r.iap))) + '<small> 원</small>',
+      deltas: deltas(r => r.iap) },
+    { label: `자체결제 PU (일평균 · ${periodLabel})`,
+      value: fmtNum(avg(pick(cur, r => r.pu))) + '<small> 명</small>',
+      deltas: deltas(r => r.pu) },
+    { label: `자체결제 ARPPU (일평균 · ${periodLabel})`,
+      value: fmtWon(avg(pick(cur, r => r.arppu))) + '<small> 원</small>',
+      deltas: deltas(r => r.arppu) },
+    { label: `DAU (일평균 · ${periodLabel})`,
+      value: fmtNum(avg(pick(cur, r => r.dau))),
+      deltas: deltas(r => r.dau) },
+  ];
+  document.getElementById("cards").innerHTML = items.map(it => `
+    <div class="card${it.hero ? " hero" : ""}">
+      <div class="label">${it.label}</div>
+      <div class="value">${it.value}</div>
+      ${it.deltas || '<div class="delta flat">–</div>'}
+    </div>`).join("");
+}
+
+/* ================= 피크/최저 라벨 플러그인 ================= */
+const extremePlugin = {
+  id: "extremeLabels",
+  afterDatasetsDraw(chart) {
+    const cfg = chart.options.plugins.extremeLabels;
+    if (!cfg || !cfg.items || !cfg.items.length) return;
+    const ctx = chart.ctx;
+    const xScale = chart.scales.x, yScale = chart.scales.y;
+    const area = chart.chartArea;
+    ctx.save();
+    ctx.textAlign = "center";
+    const placed = []; // 이미 배치된 라벨 박스 (충돌 회피)
+    const overlaps = box => placed.some(p =>
+      box.x0 < p.x1 && box.x1 > p.x0 && box.y0 < p.y1 && box.y1 > p.y0);
+    const H = 25;
+    [...cfg.items].sort((a, b) => a.i - b.i).forEach(t => {
+      const x = xScale.getPixelForValue(t.i);
+      const yv = Math.min(Math.max(yScale.getPixelForValue(t.y), area.top), area.bottom);
+      ctx.font = "600 9.5px 'Pretendard','Malgun Gothic',sans-serif";
+      const w = Math.max(ctx.measureText(t.text).width, 14) + 10;
+      // 후보 위치: 포인트 위로 층층이 → 공간 없으면 포인트 아래
+      let top = null;
+      for (let k = 0; k < 6 && top == null; k++) {
+        const cand = yv - 30 - k * (H + 2);
+        if (cand < area.top + 2) break;
+        if (!overlaps({ x0: x - w / 2, x1: x + w / 2, y0: cand, y1: cand + H })) top = cand;
+      }
+      for (let k = 0; k < 4 && top == null; k++) {
+        const cand = yv + 8 + k * (H + 2);
+        if (cand + H > area.bottom) break;
+        if (!overlaps({ x0: x - w / 2, x1: x + w / 2, y0: cand, y1: cand + H })) top = cand;
+      }
+      if (top == null) top = Math.max(area.top + 2, yv - 30);
+      placed.push({ x0: x - w / 2, x1: x + w / 2, y0: top, y1: top + H });
+      // 포인트와 떨어져 있으면 연결선
+      if (yv - (top + H) > 6) {
+        ctx.strokeStyle = t.color + "55"; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(x, top + H); ctx.lineTo(x, yv - 2); ctx.stroke();
+      }
+      // 배경 박스 (라인·막대 위에서도 읽히도록)
+      ctx.fillStyle = cssVar("--panel") + "e6";
+      ctx.strokeStyle = t.color + "88"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(x - w / 2, top, w, H, 6);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = t.color;
+      ctx.font = "bold 11px 'Pretendard','Malgun Gothic',sans-serif";
+      ctx.fillText(t.mark, x, top + 11);
+      ctx.font = "600 9.5px 'Pretendard','Malgun Gothic',sans-serif";
+      ctx.fillText(t.text, x, top + 21);
+    });
+    ctx.restore();
+  }
+};
+
+function renderChips(elId, chips) {
+  document.getElementById(elId).innerHTML = chips.map(c =>
+    `<span class="chip"><b style="color:${c.color}">${c.mark}</b> ${c.label}</span>`
+  ).join("");
+}
+
+/* ================= 차트 ================= */
+function chartTheme() {
+  const muted = cssVar("--muted");
+  Chart.defaults.color = muted;
+  Chart.defaults.font.family = "'Pretendard','Malgun Gothic',sans-serif";
+  Chart.defaults.font.size = 11;
+  return {
+    grid: theme === "dark" ? "rgba(139,150,173,.12)" : "rgba(92,103,121,.15)",
+    tooltipBg: cssVar("--panel-2"),
+    tooltipBorder: cssVar("--border"),
+    tooltipColor: cssVar("--text")
+  };
+}
+function baseOpts(th, extra) {
+  return Object.assign({
+    responsive: true, maintainAspectRatio: false,
+    interaction: { mode: "index", intersect: false },
+    plugins: {
+      legend: { labels: { boxWidth: 12, boxHeight: 12 } },
+      tooltip: {
+        backgroundColor: th.tooltipBg, borderColor: th.tooltipBorder, borderWidth: 1,
+        titleColor: th.tooltipColor, bodyColor: th.tooltipColor, padding: 10
+      }
+    }
+  }, extra);
+}
+function destroyCharts() { Object.values(charts).forEach(c => c.destroy()); charts = {}; }
+
+function renderCharts() {
+  destroyCharts();
+  const th = chartTheme();
+  const rows = ranged();
+  const labels = rows.map(r => mmdd(r.date));
+  const dateIdx = {}; rows.forEach((r, i) => dateIdx[r.date] = i);
+  const ratioPct = rows.map(r => r.ratio * 100);
+  const isAll = activeGame === "ALL";
+  const gameNames = Object.keys(games);
+
+  /* ---- 이벤트 마크 (기간 겹침 = 한 그룹) ---- */
+  const evGroups = rows.length ? eventGroups(visibleEvents())
+    .map((g, k) => ({ ...g, num: k + 1 })) // 번호는 전체 기준 → 이벤트 효과 페이지와 동일
+    .filter(g => g.end >= rows[0].date && g.start <= rows[rows.length - 1].date)
+    .map(g => {
+      let i0 = rows.findIndex(r => r.date >= g.start);
+      if (i0 < 0) i0 = 0;
+      let i1 = -1; rows.forEach((r, i) => { if (r.date <= g.end) i1 = i; });
+      return { ...g, i0, i1: Math.max(i1, i0), color: typeColor(g.events[0].type) };
+    }) : [];
+
+  /* ---- 피크 TOP5 & 최저 (자체결제 매출 기준) ---- */
+  const peaks = topNOf(rows, r => r.d2c);
+  const low = minOf(rows, r => r.d2c);
+  const lowIdx = low && !peaks.some(t => t.i === low.i) ? low.i : -1;
+  const topSet = new Set(peaks.map(t => t.i));
+  const stackTop = i => isAll ? rows[i].d2c : rows[i].iap; // 라벨 위치(스택 최상단)
+  const revLabelItems = [
+    ...peaks.map(t => ({ i: t.i, y: stackTop(t.i), mark: RANK_MARKS[t.rank - 1],
+      text: (rows[t.i].ratio * 100).toFixed(1) + "%", color: cssVar("--peak") })),
+    ...(lowIdx >= 0 ? [{ i: lowIdx, y: stackTop(lowIdx), mark: "▼",
+      text: (rows[lowIdx].ratio * 100).toFixed(1) + "%", color: cssVar("--down") }] : [])
+  ];
+  renderChips("top5Chips", [
+    ...peaks.map(t => ({ mark: RANK_MARKS[t.rank - 1], color: cssVar("--peak"),
+      label: `${mmdd(t.date)} · ${fmtWon(t.v)}원 <span class="pct">(비중 ${(t.r.ratio * 100).toFixed(1)}%)</span>` })),
+    ...(low ? [{ mark: "▼최저", color: cssVar("--down"),
+      label: `${mmdd(low.date)} · ${fmtWon(low.v)}원 <span class="pct">(비중 ${(low.r.ratio * 100).toFixed(1)}%)</span>` }] : [])
+  ]);
+
+  /* ---- 1. 매출 + 비중 ---- */
+  const wonTip = c => c.dataset.yAxisID === "y2"
+    ? ` ${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`
+    : ` ${c.dataset.label}: ${Math.round(c.parsed.y).toLocaleString()}원`;
+
+  let revDatasets;
+  if (isAll) {
+    document.getElementById("chRevenueTitle").innerHTML =
+      '게임별 자체결제 매출 &amp; 전체 비중 <span>★ 피크 TOP5 &amp; ▼ 최저 · 막대: 게임별 자체결제(원) / 선: 전체 비중(%)</span>';
+    revDatasets = [
+      { type: "line", label: "전체 자체결제 비중(%)", data: ratioPct, yAxisID: "y2",
+        borderColor: cssVar("--accent-2"), borderWidth: 2, pointRadius: 0, tension: .3 },
+      ...gameNames.map(g => {
+        const map = {}; (games[g] || []).forEach(r => map[r.date] = r.d2c);
+        return { type: "bar", label: g, data: rows.map(r => map[r.date] ?? 0), yAxisID: "y",
+          backgroundColor: gameColor(g), stack: "s", borderRadius: 2 };
+      })
+    ];
+  } else {
+    document.getElementById("chRevenueTitle").innerHTML =
+      '일별 매출 &amp; 자체결제 비중 <span>★ 피크 TOP5 &amp; ▼ 최저 · 막대: 매출(원) / 선: 비중(%)</span>';
+    revDatasets = [
+      { type: "line", label: "자체결제 비중(%)", data: ratioPct, yAxisID: "y2",
+        borderColor: cssVar("--accent-2"), borderWidth: 2, pointRadius: 0, tension: .3 },
+      { type: "bar", label: "자체결제 매출", data: rows.map(r => r.d2c), yAxisID: "y",
+        backgroundColor: rows.map((r, i) =>
+          i === lowIdx ? cssVar("--down") : topSet.has(i) ? cssVar("--peak") : cssVar("--accent")),
+        stack: "s", borderRadius: 2 },
+      { type: "bar", label: "기타 IAP 매출", data: rows.map(r => r.iap - r.d2c), yAxisID: "y",
+        backgroundColor: theme === "dark" ? "rgba(139,150,173,.35)" : "rgba(92,103,121,.25)",
+        stack: "s", borderRadius: 2 },
+    ];
+  }
+  charts.rev = new Chart(document.getElementById("chRevenue"), {
+    data: { labels, datasets: revDatasets },
+    plugins: [extremePlugin, eventMarkPlugin],
+    options: baseOpts(th, {
+      layout: { padding: { top: 26, bottom: 24 } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 14 } },
+        y: { stacked: true, grid: { color: th.grid }, ticks: { callback: v => fmtWon(v) } },
+        y2: { position: "right", grid: { display: false }, min: 0, ticks: { callback: v => v + "%" } }
+      },
+      plugins: {
+        eventMarks: { groups: evGroups },
+        extremeLabels: { items: revLabelItems },
+        legend: { labels: { boxWidth: 12 } },
+        tooltip: { callbacks: {
+          label: wonTip,
+          afterTitle: items => {
+            const t = peaks.find(t => t.i === items[0].dataIndex);
+            if (t) return `★ 피크 ${t.rank}위 (비중 ${(t.r.ratio * 100).toFixed(1)}%)`;
+            return items[0].dataIndex === lowIdx ? "▼ 기간 내 최저" : "";
+          }
+        } }
+      }
+    })
+  });
+
+  attachEventClicks(charts.rev);
+
+  /* ---- 2. 비중 추이 ---- */
+  let ratioDatasets;
+  if (isAll) {
+    document.getElementById("chRatioTitle").innerHTML =
+      '게임별 자체결제 비중 추이 <span>가는 선: 게임별 / 굵은 선: 전체 · 목표선</span>';
+    ratioDatasets = [
+      ...gameNames.map(g => {
+        const map = {}; (games[g] || []).forEach(r => map[r.date] = r.ratio * 100);
+        return { label: g, data: rows.map(r => map[r.date] ?? null), spanGaps: true,
+          borderColor: gameColor(g), borderWidth: 1.5, pointRadius: 0, tension: .3 };
+      }),
+      { label: "전체", data: ratioPct, borderColor: cssVar("--text"),
+        borderWidth: 2.5, pointRadius: 0, tension: .3 },
+      { label: `목표 ${targetPct}%`, data: labels.map(() => targetPct), borderColor: cssVar("--down"),
+        borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0 },
+    ];
+  } else {
+    document.getElementById("chRatioTitle").innerHTML =
+      '자체결제 비중 추이 <span>7일 이동평균 &amp; 목표선</span>';
+    ratioDatasets = [
+      { label: "일별 비중", data: ratioPct, borderColor: theme === "dark" ? "rgba(79,140,255,.45)" : "rgba(47,111,237,.4)",
+        borderWidth: 1.5, pointRadius: 0, tension: .2 },
+      { label: "7일 이동평균", data: movingAvg(ratioPct, 7), borderColor: cssVar("--accent-2"),
+        borderWidth: 2.5, pointRadius: 0, tension: .3 },
+      { label: `목표 ${targetPct}%`, data: labels.map(() => targetPct), borderColor: cssVar("--down"),
+        borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0 },
+    ];
+  }
+  charts.ratio = new Chart(document.getElementById("chRatio"), {
+    type: "line",
+    data: { labels, datasets: ratioDatasets },
+    plugins: [eventMarkPlugin],
+    options: baseOpts(th, {
+      layout: { padding: { bottom: 24 } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 14 } },
+        y: { grid: { color: th.grid }, min: 0, ticks: { callback: v => v + "%" } }
+      },
+      plugins: {
+        eventMarks: { groups: evGroups },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y == null ? "-" : c.parsed.y.toFixed(1) + "%"}` } }
+      }
+    })
+  });
+  attachEventClicks(charts.ratio);
+
+  /* ---- 3. PU & ARPPU ---- */
+  charts.pu = new Chart(document.getElementById("chPu"), {
+    data: {
+      labels,
+      datasets: [
+        { type: "line", label: "ARPPU(원)", data: rows.map(r => r.arppu), yAxisID: "y2",
+          borderColor: "#c084fc", borderWidth: 2, pointRadius: 0, tension: .3, spanGaps: true },
+        { type: "bar", label: "PU(명)", data: rows.map(r => r.pu), yAxisID: "y",
+          backgroundColor: theme === "dark" ? "rgba(52,211,153,.7)" : "rgba(15,157,110,.65)", borderRadius: 2 },
+      ]
+    },
+    options: baseOpts(th, {
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 14 } },
+        y: { grid: { color: th.grid } },
+        y2: { position: "right", grid: { display: false }, ticks: { callback: v => fmtWon(v) } }
+      },
+      plugins: { tooltip: { callbacks: { label: c =>
+        c.dataset.yAxisID === "y2"
+          ? ` ${c.dataset.label}: ${c.parsed.y == null ? "-" : Math.round(c.parsed.y).toLocaleString() + "원"}`
+          : ` ${c.dataset.label}: ${c.parsed.y.toLocaleString()}명` } } }
+    })
+  });
+
+  /* ---- 4. 주별 ---- */
+  let wkLabels, wkDatasets, wkMeta;
+  if (isAll) {
+    document.getElementById("chWeeklyTitle").innerHTML =
+      '주별 게임별 자체결제 매출 &amp; 전체 비중 <span>월요일 시작 주 단위 합계</span>';
+    const perGame = {};
+    gameNames.forEach(g => {
+      const inRange = sortedRows(games[g] || []).filter(r => dateIdx[r.date] != null);
+      perGame[g] = weeklyAgg(inRange);
+    });
+    const totalWk = weeklyAgg(rows);
+    wkLabels = Object.keys(totalWk).sort();
+    wkMeta = wkLabels.map(k => totalWk[k]);
+    wkDatasets = [
+      { type: "line", label: "전체 비중(%)", data: wkLabels.map(k => totalWk[k].iap ? totalWk[k].d2c / totalWk[k].iap * 100 : null),
+        yAxisID: "y2", borderColor: cssVar("--accent-2"), borderWidth: 2, pointRadius: 3, tension: .3 },
+      ...gameNames.map(g => ({
+        type: "bar", label: g, data: wkLabels.map(k => perGame[g][k] ? perGame[g][k].d2c : 0),
+        yAxisID: "y", backgroundColor: gameColor(g), stack: "s", borderRadius: 3, maxBarThickness: 46
+      }))
+    ];
+  } else {
+    document.getElementById("chWeeklyTitle").innerHTML =
+      '주별 자체결제 매출 &amp; 비중 <span>월요일 시작 주 단위 합계</span>';
+    const wk = weeklyAgg(rows);
+    wkLabels = Object.keys(wk).sort();
+    wkMeta = wkLabels.map(k => wk[k]);
+    wkDatasets = [
+      { type: "line", label: "주간 비중(%)", data: wkLabels.map(k => wk[k].iap ? wk[k].d2c / wk[k].iap * 100 : null),
+        yAxisID: "y2", borderColor: cssVar("--accent-2"), borderWidth: 2, pointRadius: 3, tension: .3 },
+      { type: "bar", label: "주간 자체결제 매출", data: wkLabels.map(k => wk[k].d2c),
+        yAxisID: "y", backgroundColor: cssVar("--accent"), borderRadius: 3, maxBarThickness: 46 },
+    ];
+  }
+  charts.weekly = new Chart(document.getElementById("chWeekly"), {
+    data: { labels: wkLabels.map(k => mmdd(k) + "주"), datasets: wkDatasets },
+    options: baseOpts(th, {
+      scales: {
+        x: { grid: { display: false } },
+        y: { stacked: isAll, grid: { color: th.grid }, ticks: { callback: v => fmtWon(v) } },
+        y2: { position: "right", grid: { display: false }, min: 0, ticks: { callback: v => v + "%" } }
+      },
+      plugins: { tooltip: { callbacks: {
+        label: wonTip,
+        afterBody: items => { const m = wkMeta[items[0].dataIndex]; return m && m.days < 7 ? `(${m.days}일치 데이터)` : ""; }
+      } } }
+    })
+  });
+
+  /* ---- 5. PU 추이 (피크 TOP5 & 최저) ---- */
+  const puVals = rows.map(r => r.pu ?? null);
+  const puPeaks = topNOf(rows, r => r.pu);
+  const puLow = minOf(rows, r => r.pu);
+  const puLowIdx = puLow && !puPeaks.some(t => t.i === puLow.i) ? puLow.i : -1;
+  const puPeakSet = new Set(puPeaks.map(t => t.i));
+  const puLabelItems = [
+    ...puPeaks.map(t => ({ i: t.i, y: t.v, mark: RANK_MARKS[t.rank - 1],
+      text: fmtNum(t.v) + "명", color: cssVar("--peak") })),
+    ...(puLowIdx >= 0 ? [{ i: puLowIdx, y: puLow.v, mark: "▼",
+      text: fmtNum(puLow.v) + "명", color: cssVar("--down") }] : [])
+  ];
+  renderChips("puChips", [
+    ...puPeaks.map(t => ({ mark: RANK_MARKS[t.rank - 1], color: cssVar("--peak"),
+      label: `${mmdd(t.date)} · ${fmtNum(t.v)}명` })),
+    ...(puLow ? [{ mark: "▼최저", color: cssVar("--down"),
+      label: `${mmdd(puLow.date)} · ${fmtNum(puLow.v)}명` }] : [])
+  ]);
+  const puPointStyle = {
+    pointRadius: rows.map((r, i) => puPeakSet.has(i) || i === puLowIdx ? 4 : 0),
+    pointBackgroundColor: rows.map((r, i) => i === puLowIdx ? cssVar("--down") : cssVar("--peak")),
+    pointBorderWidth: 0, pointHoverRadius: 5
+  };
+  let puDatasets;
+  if (isAll) {
+    document.getElementById("chPuTrendTitle").innerHTML =
+      '게임별 자체결제 PU 추이 <span>★ 피크 TOP5 &amp; ▼ 최저 (전체 합 기준) · 가는 선: 게임별 / 굵은 선: 전체 합</span>';
+    puDatasets = [
+      ...gameNames.map(g => {
+        const map = {}; (games[g] || []).forEach(r => map[r.date] = r.pu);
+        return { label: g, data: rows.map(r => map[r.date] ?? null), spanGaps: true,
+          borderColor: gameColor(g), borderWidth: 1.5, pointRadius: 0, tension: .3 };
+      }),
+      Object.assign({ label: "전체 합", data: puVals, borderColor: cssVar("--text"),
+        borderWidth: 2.5, tension: .3, spanGaps: true }, puPointStyle),
+    ];
+  } else {
+    document.getElementById("chPuTrendTitle").innerHTML =
+      '자체결제 PU 추이 <span>★ 피크 TOP5 &amp; ▼ 최저 · 7일 이동평균</span>';
+    puDatasets = [
+      Object.assign({ label: "일별 PU", data: puVals,
+        borderColor: theme === "dark" ? "rgba(79,140,255,.45)" : "rgba(47,111,237,.4)",
+        borderWidth: 1.5, tension: .2, spanGaps: true }, puPointStyle),
+      { label: "7일 이동평균", data: movingAvg(puVals.map(v => v ?? 0), 7), borderColor: cssVar("--accent-2"),
+        borderWidth: 2.5, pointRadius: 0, tension: .3 },
+    ];
+  }
+  charts.puTrend = new Chart(document.getElementById("chPuTrend"), {
+    type: "line",
+    data: { labels, datasets: puDatasets },
+    plugins: [extremePlugin, eventMarkPlugin],
+    options: baseOpts(th, {
+      layout: { padding: { top: 26, bottom: 24 } },
+      scales: {
+        x: { grid: { display: false }, ticks: { maxTicksLimit: 14 } },
+        y: { grid: { color: th.grid }, min: 0 }
+      },
+      plugins: {
+        eventMarks: { groups: evGroups },
+        extremeLabels: { items: puLabelItems },
+        tooltip: { callbacks: {
+          label: c => ` ${c.dataset.label}: ${c.parsed.y == null ? "-" : Math.round(c.parsed.y).toLocaleString() + "명"}`,
+          afterTitle: items => {
+            const t = puPeaks.find(t => t.i === items[0].dataIndex);
+            if (t) return `★ PU 피크 ${t.rank}위`;
+            return items[0].dataIndex === puLowIdx ? "▼ 기간 내 PU 최저" : "";
+          }
+        } }
+      }
+    })
+  });
+  attachEventClicks(charts.puTrend);
+}
+
+/* ================= 테이블 ================= */
+function renderTable() {
+  const rows = ranged();
+  const peakDates = new Set(topNOf(rows, r => r.d2c).map(t => t.date));
+  const low = minOf(rows, r => r.d2c);
+  const lowDate = low && !peakDates.has(low.date) ? low.date : null;
+  const tgt = targetPct / 100;
+  document.querySelector("#dataTable tbody").innerHTML = [...rows].reverse().map(r => `
+    <tr class="${peakDates.has(r.date) ? "peak" : r.date === lowDate ? "low" : ""}">
+      <td>${r.date}</td>
+      <td>${fmtNum(r.dau)}</td>
+      <td>${fmtNum(r.iap)}</td>
+      <td>${fmtNum(r.d2c)}</td>
+      <td class="${r.ratio >= tgt ? "ok" : "no"}">${fmtPct(r.ratio)}</td>
+      <td>${fmtNum(r.pu)}</td>
+      <td>${fmtNum(r.arppu)}</td>
+      <td>${r.arpdau != null ? Number(r.arpdau).toLocaleString() : "-"}</td>
+    </tr>`).join("");
+}
+
+/* ================= 탭 & 헤더 ================= */
+function renderTabs() {
+  const names = Object.keys(games);
+  let html = "";
+  if (names.length > 1) {
+    html += `<div class="tab ${activeGame === "ALL" ? "active" : ""}" data-game="ALL">🌐 전체 게임</div>`;
+  }
+  html += names.map(g => `
+    <div class="tab ${activeGame === g ? "active" : ""}" data-game="${g}">
+      <span class="dot" style="background:${gameColor(g)}"></span>${g}
+      <span class="x" data-del="${g}" title="이 게임 데이터 삭제">✕</span>
+    </div>`).join("");
+  html += `<span class="hint">+ 다른 게임 xlsx를 업로드하면 탭이 추가됩니다 (현재 ${names.length}개 · 개수 제한 없음)</span>`;
+  document.getElementById("gameTabs").innerHTML = html;
+
+  document.querySelectorAll("#gameTabs .tab").forEach(el => {
+    el.addEventListener("click", e => {
+      if (e.target.dataset.del) return;
+      activeGame = el.dataset.game;
+      saveState();
+      renderAll();
+    });
+  });
+  document.querySelectorAll("#gameTabs .x").forEach(el => {
+    el.addEventListener("click", e => {
+      e.stopPropagation();
+      const g = el.dataset.del;
+      if (!confirm(`${g} 데이터를 삭제할까요?${gameSheets[g] ? "\n(구글시트 등록도 함께 해제됩니다)" : ""}`)) return;
+      delete games[g];
+      delete gameSheets[g];
+      if (activeGame === g || (activeGame === "ALL" && Object.keys(games).length <= 1)) {
+        activeGame = Object.keys(games)[0] || "ALL";
+      }
+      saveState();
+      renderAll();
+      toast(`${g} 데이터를 삭제했습니다`);
+    });
+  });
+}
+
+function renderHeader() {
+  document.getElementById("gameName").textContent = activeGame === "ALL" ? "전체 게임" : activeGame;
+  const s = currentSorted();
+  document.getElementById("periodLabel").textContent = s.length
+    ? `${s[0].date} ~ ${s[s.length - 1].date} · ${s.length}일` : "";
+  document.getElementById("themeBtn").textContent = theme === "dark" ? "🌙" : "☀️";
+}
+
+/* ================= 이벤트 효과 페이지 ================= */
+let evPageGroups = [];
+function renderEvents() {
+  const body = document.getElementById("eventsBody");
+  const evts = visibleEvents();
+  if (!evts.length) {
+    body.innerHTML = eventSheetUrl
+      ? '<div class="m-empty">현재 게임에 해당하는 이벤트가 없습니다. 구글시트에 행을 추가한 뒤 📅 버튼에서 동기화하세요.</div>'
+      : '<div class="m-empty">아직 이벤트 데이터가 없습니다. 우측 상단 <b>📅 이벤트 시트</b> 버튼으로 구글시트를 연결하면, 시트에 기입한 프로모션/액션이 차트와 이 페이지에 자동 반영됩니다.</div>';
+    return;
+  }
+  evPageGroups = eventGroups(evts).map((g, k) => ({ ...g, num: k + 1 }));
+  const list = [...evPageGroups].reverse(); // 최신순
+  body.innerHTML = `
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>#</th><th>기간</th><th>이벤트</th><th>기준</th>
+        <th>자체결제 일평균</th><th>매출 vs 직전</th><th>비중</th><th>비중 vs 직전</th><th>PU vs 직전</th>
+      </tr></thead>
+      <tbody>${list.map(g => {
+        const ctx = groupRowsCtx(g);
+        const eff = periodEffect(ctx.rows, g.start, g.end);
+        const evHtml = g.events.map(e =>
+          `<div style="margin:2px 0;text-align:left"><span class="ev-badge" style="background:${typeColor(e.type)}">${e.type}</span> ${e.title}${e.game !== "ALL" ? ` <span style="color:var(--muted);font-size:11px">[${e.game}]</span>` : ""}</div>`).join("");
+        return `<tr class="ev-row" data-num="${g.num}" style="cursor:pointer" title="클릭하면 상세 보기">
+          <td><span class="ev-num" style="background:${typeColor(g.events[0].type)}">${g.num}</span></td>
+          <td>${mmdd(g.start)}${g.end !== g.start ? "~" + mmdd(g.end) : ""}<br><span style="color:var(--muted);font-size:11px">${eff ? eff.days + "일" : "-"}</span></td>
+          <td style="text-align:left">${evHtml}</td>
+          <td>${ctx.label}</td>
+          <td>${eff ? fmtWon(eff.cur.d2c) + "원" : "-"}</td>
+          <td>${eff ? evDelta(eff.d2cDelta, "%") : "-"}</td>
+          <td>${eff ? fmtPct(eff.cur.ratio) : "-"}</td>
+          <td>${eff ? evDelta(eff.ratioDelta, "%p") : "-"}</td>
+          <td>${eff ? evDelta(eff.puDelta, "%") : "-"}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table></div>
+    <div class="m-empty" style="margin-top:8px">행을 클릭하면 상세 내용을 볼 수 있습니다 · "vs 직전" = 이벤트 기간 평균을 직전 동일 일수 평균과 비교 · 겹치는 기간의 이벤트는 한 묶음으로 분석</div>`;
+  body.querySelectorAll(".ev-row").forEach(tr => {
+    tr.addEventListener("click", () => {
+      const g = evPageGroups.find(x => x.num === Number(tr.dataset.num));
+      if (g) showEventDetail(g);
+    });
+  });
+}
+
+function applyView() {
+  const dash = viewMode === "dash";
+  document.getElementById("cards").style.display = dash ? "" : "none";
+  document.getElementById("chartsGrid").style.display = dash ? "" : "none";
+  document.getElementById("tablePanel").style.display = dash ? "" : "none";
+  document.getElementById("rangeSeg").style.display = dash ? "" : "none";
+  document.getElementById("targetCtl").style.display = dash ? "" : "none";
+  document.getElementById("eventsPanel").style.display = dash ? "none" : "";
+  document.querySelectorAll("#viewSeg button").forEach(b =>
+    b.classList.toggle("active", b.dataset.view === viewMode));
+}
+
+function renderAll() {
+  renderHeader();
+  renderTabs();
+  renderCards();
+  renderCharts();
+  renderTable();
+  renderEvents();
+  applyView();
+}
+
+/* ================= 테마 ================= */
+function applyTheme() {
+  document.documentElement.dataset.theme = theme;
+}
+document.getElementById("themeBtn").addEventListener("click", () => {
+  theme = theme === "dark" ? "light" : "dark";
+  applyTheme();
+  saveState();
+  renderAll();
+});
+
+/* ================= 엑셀 업로드 ================= */
+function excelDate(serial) {
+  return new Date(Date.UTC(1899, 11, 30) + serial * 86400000).toISOString().slice(0, 10);
+}
+/* KPI 그리드 공용 파서: xlsx(sheet_to_json)와 구글시트 CSV 모두 처리 */
+function parseKpiGrid(grid) {
+  if (!grid.length) throw new Error("빈 시트입니다.");
+  const header = grid[0].map(h => String(h || "").trim());
+  const idx = {};
+  header.forEach((h, i) => {
+    const n = h.replace(/\s/g, "").toLowerCase();
+    if (n === "datekey" || n.includes("날짜") || n === "date") idx.date = i;
+    else if (n === "dau") idx.dau = i;
+    else if (n.includes("전체") && n.includes("매출")) idx.iap = i;
+    else if (n.includes("비중")) idx.ratio = i;
+    else if (n.includes("arppu")) idx.arppu = i;
+    else if (n.includes("arpdau")) idx.arpdau = i;
+    else if (n.includes("pu")) idx.pu = i;
+    else if (n.includes("자체") && n.includes("매출")) idx.d2c = i;
+  });
+  if (idx.date == null || idx.iap == null || idx.d2c == null)
+    throw new Error("필수 컬럼(datekey / 전체 IAP 매출 / 자체 결제 매출)을 찾지 못했습니다. 인식된 헤더: " + header.join(", "));
+
+  const toNum = v => {
+    if (v == null || v === "") return null;
+    if (typeof v === "number") return isNaN(v) ? null : v;
+    const n = Number(String(v).replace(/[,%₩원\s]/g, ""));
+    return isNaN(n) ? null : n;
+  };
+  const rows = [];
+  for (let i = 1; i < grid.length; i++) {
+    const g = grid[i];
+    if (!g || g[idx.date] == null || g[idx.date] === "") continue;
+    const dv = g[idx.date];
+    let date = null;
+    if (typeof dv === "number") date = excelDate(dv);
+    else {
+      date = normDate(dv);
+      if (!date) { const n = toNum(dv); if (n && n > 20000 && n < 80000) date = excelDate(n); }
+    }
+    if (!date) continue;
+    const num = j => j == null ? null : toNum(g[j]);
+    const iap = num(idx.iap), d2c = num(idx.d2c);
+    if (iap == null || d2c == null) continue;
+    let ratio = num(idx.ratio);
+    if (ratio == null) ratio = iap ? d2c / iap : 0;
+    if (ratio > 1.5) ratio = ratio / 100; // % 표기(33.8) 대응
+    rows.push({
+      date, dau: num(idx.dau), iap: Math.round(iap), d2c: Math.round(d2c),
+      ratio: Math.round(ratio * 10000) / 10000,
+      pu: num(idx.pu), arppu: num(idx.arppu) != null ? Math.round(num(idx.arppu)) : null,
+      arpdau: num(idx.arpdau) != null ? Math.round(num(idx.arpdau) * 10) / 10 : null
+    });
+  }
+  if (!rows.length) throw new Error("유효한 데이터 행이 없습니다.");
+  return rows;
+}
+
+function parseWorkbook(buf, fileName) {
+  const wb = XLSX.read(buf, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+  const rows = parseKpiGrid(grid);
+  const gm = fileName.match(/^([a-zA-Z0-9]+)[_\-]/);
+  return { rows, game: gm ? gm[1].toUpperCase() : null };
+}
+
+/* ---- 게임 KPI 구글시트 동기화 ---- */
+async function syncGameSheet(name) {
+  const csv = sheetCsvUrl(gameSheets[name]);
+  if (!csv) throw new Error("시트 URL 형식을 인식하지 못했습니다.");
+  const res = await fetch(csv);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const rows = parseKpiGrid(parseCsv(await res.text()));
+  games[name] = rows;
+  return rows.length;
+}
+
+/* ---- 게임코드 발견: index 탭 → 폴백: 후보 풀에서 요약 탭 존재 프로빙 ---- */
+const KNOWN_CODES = GSheet.KNOWN_CODES;           // 공통 모듈에서 관리
+const fetchTabGrid = GSheet.fetchTab;             // (url, tab, tq) → grid
+async function readIndexTab(url) {
+  // 1) index 탭 시도
+  try {
+    const grid = await fetchTabGrid(url, "index", "limit 500");
+    if (grid.length) {
+      const header = grid[0].map(h => String(h || "").trim().toLowerCase());
+      // 없는 탭 요청 시 구글이 첫 탭을 반환 → 데이터성 헤더면 index 아님
+      if (!header.some(h => /start|end|title|memo|datekey|비중|arppu/.test(h))) {
+        const gi = header.findIndex(h => h.includes("game") || h.includes("게임") || h.includes("프로젝트") || h.includes("project"));
+        const gcol = gi >= 0 ? gi : 0;
+        const codes = [];
+        for (let i = 1; i < grid.length; i++) {
+          const g = String(grid[i][gcol] || "").trim();
+          if (g) codes.push(g.toUpperCase());
+        }
+        if (codes.length) return [...new Set(codes)];
+      }
+    }
+  } catch (e) {}
+  // 2) 폴백: 후보 풀(events 게임 ∪ 알려진 코드)에서 요약 탭(datekey+DAU 헤더) 존재 확인
+  const pool = new Set(KNOWN_CODES);
+  try {
+    const grid = await fetchTabGrid(url, "events");
+    const gi = Math.max(0, grid[0].map(h=>String(h||"").trim().toLowerCase())
+      .findIndex(h => h.includes("game") || h.includes("게임")));
+    for (let i = 1; i < grid.length; i++) {
+      const g = String(grid[i][gi] || "").trim().toUpperCase();
+      if (g && g !== "ALL") pool.add(g);
+    }
+  } catch (e) {}
+  const checks = await Promise.all([...pool].map(async c => {
+    try {
+      const h = (await fetchTabGrid(url, c, "limit 1"))[0].map(x=>String(x||"").trim().toLowerCase());
+      return (h.some(x=>x.includes("datekey")) && h.some(x=>x==="dau")) ? c : null;
+    } catch (e) { return null; }
+  }));
+  const codes = checks.filter(Boolean).sort();
+  if (!codes.length) throw new Error("게임 요약 탭을 찾지 못했습니다. index 탭(game 열에 게임코드 나열)을 만들면 정확히 인식됩니다.");
+  return codes;
+}
+
+/* ---- 메인 시트(멀티 탭) 연결: index의 게임코드 → 각 '코드' 탭(요약) 로드 (-kpi 제외) ---- */
+async function connectMasterSheet(url, silent) {
+  try {
+    const codes = await readIndexTab(url);
+    const ok = [], fail = [];
+    for (const code of codes) {
+      try {
+        const tu = sheetTabCsvUrl(url, code); // 요약 탭 = 게임코드 (접미사 없음)
+        const r = await fetch(tu + "&_t=" + Date.now(), { cache: "no-store" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const rows = parseKpiGrid(parseCsv(await r.text()));
+        games[code] = rows;
+        gameSheets[code] = tu; // 개별 재동기화용
+        ok.push(`${code} ${rows.length}일`);
+      } catch (err) { fail.push(`${code}(${err.message})`); }
+    }
+    masterSheetUrl = url;
+    if (ok.length) {
+      activeGame = Object.keys(games).length > 1 ? "ALL" : (Object.keys(games)[0] || "ALL");
+      saveState(); renderAll();
+    }
+    if (!silent) {
+      if (ok.length) toast(`🔗 메인 시트 · ${ok.length}개 프로젝트 로드: ${ok.join(" · ")}${fail.length ? " / 실패: " + fail.join(", ") : ""}`);
+      else alert("불러오기 실패: " + fail.join(", "));
+    }
+  } catch (err) {
+    if (!silent) alert("메인 시트 연결 실패: " + err.message +
+      '\n\n확인:\n1) 공유가 "링크가 있는 모든 사용자: 뷰어"인지\n2) index 탭(첫 열 game, 게임코드 나열)이 있는지\n3) 각 게임코드와 같은 이름의 요약 탭이 있는지\n4) 실제 브라우저에서 열었는지 (미리보기 패널은 외부 요청 차단 가능)');
+  }
+}
+async function syncAllGameSheets(silent) {
+  const names = Object.keys(gameSheets);
+  if (!names.length) return;
+  const ok = [], fail = [];
+  for (const n of names) {
+    try { ok.push(`${n} ${await syncGameSheet(n)}일`); }
+    catch (e) { fail.push(`${n}(${e.message})`); }
+  }
+  if (ok.length) { saveState(); renderAll(); }
+  if (!silent) {
+    if (ok.length) toast(`🔄 시트 동기화: ${ok.join(" · ")}${fail.length ? " / 실패: " + fail.join(", ") : ""}`);
+    else if (fail.length) alert("시트 동기화 실패: " + fail.join(", ") +
+      '\n\n시트 공유가 "링크가 있는 모든 사용자: 뷰어"인지, 헤더가 엑셀 포맷과 같은지 확인하세요.');
+  }
+}
+function renderGsList() {
+  const el = document.getElementById("gsList");
+  const names = Object.keys(gameSheets);
+  el.innerHTML = names.length ? names.map(n => `
+    <div class="ev-item" style="display:flex;align-items:center;gap:10px;padding:9px 12px">
+      <b style="min-width:56px">${n}</b>
+      <span style="flex:1;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${gameSheets[n]}</span>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap">${games[n] ? games[n].length + "일" : "-"}</span>
+      <button class="btn" data-gssync="${n}" style="padding:4px 10px;font-size:12px">동기화</button>
+      <button class="btn" data-gsdel="${n}" style="padding:4px 10px;font-size:12px">삭제</button>
+    </div>`).join("") : '<div class="m-empty">등록된 게임 시트가 없습니다. 아래에서 추가하세요.</div>';
+  el.querySelectorAll("[data-gssync]").forEach(b => b.addEventListener("click", async () => {
+    b.textContent = "…";
+    try {
+      const days = await syncGameSheet(b.dataset.gssync);
+      saveState(); renderAll(); renderGsList();
+      toast(`🔄 ${b.dataset.gssync} ${days}일 동기화 완료`);
+    } catch (e) { alert(`${b.dataset.gssync} 동기화 실패: ` + e.message); b.textContent = "동기화"; }
+  }));
+  el.querySelectorAll("[data-gsdel]").forEach(b => b.addEventListener("click", () => {
+    const n = b.dataset.gsdel;
+    if (!confirm(`${n} 시트 등록과 데이터를 삭제할까요?`)) return;
+    delete gameSheets[n];
+    delete games[n];
+    if (activeGame === n) activeGame = Object.keys(games)[0] || "ALL";
+    saveState(); renderAll(); renderGsList();
+  }));
+}
+
+/* ---- 병합 계획: 신규 / 중복(동일) / 중복(값 다름) 분류 ---- */
+function buildMergePlan(existing, incoming) {
+  const exMap = new Map(existing.map(r => [r.date, r]));
+  const seen = new Set();
+  const newRows = [], dupSame = [], dupDiff = [];
+  for (const r of incoming) {
+    if (seen.has(r.date)) continue;
+    seen.add(r.date);
+    const ex = exMap.get(r.date);
+    if (!ex) { newRows.push(r); continue; }
+    const diff = ex.iap !== r.iap || ex.d2c !== r.d2c ||
+      (ex.dau ?? null) !== (r.dau ?? null) || (ex.pu ?? null) !== (r.pu ?? null);
+    (diff ? dupDiff : dupSame).push({ old: ex, neu: r });
+  }
+  newRows.sort((a, b) => a.date.localeCompare(b.date));
+  return { newRows, dupSame, dupDiff };
+}
+
+/* ---- 비교 확인 모달 (Promise 기반) ---- */
+function showMergeModal(game, fileName, plan) {
+  return new Promise(resolve => {
+    const $ = id => document.getElementById(id);
+    $("mTitle").textContent = `${game} 데이터 업데이트 확인`;
+    $("mFile").textContent = fileName;
+    $("mNewCnt").textContent = `${plan.newRows.length}일`;
+    $("mDupCnt").textContent = `${plan.dupSame.length + plan.dupDiff.length}일`;
+
+    const rowsTable = rows => `
+      <div class="m-list"><table>
+        <thead><tr><th>날짜</th><th>자체결제 매출</th><th>전체 IAP</th><th>비중</th></tr></thead>
+        <tbody>${rows.map(r => `<tr>
+          <td>${r.date}</td><td>${fmtNum(r.d2c)}</td><td>${fmtNum(r.iap)}</td><td>${fmtPct(r.ratio)}</td>
+        </tr>`).join("")}</tbody>
+      </table></div>`;
+    $("mNewList").innerHTML = plan.newRows.length
+      ? rowsTable(plan.newRows)
+      : '<div class="m-empty">신규 날짜가 없습니다.</div>';
+
+    const dupTotal = plan.dupSame.length + plan.dupDiff.length;
+    if (!dupTotal) {
+      $("mDupList").innerHTML = '<div class="m-empty">중복 날짜가 없습니다.</div>';
+    } else if (!plan.dupDiff.length) {
+      const ds = plan.dupSame.map(d => d.old.date).sort();
+      $("mDupList").innerHTML =
+        `<div class="m-empty">${ds[0]} ~ ${ds[ds.length - 1]} · ${dupTotal}일 모두 기존 값과 동일합니다.</div>`;
+    } else {
+      $("mDupList").innerHTML = `
+        ${plan.dupSame.length ? `<div class="m-empty">값이 동일한 중복 ${plan.dupSame.length}일은 표시 생략</div>` : ""}
+        <div class="m-list"><table>
+          <thead><tr><th>날짜 (값 다름)</th><th>자체결제: 기존 → 새값</th><th>전체 IAP: 기존 → 새값</th></tr></thead>
+          <tbody>${plan.dupDiff.map(d => `<tr>
+            <td>${d.old.date}</td>
+            <td><span class="old">${fmtNum(d.old.d2c)}</span> → <span class="new">${fmtNum(d.neu.d2c)}</span></td>
+            <td><span class="old">${fmtNum(d.old.iap)}</span> → <span class="new">${fmtNum(d.neu.iap)}</span></td>
+          </tr>`).join("")}</tbody>
+        </table></div>`;
+    }
+    $("mOverwriteWrap").style.display = plan.dupDiff.length ? "flex" : "none";
+    $("mOverwrite").checked = false;
+    $("mDiffCnt").textContent = plan.dupDiff.length;
+
+    const overlay = $("mergeModal");
+    overlay.classList.add("show");
+    const close = result => {
+      overlay.classList.remove("show");
+      $("mApply").onclick = $("mCancel").onclick = overlay.onclick = null;
+      resolve(result);
+    };
+    $("mApply").onclick = () => close({ apply: true, overwrite: $("mOverwrite").checked });
+    $("mCancel").onclick = () => close({ apply: false });
+    overlay.onclick = e => { if (e.target === overlay) close({ apply: false }); };
+  });
+}
+
+async function handleFiles(files) {
+  const results = [];
+  for (const file of files) {
+    try {
+      const buf = await file.arrayBuffer();
+      let { rows, game } = parseWorkbook(new Uint8Array(buf), file.name);
+      if (!game) game = (prompt(`"${file.name}"의 게임명을 입력하세요 (예: GBTW)`) || "").trim().toUpperCase();
+      if (!game) continue;
+
+      if (!games[game] || !games[game].length) {
+        games[game] = rows;
+        activeGame = game;
+        results.push(`${game} ${rows.length}일 (신규 게임)`);
+        continue;
+      }
+
+      const plan = buildMergePlan(games[game], rows);
+      if (!plan.newRows.length && !plan.dupDiff.length) {
+        results.push(`${game} 변경 없음 (전부 중복 ${plan.dupSame.length}일)`);
+        continue;
+      }
+      const decision = await showMergeModal(game, file.name, plan);
+      if (!decision.apply) { results.push(`${game} 취소`); continue; }
+
+      const merged = new Map(games[game].map(r => [r.date, r]));
+      plan.newRows.forEach(r => merged.set(r.date, r));
+      if (decision.overwrite) plan.dupDiff.forEach(d => merged.set(d.neu.date, d.neu));
+      games[game] = [...merged.values()];
+      activeGame = game;
+      results.push(`${game} 신규 ${plan.newRows.length}일 추가` +
+        (decision.overwrite && plan.dupDiff.length ? `, ${plan.dupDiff.length}일 덮어씀` : ""));
+    } catch (err) {
+      alert(`${file.name} 업로드 실패: ` + err.message);
+    }
+  }
+  if (results.length) {
+    saveState();
+    renderAll();
+    toast(`✅ ${results.join(" · ")}`);
+  }
+}
+
+document.getElementById("fileInput").addEventListener("change", e => {
+  if (e.target.files.length) handleFiles(e.target.files);
+  e.target.value = "";
+});
+
+/* ================= 차트 패널: 확대 & 드래그 정렬 ================= */
+let dragPanel = null; // 순서 변경 중인 패널 (파일 드롭과 구분용)
+
+function toggleExpand(panel) {
+  const wasExpanded = panel.classList.contains("expanded");
+  document.querySelectorAll(".chart-panel.expanded").forEach(p => {
+    p.classList.remove("expanded");
+    p.querySelector(".p-btn.expand").textContent = "⛶";
+  });
+  if (!wasExpanded) {
+    panel.classList.add("expanded");
+    panel.querySelector(".p-btn.expand").textContent = "↩ 돌아가기";
+  }
+  document.getElementById("expandBackdrop").classList.toggle("show", !wasExpanded);
+}
+function collapseExpanded() {
+  const p = document.querySelector(".chart-panel.expanded");
+  if (p) toggleExpand(p);
+}
+document.getElementById("expandBackdrop").addEventListener("click", collapseExpanded);
+window.addEventListener("keydown", e => { if (e.key === "Escape") collapseExpanded(); });
+
+function applyChartOrder() {
+  const grid = document.getElementById("chartsGrid");
+  chartOrder.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) grid.appendChild(el);
+  });
+}
+(function initPanelControls() {
+  const grid = document.getElementById("chartsGrid");
+  grid.querySelectorAll(".chart-panel").forEach(panel => {
+    const handle = panel.querySelector(".p-btn.drag");
+    panel.querySelector(".p-btn.expand").addEventListener("click", () => toggleExpand(panel));
+    // 핸들을 누른 동안만 드래그 가능 (차트 조작과 충돌 방지)
+    handle.addEventListener("mousedown", () => {
+      if (!panel.classList.contains("expanded")) panel.draggable = true;
+    });
+    handle.addEventListener("mouseup", () => panel.draggable = false);
+    panel.addEventListener("dragstart", e => {
+      dragPanel = panel;
+      panel.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      try { e.dataTransfer.setData("text/plain", panel.id); } catch (err) {}
+    });
+    panel.addEventListener("dragend", () => {
+      panel.classList.remove("dragging");
+      panel.draggable = false;
+      dragPanel = null;
+      chartOrder = [...grid.querySelectorAll(".chart-panel")].map(el => el.id);
+      saveState();
+    });
+    panel.addEventListener("dragover", e => {
+      if (!dragPanel || dragPanel === panel) return;
+      e.preventDefault();
+      if (dragPanel.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING) panel.after(dragPanel);
+      else panel.before(dragPanel);
+    });
+  });
+})();
+
+/* 드래그&드롭 (엑셀 파일 업로드 — 패널 순서 변경과 구분) */
+const isFileDrag = e => !dragPanel && e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
+let dragDepth = 0;
+window.addEventListener("dragenter", e => {
+  if (!isFileDrag(e)) return;
+  e.preventDefault(); dragDepth++;
+  document.getElementById("dropOverlay").classList.add("show");
+});
+window.addEventListener("dragleave", e => {
+  if (!isFileDrag(e)) return;
+  e.preventDefault(); dragDepth--;
+  if (dragDepth <= 0) { dragDepth = 0; document.getElementById("dropOverlay").classList.remove("show"); }
+});
+window.addEventListener("dragover", e => { if (isFileDrag(e)) e.preventDefault(); });
+window.addEventListener("drop", e => {
+  if (!isFileDrag(e)) return;
+  e.preventDefault(); dragDepth = 0;
+  document.getElementById("dropOverlay").classList.remove("show");
+  if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+});
+
+/* 초기화 */
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if (!confirm("모든 게임 데이터를 지웁니다.\n(게임 시트 등록·이벤트 시트 연결은 유지되며, 등록된 시트는 다음 동기화 때 다시 불러옵니다)")) return;
+  games = DEFAULT_DATA.length ? { [DEFAULT_GAME]: [...DEFAULT_DATA] } : {};
+  activeGame = Object.keys(games)[0] || "ALL";
+  saveState();
+  renderAll();
+  toast("게임 데이터를 초기화했습니다");
+});
+
+/* 기간 필터 */
+document.querySelectorAll("#rangeSeg button").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll("#rangeSeg button").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    rangeDays = Number(b.dataset.days);
+    renderCards();
+    renderCharts();
+    renderTable();
+  });
+});
+
+/* 목표 비중 */
+document.getElementById("targetInput").addEventListener("change", e => {
+  targetPct = Number(e.target.value) || 0;
+  saveState();
+  renderCharts();
+  renderTable();
+});
+
+/* 뷰 전환 (대시보드 ↔ 이벤트 효과) */
+document.querySelectorAll("#viewSeg button").forEach(b => {
+  b.addEventListener("click", () => {
+    viewMode = b.dataset.view;
+    applyView();
+  });
+});
+
+/* 이벤트 시트 모달 */
+document.getElementById("sheetBtn").addEventListener("click", () => {
+  document.getElementById("sheetUrlInput").value = eventSheetUrl;
+  document.getElementById("sheetStatus").textContent = eventSheetUrl
+    ? `연결됨 · 이벤트 ${events.length}건 · 마지막 동기화: ${lastSync || "-"}`
+    : "연결된 시트가 없습니다";
+  document.getElementById("sheetModal").classList.add("show");
+});
+document.getElementById("sheetClose").addEventListener("click", () =>
+  document.getElementById("sheetModal").classList.remove("show"));
+document.getElementById("sheetSync").addEventListener("click", async () => {
+  const url = document.getElementById("sheetUrlInput").value.trim();
+  if (!url) { alert("시트 URL을 입력하세요."); return; }
+  eventSheetUrl = url;
+  saveState();
+  await syncEvents(false);
+  document.getElementById("sheetModal").classList.remove("show");
+});
+document.getElementById("sheetDisconnect").addEventListener("click", () => {
+  if (!confirm("시트 연결을 해제하고 이벤트 데이터를 지울까요?")) return;
+  eventSheetUrl = ""; events = []; lastSync = "";
+  saveState();
+  renderAll();
+  document.getElementById("sheetModal").classList.remove("show");
+});
+document.getElementById("sheetModal").addEventListener("click", e => {
+  if (e.target.id === "sheetModal") e.target.classList.remove("show");
+});
+
+/* 게임 KPI 시트 모달 */
+document.getElementById("gameSheetBtn").addEventListener("click", () => {
+  renderGsList();
+  document.getElementById("gsMasterUrl").value = masterSheetUrl;
+  document.getElementById("gameSheetModal").classList.add("show");
+});
+document.getElementById("gsMasterConnect").addEventListener("click", async () => {
+  const url = document.getElementById("gsMasterUrl").value.trim();
+  if (!url) { alert("메인 스프레드시트 URL을 입력하세요."); return; }
+  const btn = document.getElementById("gsMasterConnect");
+  btn.textContent = "연결 중…";
+  await connectMasterSheet(url, false);
+  renderGsList();
+  btn.textContent = "연결 & 동기화";
+});
+document.getElementById("gsClose").addEventListener("click", () =>
+  document.getElementById("gameSheetModal").classList.remove("show"));
+document.getElementById("gameSheetModal").addEventListener("click", e => {
+  if (e.target.id === "gameSheetModal") e.target.classList.remove("show");
+});
+document.getElementById("gsSyncAll").addEventListener("click", async () => {
+  await syncAllGameSheets(false);
+  renderGsList();
+});
+document.getElementById("gsAdd").addEventListener("click", async () => {
+  const name = document.getElementById("gsName").value.trim().toUpperCase();
+  const url = document.getElementById("gsUrl").value.trim();
+  if (!name || !url) { alert("게임명과 시트 URL을 모두 입력하세요."); return; }
+  gameSheets[name] = url;
+  try {
+    const days = await syncGameSheet(name);
+    activeGame = name;
+    saveState(); renderAll(); renderGsList();
+    document.getElementById("gsName").value = "";
+    document.getElementById("gsUrl").value = "";
+    toast(`✅ ${name} ${days}일 데이터 연결 완료`);
+  } catch (e) {
+    delete gameSheets[name];
+    alert(`${name} 연결 실패: ` + e.message +
+      '\n\n확인할 것:\n1) 시트 공유가 "링크가 있는 모든 사용자: 뷰어"인지\n2) 1행 헤더가 엑셀 포맷(datekey, DAU, 전체 IAP 매출...)과 같은지\n3) 브라우저에서 직접 열었는지 (미리보기 패널은 외부 요청 차단 가능)');
+  }
+});
+
+/* ================= 암호화 스냅샷 (AES-GCM + PBKDF2) ================= */
+const SNAP_FILE = "snapshot.enc.json";
+let serverSnap = null; // 서버(저장소)에 게시된 스냅샷
+
+const bufToB64 = buf => {
+  const u = new Uint8Array(buf); let s = "";
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+const b64ToBuf = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+async function deriveSnapKey(pw, salt) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 150000, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function encryptSnapshot(pw) {
+  const payload = {
+    publishedAt: new Date().toISOString(),
+    games, events, target: targetPct
+    // 주의: 구글시트 URL(gameSheets, eventSheetUrl)은 의도적으로 미포함
+  };
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveSnapKey(pw, salt);
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key,
+    new TextEncoder().encode(JSON.stringify(payload)));
+  return {
+    fmt: 1,
+    publishedAt: payload.publishedAt,
+    gamesCount: Object.keys(games).length,
+    days: Object.values(games).reduce((s, r) => s + r.length, 0),
+    salt: bufToB64(salt), iv: bufToB64(iv), ct: bufToB64(ct)
+  };
+}
+async function decryptSnapshot(file, pw) {
+  const key = await deriveSnapKey(pw, b64ToBuf(file.salt));
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: b64ToBuf(file.iv) }, key, b64ToBuf(file.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+function downloadFile(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function updateSnapStatus() {
+  const el = document.getElementById("snapStatus");
+  if (serverSnap) {
+    const loaded = serverSnap.publishedAt === lastSnapshotLoaded ? " · ✅ 이 브라우저에 불러옴" : "";
+    el.textContent = `게시본: ${new Date(serverSnap.publishedAt).toLocaleString("ko-KR")} · 게임 ${serverSnap.gamesCount}개 · 총 ${serverSnap.days}일치${loaded}`;
+  } else {
+    el.textContent = "게시된 스냅샷이 없습니다. (게시 후 저장소에 커밋하면 여기에 표시됩니다)";
+  }
+}
+async function checkServerSnapshot() {
+  try {
+    const res = await fetch(SNAP_FILE + "?t=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) return;
+    serverSnap = await res.json();
+    if (!serverSnap || !serverSnap.ct) { serverSnap = null; return; }
+    updateSnapStatus();
+    // 시트 로딩이 진행 중이면(마스터/개별 시트 연결됨) 스냅샷 자동 안내를 띄우지 않음 (부트 경쟁 방지)
+    const sheetPending = !!masterSheetUrl || Object.keys(gameSheets).length > 0;
+    const hasData = Object.keys(games).length > 0;
+    if (!hasData && !sheetPending) {
+      document.getElementById("snapModal").classList.add("show"); // 데이터원 없고 빈 화면이면 불러오기 안내
+    } else if (lastSnapshotLoaded && serverSnap.publishedAt !== lastSnapshotLoaded) {
+      toast("📦 새 스냅샷이 게시되어 있습니다 — 헤더의 📦 스냅샷에서 불러오세요");
+    }
+  } catch (e) {}
+}
+document.getElementById("snapBtn").addEventListener("click", () => {
+  updateSnapStatus();
+  document.getElementById("snapModal").classList.add("show");
+});
+document.getElementById("snapClose").addEventListener("click", () =>
+  document.getElementById("snapModal").classList.remove("show"));
+document.getElementById("snapModal").addEventListener("click", e => {
+  if (e.target.id === "snapModal") e.target.classList.remove("show");
+});
+document.getElementById("snapPubBtn").addEventListener("click", async () => {
+  const pw = document.getElementById("snapPubPw").value;
+  if (!Object.keys(games).length) { alert("게시할 데이터가 없습니다. 먼저 시트 동기화 또는 xlsx 업로드를 하세요."); return; }
+  if (pw.length < 4) { alert("비밀번호는 4자 이상으로 입력하세요."); return; }
+  const btn = document.getElementById("snapPubBtn");
+  btn.textContent = "암호화 중…";
+  try {
+    const file = await encryptSnapshot(pw);
+    downloadFile(SNAP_FILE, JSON.stringify(file));
+    document.getElementById("snapPubPw").value = "";
+    toast('🔐 snapshot.enc.json 다운로드 완료 — Claude에게 "스냅샷 배포해줘"라고 요청하세요');
+  } catch (e) { alert("암호화 실패: " + e.message); }
+  btn.textContent = "🔐 암호화 파일 만들기";
+});
+document.getElementById("snapLoadBtn").addEventListener("click", async () => {
+  if (!serverSnap) { alert("게시된 스냅샷이 없습니다."); return; }
+  const pw = document.getElementById("snapLoadPw").value;
+  if (!pw) { alert("비밀번호를 입력하세요."); return; }
+  try {
+    const data = await decryptSnapshot(serverSnap, pw);
+    games = data.games || {};
+    events = data.events || [];
+    if (data.target) targetPct = data.target;
+    lastSnapshotLoaded = serverSnap.publishedAt;
+    activeGame = Object.keys(games).length > 1 ? "ALL" : (Object.keys(games)[0] || "ALL");
+    saveState();
+    document.getElementById("targetInput").value = targetPct;
+    document.getElementById("snapLoadPw").value = "";
+    document.getElementById("snapModal").classList.remove("show");
+    renderAll();
+    toast(`🔓 스냅샷 로드 완료 — 게임 ${Object.keys(games).length}개 · 이벤트 ${events.length}건`);
+  } catch (e) {
+    alert("불러오기 실패: 비밀번호가 틀렸거나 파일이 손상되었습니다.");
+  }
+});
+
+/* 버전 히스토리 */
+const verTypeColor = t => t === "리뉴얼" ? "#f87171" : t === "기능" ? "#4f8cff" : "#8b96ad";
+document.getElementById("verBadge").textContent = "v" + APP_VERSION;
+document.getElementById("verBadge").addEventListener("click", () => {
+  document.getElementById("verBody").innerHTML = VERSION_HISTORY.map(v => `
+    <div class="vh-item">
+      <div class="vh-ver" style="color:${verTypeColor(v.type)}">v${v.ver}</div>
+      <div class="vh-body">
+        <div class="vh-meta">
+          <span class="ev-badge" style="background:${verTypeColor(v.type)}">${v.type}</span> ${v.date}
+        </div>
+        <ul>${v.changes.map(c => `<li>${c}</li>`).join("")}</ul>
+      </div>
+    </div>`).join("");
+  document.getElementById("verModal").classList.add("show");
+});
+document.getElementById("verClose").addEventListener("click", () =>
+  document.getElementById("verModal").classList.remove("show"));
+document.getElementById("verModal").addEventListener("click", e => {
+  if (e.target.id === "verModal") e.target.classList.remove("show");
+});
+
+/* 이벤트 상세 모달 닫기 */
+document.getElementById("evClose").addEventListener("click", () =>
+  document.getElementById("eventModal").classList.remove("show"));
+document.getElementById("eventModal").addEventListener("click", e => {
+  if (e.target.id === "eventModal") e.target.classList.remove("show");
+});
+
+/* 시작 */
+loadState();
+applyTheme();
+applyChartOrder();
+document.getElementById("targetInput").value = targetPct;
+renderAll();
+if (eventSheetUrl) syncEvents(true); // 시트 연결되어 있으면 자동 동기화
+/* 시트 URL 결정: ?sheet= 파라미터 > 저장된 메인 시트 > 플래너에서 연결한 시트 */
+(function(){
+  try {
+    const p = new URLSearchParams(location.search).get("sheet");
+    if (p) { masterSheetUrl = p.trim(); saveState(); history.replaceState(null, "", location.pathname); }
+  } catch (e) {}
+  if (!masterSheetUrl) {
+    const ps = localStorage.getItem("kpiplanner-sheet");
+    if (ps) { masterSheetUrl = ps; saveState(); }
+  }
+})();
+if (masterSheetUrl) connectMasterSheet(masterSheetUrl, true); // 메인 시트 자동 동기화
+else if (Object.keys(gameSheets).length) syncAllGameSheets(true); // 개별 게임 시트 자동 동기화
+checkServerSnapshot(); // 게시된 암호화 스냅샷 확인 (빈 화면이면 불러오기 안내)
+</script>
+</body>
+</html>
