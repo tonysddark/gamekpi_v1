@@ -90,7 +90,8 @@ const $=s=>document.querySelector(s);
 const qp=new URLSearchParams(location.search);
 const state={sheet:"",game:"",view:"",period:"30",month:"",theme:"",tot:"",ratio:"50",scen:"arppu",base:"",embed:false,wid:"",cfg:false};
 let dailyCache=null,gamesCache=null,chart=null,MONTHS=[];
-const VIEWS=[["summary","요약 KPI"],["trend","추이"],["channel","채널"],["monthly","월별"],["top","TOP"],["target","KPI 목표"],["daily","일별 트래킹"],["country","국가별"]];
+const VIEWS=[["summary","요약 KPI"],["trend","추이"],["channel","채널"],["monthly","월별"],["top","TOP"],["target","KPI 목표"],["daily","일별 트래킹"],["events","이벤트"],["country","국가별"]];
+let eventsCache=null;
 function widKey(){return state.wid?"rpt:"+state.wid:null;}
 function persist(){const k=widKey();if(!k)return;try{localStorage.setItem(k,JSON.stringify({game:state.game,view:state.view,period:state.period,month:state.month,theme:state.theme,tot:state.tot,ratio:state.ratio,scen:state.scen,base:state.base}));}catch(e){}}
 function loadPersist(){const k=widKey();if(!k)return;try{const s=JSON.parse(localStorage.getItem(k));if(s)Object.assign(state,s);}catch(e){}}
@@ -319,12 +320,50 @@ async function wCountry(el){let games=[state.game];if(state.game==="ALL")games=a
   el.innerHTML=shell(gLabel()+" 국가별 매출","TOP "+top.length,"day",
     `<table><thead><tr><th>국가</th><th>매출</th><th>비중</th></tr></thead><tbody>${top.map(([c,v],i)=>`<tr><td>${i+1}. ${c}</td><td>${억(v)}</td><td style="color:var(--mut)">${(v/tot*100).toFixed(0)}%</td></tr>`).join("")}</tbody></table>`);wireTools();}
 
+/* ---- 이벤트 ---- */
+async function loadEvents(){
+  if(eventsCache)return eventsCache;
+  let grid=null;
+  for(const t of ["events","이벤트"]){try{const g=await GSheet.fetchTab(state.sheet,t);const h=GSheet.headerOf(g);
+    if(h.some(x=>x.includes("title")||x.includes("제목")||x.includes("start")||x.includes("시작"))){grid=g;break;}}catch(e){}}
+  if(!grid){eventsCache=[];return eventsCache;}
+  const h=GSheet.headerOf(grid);
+  const ci={game:h.findIndex(x=>x.includes("game")||x.includes("게임")),start:h.findIndex(x=>x.includes("start")||x.includes("시작")),
+    end:h.findIndex(x=>x.includes("end")||x.includes("종료")),title:h.findIndex(x=>x.includes("title")||x.includes("제목")||x.includes("이벤트")||x.includes("내용")),
+    memo:h.findIndex(x=>x.includes("memo")||x.includes("메모")||x.includes("비고"))};
+  const out=[];
+  for(let i=1;i<grid.length;i++){const g=grid[i];const s=GSheet.normDate(g[ci.start]);const title=String(ci.title>=0?g[ci.title]||"":"").trim();if(!s||!title)continue;
+    out.push({game:String(ci.game>=0?g[ci.game]||"":"").trim().toUpperCase()||"ALL",start:s,end:GSheet.normDate(ci.end>=0?g[ci.end]:null)||s,title,memo:String(ci.memo>=0?g[ci.memo]||"":"").trim()});}
+  eventsCache=out;return out;
+}
+function eventEffect(rows,start,end){
+  const inP=rows.filter(r=>r.date>=start&&r.date<=end);if(!inP.length)return null;
+  const n=inP.length,i0=rows.findIndex(r=>r.date===inP[0].date),prev=rows.slice(Math.max(0,i0-n),i0);
+  const d2cCur=sum(inP,r=>r.d2c)/n,ratioCur=sum(inP,r=>r.d2c)/(sum(inP,r=>r.total)||1),puCur=sum(inP,r=>r.pu)/n;
+  const d2cPrev=prev.length?sum(prev,r=>r.d2c)/prev.length:null;
+  return{n,d2cCur,ratioCur,puCur,delta:d2cPrev?(d2cCur/d2cPrev-1)*100:null};
+}
+async function wEvents(rows,el){
+  let evs=(await loadEvents()).filter(e=>state.game==="ALL"||e.game==="ALL"||e.game===state.game);
+  if(state.month) evs=evs.filter(e=>e.end>=state.month+"-01"&&e.start<=state.month+"-31");
+  evs=evs.sort((a,b)=>b.start.localeCompare(a.start)).slice(0,10);
+  if(!evs.length){el.innerHTML=shell(gLabel()+" 이벤트 효과",null,"day",`<div class="msg">표시할 이벤트가 없습니다. (이벤트 탭·기간 확인)</div>`);wireTools();return;}
+  const body=evs.map(e=>{const ef=eventEffect(rows,e.start,e.end);
+    const dchip=ef&&ef.delta!=null?`<span style="color:${ef.delta>0?'var(--green)':'var(--down)'}">${ef.delta>0?'▲':'▼'}${Math.abs(ef.delta).toFixed(0)}%</span>`:'-';
+    return `<tr><td>${e.start.slice(5)}${e.end!==e.start?"~"+e.end.slice(5):""}${state.game==="ALL"?` <span class="flat">[${e.game}]</span>`:""}<br><span class="flat" style="font-size:11px">${e.title}</span></td>
+      <td>${ef?만(ef.d2cCur):"-"}</td><td>${dchip}</td><td>${ef?P(ef.ratioCur):"-"}</td><td>${ef?N(ef.puCur)+"명":"-"}</td></tr>`;}).join("");
+  el.innerHTML=shell(gLabel()+" 이벤트 효과",scopeSub(rows),"day",
+    `<table><thead><tr><th>기간 · 이벤트</th><th>일평균 자체결제</th><th>vs직전</th><th>비중</th><th>일평균PU</th></tr></thead><tbody>${body}</tbody></table>
+     <div class="note">기간 중 일평균을 '직전 동일 일수'와 비교. 최신순 최대 10건. 월 선택 시 그 달 겹친 이벤트만.</div>`);wireTools();
+}
+
 /* ================= 렌더 ================= */
 async function renderCurrent(){const app=$("#app");if(chart){chart.destroy();chart=null;}
   if(state.view==="country"){app.innerHTML=`<div class="w"><div class="msg">불러오는 중…</div></div>`;try{await wCountry(app);}catch(e){app.innerHTML=errW(e);}return;}
   app.innerHTML=`<div class="w"><div class="msg">${gLabel()} 불러오는 중…</div></div>`;
   try{const rows=await loadData();if(!rows.length){app.innerHTML=`<div class="w"><div class="msg err">데이터가 없습니다.</div></div>`;return;}
     MONTHS=[...new Set(rows.map(r=>r.date.slice(0,7)))].sort();
+    if(state.view==="events"){await wEvents(rows,app);return;}
     ({summary:wSummary,trend:wTrend,channel:wChannel,monthly:wMonthly,top:wTop,daily:wDaily,target:wTarget}[state.view]||wSummary)(rows,app);
   }catch(e){app.innerHTML=errW(e);}}
 function errW(e){return `<div class="w"><div class="msg err">불러오기 실패: ${e.message}<br><span class="w-sub">시트 공유(링크 뷰어)·탭 이름을 확인하세요</span></div></div>`;}
@@ -339,7 +378,7 @@ async function renderBuilder(){const app=$("#app");
     <div class="row"><label>위젯</label><span class="seg" id="b_view">
       <button data-v="summary" class="active">요약 KPI</button><button data-v="trend">추이</button><button data-v="channel">채널</button>
       <button data-v="monthly">월별</button><button data-v="top">TOP</button><button data-v="target">KPI 목표</button>
-      <button data-v="daily">일별 트래킹</button><button data-v="country">국가별</button></span></div>
+      <button data-v="daily">일별 트래킹</button><button data-v="events">이벤트</button><button data-v="country">국가별</button></span></div>
     <div class="row"><label>기본 기간</label><span class="seg" id="b_period">
       <button data-p="30" class="active">30일</button><button data-p="90">90일</button><button data-p="180">180일</button><button data-p="all">전체</button></span></div>
     <div id="plan-extra">
