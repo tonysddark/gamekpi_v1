@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KPI 리포트 위젯</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="assets/gsheet.js"></script>
+<style>
+  :root{
+    --bg:transparent; --card:#fff; --bd:#e6e9f0; --tx:#1c2333; --mut:#6b7688;
+    --accent:#2f6fed; --purple:#7c53e6; --green:#0f9d6e; --peak:#d97706; --down:#dc2626;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --card:#1a2132; --bd:#2c3752; --tx:#e8ecf5; --mut:#8b96ad;
+      --accent:#4f8cff; --purple:#c084fc; --green:#34d399; --peak:#fbbf24; --down:#f87171; }
+  }
+  :root[data-theme="light"]{ --card:#fff; --bd:#e6e9f0; --tx:#1c2333; --mut:#6b7688;
+    --accent:#2f6fed; --purple:#7c53e6; --green:#0f9d6e; --peak:#d97706; --down:#dc2626; }
+  :root[data-theme="dark"]{ --card:#1a2132; --bd:#2c3752; --tx:#e8ecf5; --mut:#8b96ad;
+    --accent:#4f8cff; --purple:#c084fc; --green:#34d399; --peak:#fbbf24; --down:#f87171; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{background:var(--bg)}
+  body{font-family:'Pretendard','Malgun Gothic',-apple-system,sans-serif;color:var(--tx);padding:10px}
+  .w{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px 18px}
+  .w-head{display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  .w-title{font-size:15px;font-weight:700}
+  .w-sub{font-size:12px;color:var(--mut)}
+  .w-tools{margin-left:auto}
+  /* 위젯 내부 기간 셀렉터 (우상단) */
+  .wp{display:inline-flex;border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+  .wp button{background:transparent;border:none;color:var(--mut);padding:4px 9px;font-size:11px;cursor:pointer}
+  .wp button.active{background:var(--accent);color:#fff;font-weight:600}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+  .kpi{border:1px solid var(--bd);border-radius:12px;padding:11px 13px}
+  .kpi.hero{border-color:var(--accent);background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 12%,transparent),transparent)}
+  .kpi.web{border-color:var(--purple)}
+  .kpi .l{font-size:11px;color:var(--mut);margin-bottom:5px}
+  .kpi .v{font-size:23px;font-weight:800;letter-spacing:-.5px;line-height:1}
+  .kpi.hero .v{color:var(--accent)} .kpi.web .v{color:var(--purple)}
+  .kpi .v small{font-size:12px;font-weight:600;color:var(--mut)}
+  .kpi .d{font-size:11px;margin-top:5px}
+  .up{color:var(--green)} .down{color:var(--down)} .flat{color:var(--mut)}
+  .chart-box{position:relative;height:250px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--bd)}
+  th{color:var(--mut);font-weight:600} td:first-child,th:first-child{text-align:left}
+  tr:last-child td{border-bottom:none}
+  .msg{color:var(--mut);font-size:13px;padding:20px 6px;text-align:center;line-height:1.7}
+  .err{color:var(--down)}
+  .builder{max-width:860px;margin:0 auto}
+  .builder h1{font-size:18px;margin-bottom:4px}
+  .builder .lead{color:var(--mut);font-size:13px;margin-bottom:16px;line-height:1.6}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .row>label{font-size:13px;color:var(--mut);min-width:64px}
+  input,select{background:var(--card);border:1px solid var(--bd);color:var(--tx);padding:8px 11px;border-radius:8px;font-size:13px}
+  input[type=text]{flex:1;min-width:220px}
+  .seg{display:inline-flex;border:1px solid var(--bd);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+  .seg button{background:transparent;border:none;color:var(--mut);padding:7px 12px;font-size:12px;cursor:pointer}
+  .seg button.active{background:var(--accent);color:#fff;font-weight:600}
+  .out{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-top:8px}
+  .out .u{font-family:monospace;font-size:12px;word-break:break-all;color:var(--accent)}
+  .btn{background:var(--accent);border:none;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px solid var(--bd);color:var(--tx)}
+  .preview{margin-top:16px;border:1px dashed var(--bd);border-radius:12px;padding:8px}
+  .preview .pl{font-size:11px;color:var(--mut);margin:2px 6px 8px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ================= KPI 리포트 위젯 (Notion 임베드) =================
+ * 임베드: report.html?sheet=<URL>&game=POTC&view=summary&period=30&theme=light
+ *   game: 프로젝트코드 | ALL(전체)
+ *   view: summary | trend | channel | monthly | top | country
+ *   period: 30|90|180|all (일 기준) / monthly는 6|12|all(월)
+ * 파라미터 없이 열면 위젯 URL 빌더.
+ * ================================================================= */
+const D2C_PGS = ["다날","엑솔라","페이레터","페이레터 PPAY"];
+const 억=v=>v==null||isNaN(v)?"-":(Math.abs(v)>=1e8?(v/1e8).toFixed(v>=1e9?1:2)+"억":Math.round(v/1e4).toLocaleString()+"만");
+const 만=v=>v==null||isNaN(v)?"-":Math.round(v/1e4).toLocaleString()+"만";
+const N=v=>v==null||isNaN(v)?"-":Math.round(v).toLocaleString();
+const P=v=>v==null||isNaN(v)?"-":(v*100).toFixed(1)+"%";
+const sum=(a,f)=>a.reduce((s,x)=>s+(f?f(x):x),0);
+const avg=(a,f)=>a.length?sum(a,f)/a.length:0;
+const $=s=>document.querySelector(s);
+const qp=new URLSearchParams(location.search);
+
+const state={ sheet:"", game:"", view:"", period:"30", theme:"" };
+let dailyCache=null, gamesCache=null, chart=null;
+
+function applyTheme(){ const t=qp.get("theme")||state.theme; if(t==="light"||t==="dark") document.documentElement.dataset.theme=t; }
+function sheetParam(){
+  const s=qp.get("sheet"); if(s) return s.trim();
+  const id=qp.get("sid"); if(id) return "https://docs.google.com/spreadsheets/d/"+id.trim();
+  try{ const j=JSON.parse(localStorage.getItem("d2c-dashboard-v2")); if(j&&j.masterSheetUrl) return j.masterSheetUrl; }catch(e){}
+  return localStorage.getItem("kpiplanner-sheet")||"";
+}
+
+/* ---- 게임 발견 (index 탭 → 폴백: 후보 -kpi 탭 프로빙) ---- */
+async function discoverGames(sheet){
+  if(gamesCache) return gamesCache;
+  try{
+    const grid=await GSheet.fetchTab(sheet,"index","limit 500");
+    const h=GSheet.headerOf(grid);
+    if(!h.some(x=>/start|end|title|memo|market_name|datekey/.test(x))){
+      const gi=Math.max(0,h.findIndex(x=>x.includes("game")||x.includes("게임")||x.includes("project")));
+      const c=[]; for(let i=1;i<grid.length;i++){const g=String(grid[i][gi]||"").trim();if(g)c.push(g.toUpperCase());}
+      if(c.length){ gamesCache=[...new Set(c)]; return gamesCache; }
+    }
+  }catch(e){}
+  const pool=new Set(GSheet.KNOWN_CODES);
+  try{ const grid=await GSheet.fetchTab(sheet,"events");
+    const gi=Math.max(0,GSheet.headerOf(grid).findIndex(x=>x.includes("game")||x.includes("게임")));
+    for(let i=1;i<grid.length;i++){const g=String(grid[i][gi]||"").trim().toUpperCase();if(g&&g!=="ALL")pool.add(g);}
+  }catch(e){}
+  const checks=await Promise.all([...pool].map(async c=>{
+    try{ return GSheet.headerOf(await GSheet.fetchTab(sheet,c+"-kpi","limit 1")).some(x=>x.includes("market_name"))?c:null; }catch(e){return null;}
+  }));
+  gamesCache=checks.filter(Boolean).sort();
+  return gamesCache;
+}
+
+/* ---- 상세(코드-kpi) → 일별 집계 ---- */
+async function loadKpiOne(sheet, game){
+  const grid=await GSheet.fetchTab(sheet, game+"-kpi");
+  const h=GSheet.headerOf(grid);
+  const ci={ date:h.findIndex(x=>x.includes("datekey")||x.includes("date")||x.includes("날짜")),
+    plat:h.findIndex(x=>x.includes("platform")||x.includes("device")),
+    pg:h.findIndex(x=>x.includes("pg_name")), pu:h.findIndex(x=>x==="pu"||x.includes("pu")),
+    rev:h.findIndex(x=>x.includes("revenue")||x.includes("매출")) };
+  if(ci.date<0||ci.pg<0||ci.rev<0) throw new Error("'"+game+"-kpi' 탭 헤더를 찾지 못했습니다.");
+  const by={};
+  for(let i=1;i<grid.length;i++){
+    const g=grid[i], d=GSheet.normDate(g[ci.date]), rev=GSheet.toNum(g[ci.rev]); if(!d||rev==null)continue;
+    const o=by[d]=by[d]||{date:d,total:0,d2c:0,pu:0,web:0,apk:0,pc:0,web_pu:0,apk_pu:0,pc_pu:0};
+    o.total+=rev;
+    if(D2C_PGS.includes(String(g[ci.pg]||"").trim())){
+      const pu=GSheet.toNum(g[ci.pu])||0, k=String(g[ci.plat]||"").trim().toUpperCase()==="WEB"?"web":String(g[ci.plat]||"").trim().toUpperCase()==="PC"?"pc":"apk";
+      o.d2c+=rev; o.pu+=pu; o[k]+=rev; o[k+"_pu"]+=pu;
+    }
+  }
+  return by; // {date: agg}
+}
+async function loadData(){
+  if(dailyCache) return dailyCache;
+  let games=[state.game];
+  if(state.game==="ALL") games=await discoverGames(state.sheet);
+  const merged={};
+  for(const g of games){
+    const by=await loadKpiOne(state.sheet,g);
+    for(const d in by){ const s=merged[d]=merged[d]||{date:d,total:0,d2c:0,pu:0,web:0,apk:0,pc:0,web_pu:0,apk_pu:0,pc_pu:0};
+      const o=by[d]; ["total","d2c","pu","web","apk","pc","web_pu","apk_pu","pc_pu"].forEach(k=>s[k]+=o[k]); }
+  }
+  dailyCache=Object.values(merged).sort((a,b)=>a.date.localeCompare(b.date));
+  return dailyCache;
+}
+function sliceDays(rows,period){ if(!period||period==="all")return rows; const n=parseInt(period,10); return n>0?rows.slice(-n):rows; }
+function gLabel(){ return state.game==="ALL"?"전체 게임":state.game; }
+
+/* ================= 위젯 공통 ================= */
+function periodSeg(kind){
+  const opts = kind==="month" ? [["6","6개월"],["12","12개월"],["all","전체"]] : [["30","30일"],["90","90일"],["180","180일"],["all","전체"]];
+  return `<span class="wp" id="wp">`+opts.map(([v,l])=>`<button data-p="${v}" class="${String(state.period)===v?"active":""}">${l}</button>`).join("")+`</span>`;
+}
+function shell(title, sub, kind, inner){
+  return `<div class="w"><div class="w-head"><div class="w-title">${title}</div><div class="w-sub">${sub||""}</div>
+    <div class="w-tools">${kind?periodSeg(kind):""}</div></div>${inner}</div>`;
+}
+function wirePeriod(kind){
+  const seg=$("#wp"); if(!seg) return;
+  seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ state.period=b.dataset.p; renderCurrent(); }));
+}
+function deltaHtml(cur,prev,pp){
+  if(cur==null||prev==null||(!pp&&!prev)) return "";
+  const dv=pp?(cur-prev)*100:(cur/prev-1)*100; if(isNaN(dv))return "";
+  const c=dv>0.05?"up":dv<-0.05?"down":"flat", a=dv>0.05?"▲":dv<-0.05?"▼":"―";
+  return `<div class="d ${c}">${a} ${Math.abs(dv).toFixed(1)}${pp?"%p":"%"} <span class="flat">vs 직전</span></div>`;
+}
+
+/* ================= 각 위젯 ================= */
+function wSummary(rows,el){
+  const cur=sliceDays(rows,state.period), n=cur.length, prev=rows.slice(-2*n,-n);
+  const agg=a=>({d2c:sum(a,r=>r.d2c),tot:sum(a,r=>r.total),pu:sum(a,r=>r.pu),web:sum(a,r=>r.web)});
+  const c=agg(cur), p=prev.length?agg(prev):null;
+  const ratio=c.tot?c.d2c/c.tot:0, arppu=c.pu?c.d2c/c.pu:0, puDay=n?c.pu/n:0, d2cDay=n?c.d2c/n:0, totDay=n?c.tot/n:0, webShare=c.d2c?c.web/c.d2c:0;
+  const pr=p?(p.tot?p.d2c/p.tot:0):null, parppu=p?(p.pu?p.d2c/p.pu:0):null, ppuDay=p?p.pu/prev.length:null, pd2cDay=p?p.d2c/prev.length:null;
+  el.innerHTML=shell(gLabel()+" 자체결제 요약",null,"day",`<div class="kpis">
+    <div class="kpi hero"><div class="l">자체결제 비중</div><div class="v">${P(ratio)}</div>${deltaHtml(ratio,pr,true)}</div>
+    <div class="kpi"><div class="l">자체결제 매출(월환산)</div><div class="v">${억(d2cDay*30)}</div><div class="d flat">일평균 ${만(d2cDay)}원</div></div>
+    <div class="kpi"><div class="l">전체 매출(월환산)</div><div class="v">${억(totDay*30)}</div><div class="d flat">일평균 ${만(totDay)}원</div></div>
+    <div class="kpi"><div class="l">PU(일평균)</div><div class="v">${N(puDay)}<small> 명</small></div>${deltaHtml(puDay,ppuDay)}</div>
+    <div class="kpi"><div class="l">ARPPU</div><div class="v">${만(arppu)}<small> 원</small></div>${deltaHtml(arppu,parppu)}</div>
+    <div class="kpi web"><div class="l">WEB상점 비중</div><div class="v">${P(webShare)}</div><div class="d flat">자체결제 중</div></div>
+  </div>`); wirePeriod();
+}
+function wTrend(rows,el){
+  const cur=sliceDays(rows,state.period);
+  el.innerHTML=shell(gLabel()+" 매출·비중 추이",null,"day",`<div class="chart-box"><canvas id="c"></canvas></div>`); wirePeriod();
+  const grid=cssv('--bd'), mut=cssv('--mut'); Chart.defaults.color=mut; Chart.defaults.font.family="'Pretendard','Malgun Gothic',sans-serif";
+  chart=new Chart($("#c"),{data:{labels:cur.map(r=>r.date.slice(5).replace("-","/")),datasets:[
+    {type:"bar",label:"자체결제 매출",data:cur.map(r=>r.d2c),backgroundColor:cssv('--accent'),yAxisID:"y",order:1,borderRadius:2},
+    {type:"line",label:"비중",data:cur.map(r=>r.total?r.d2c/r.total*100:0),borderColor:cssv('--peak'),borderWidth:2.5,pointRadius:0,tension:.3,yAxisID:"y2",order:0},
+  ]},options:baseOpts(grid,{y:{ticks:{callback:v=>억(v)}},y2:{position:"right",grid:{display:false},min:0,ticks:{callback:v=>v+"%"}}},
+    c=>c.dataset.yAxisID==="y2"?` 비중 ${c.parsed.y.toFixed(1)}%`:` 매출 ${N(c.parsed.y)}원`)});
+}
+function wChannel(rows,el){
+  const cur=sliceDays(rows,state.period), n=cur.length;
+  const ch=k=>{const rev=sum(cur,r=>r[k]),pu=sum(cur,r=>r[k+"_pu"]);return{rev,puDay:n?pu/n:0,arppu:pu?rev/pu:0};};
+  const web=ch("web"),apk=ch("apk"),pc=ch("pc"),tot=web.rev+apk.rev+pc.rev||1;
+  el.innerHTML=shell(gLabel()+" 채널 구성",null,"day",
+    `<div class="chart-box" style="height:200px"><canvas id="c"></canvas></div>
+     <table><thead><tr><th>채널</th><th>매출</th><th>비중</th><th>일평균PU</th><th>ARPPU</th></tr></thead><tbody>
+      <tr><td>🛒 WEB상점</td><td>${억(web.rev)}</td><td style="color:var(--purple)">${(web.rev/tot*100).toFixed(0)}%</td><td>${web.puDay.toFixed(1)}</td><td>${만(web.arppu)}</td></tr>
+      <tr><td>🎮 인게임</td><td>${억(apk.rev)}</td><td>${(apk.rev/tot*100).toFixed(0)}%</td><td>${apk.puDay.toFixed(1)}</td><td>${만(apk.arppu)}</td></tr>
+      <tr><td>💻 PC</td><td>${억(pc.rev)}</td><td>${(pc.rev/tot*100).toFixed(0)}%</td><td>${pc.puDay.toFixed(1)}</td><td>${만(pc.arppu)}</td></tr>
+     </tbody></table>`); wirePeriod();
+  chart=new Chart($("#c"),{type:"doughnut",data:{labels:["WEB상점","인게임","PC"],datasets:[{data:[web.rev,apk.rev,pc.rev],
+    backgroundColor:[cssv('--purple'),cssv('--accent'),cssv('--green')],borderWidth:0}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"60%",plugins:{legend:{position:"bottom",labels:{boxWidth:12}},
+      tooltip:{callbacks:{label:c=>` ${c.label}: ${N(c.parsed)}원 (${(c.parsed/tot*100).toFixed(0)}%)`}}}}});
+}
+function wMonthly(rows,el){
+  const byM={}; rows.forEach(r=>{const m=r.date.slice(0,7);const o=byM[m]=byM[m]||{d2c:0,tot:0};o.d2c+=r.d2c;o.tot+=r.total;});
+  let ms=Object.keys(byM).sort(); const lim=state.period==="all"?ms.length:parseInt(state.period,10)||12; ms=ms.slice(-lim);
+  el.innerHTML=shell(gLabel()+" 월별 매출·비중",null,"month",`<div class="chart-box"><canvas id="c"></canvas></div>`); wirePeriod("month");
+  const grid=cssv('--bd'), mut=cssv('--mut'); Chart.defaults.color=mut;
+  chart=new Chart($("#c"),{data:{labels:ms.map(m=>m.slice(2).replace("-","년 ")+"월"),datasets:[
+    {type:"bar",label:"자체결제 매출",data:ms.map(m=>byM[m].d2c),backgroundColor:cssv('--accent'),yAxisID:"y",order:1,borderRadius:3},
+    {type:"line",label:"비중",data:ms.map(m=>byM[m].tot?byM[m].d2c/byM[m].tot*100:0),borderColor:cssv('--peak'),borderWidth:2.5,pointRadius:3,tension:.3,yAxisID:"y2",order:0},
+  ]},options:baseOpts(grid,{y:{ticks:{callback:v=>억(v)}},y2:{position:"right",grid:{display:false},min:0,ticks:{callback:v=>v+"%"}}},
+    c=>c.dataset.yAxisID==="y2"?` 비중 ${c.parsed.y.toFixed(1)}%`:` 매출 ${N(c.parsed.y)}원`)});
+}
+function wTop(rows,el){
+  const cur=sliceDays(rows,state.period);
+  const top=cur.map(r=>({d:r.date,rev:r.d2c,pu:r.pu,arppu:r.pu?r.d2c/r.pu:0})).sort((a,b)=>b.rev-a.rev).slice(0,7);
+  el.innerHTML=shell(gLabel()+" 자체결제 매출 TOP7","선택 기간 내","day",
+    `<table><thead><tr><th>#</th><th>날짜</th><th>매출</th><th>PU</th><th>ARPPU</th></tr></thead><tbody>${
+      top.map((t,i)=>`<tr><td><b>${i+1}</b></td><td>${t.d}</td><td style="color:var(--peak);font-weight:600">${억(t.rev)}</td><td>${N(t.pu)}명</td><td>${만(t.arppu)}원</td></tr>`).join("")
+    }</tbody></table>`); wirePeriod();
+}
+async function wCountry(el){
+  let games=[state.game]; if(state.game==="ALL") games=await discoverGames(state.sheet);
+  const agg={}; let any=false, hdr="";
+  for(const g of games){
+    let grid; try{ grid=await GSheet.fetchTab(state.sheet,g+"-country"); }catch(e){ continue; }
+    const h=GSheet.headerOf(grid); hdr=grid[0]?grid[0].join(", "):"";
+    const ci={date:h.findIndex(x=>x.includes("datekey")||x.includes("date")||x.includes("날짜")),
+      country:h.findIndex(x=>x.includes("country")||x.includes("국가")||x.includes("nation")),
+      rev:h.findIndex(x=>x.includes("revenue")||x.includes("매출"))};
+    if(ci.country<0||ci.rev<0) continue; any=true;
+    const dates=[...new Set(grid.slice(1).map(r=>ci.date>=0?GSheet.normDate(r[ci.date]):null).filter(Boolean))].sort();
+    const cut=(state.period&&state.period!=="all"&&dates.length)?dates[Math.max(0,dates.length-parseInt(state.period,10))]:null;
+    for(let i=1;i<grid.length;i++){const r=grid[i];const d=ci.date>=0?GSheet.normDate(r[ci.date]):null;if(cut&&d&&d<cut)continue;
+      const c=String(r[ci.country]||"").trim();const v=GSheet.toNum(r[ci.rev])||0;if(!c)continue;agg[c]=(agg[c]||0)+v;}
+  }
+  if(!any){ el.innerHTML=shell(gLabel()+" 국가별 매출",null,null,
+    `<div class="msg">국가 탭(<b>코드-country</b>)이 없거나 <b>country·revenue</b> 열이 없습니다.<br><span class="w-sub">${hdr||"탭을 추가하면 표시됩니다"}</span></div>`); return; }
+  const top=Object.entries(agg).sort((a,b)=>b[1]-a[1]).slice(0,8), tot=Object.values(agg).reduce((s,x)=>s+x,0)||1;
+  el.innerHTML=shell(gLabel()+" 국가별 매출","TOP "+top.length,"day",
+    `<table><thead><tr><th>국가</th><th>매출</th><th>비중</th></tr></thead><tbody>${
+      top.map(([c,v],i)=>`<tr><td>${i+1}. ${c}</td><td>${억(v)}</td><td style="color:var(--mut)">${(v/tot*100).toFixed(0)}%</td></tr>`).join("")
+    }</tbody></table>`); wirePeriod();
+}
+function cssv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function baseOpts(grid,scales,label){
+  return {responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    scales:Object.assign({x:{grid:{display:false},ticks:{maxTicksLimit:8}},y:{grid:{color:grid}}},scales),
+    plugins:{legend:{labels:{boxWidth:12}},tooltip:{callbacks:{label}}}};
+}
+
+/* ================= 현재 뷰 렌더 ================= */
+async function renderCurrent(){
+  const app=$("#app");
+  if(chart){ chart.destroy(); chart=null; }
+  if(state.view==="country"){ app.innerHTML=`<div class="w"><div class="msg">불러오는 중…</div></div>`;
+    try{ await wCountry(app); }catch(e){ app.innerHTML=errW(e); } return; }
+  app.innerHTML=`<div class="w"><div class="msg">${gLabel()} 불러오는 중…</div></div>`;
+  try{
+    const rows=await loadData();
+    if(!rows.length){ app.innerHTML=`<div class="w"><div class="msg err">데이터가 없습니다.</div></div>`; return; }
+    ({summary:wSummary,trend:wTrend,channel:wChannel,monthly:wMonthly,top:wTop}[state.view]||wSummary)(rows,app);
+  }catch(e){ app.innerHTML=errW(e); }
+}
+function errW(e){ return `<div class="w"><div class="msg err">불러오기 실패: ${e.message}<br><span class="w-sub">시트 공유(링크 뷰어)·탭 이름을 확인하세요</span></div></div>`; }
+
+/* ================= 빌더 ================= */
+async function renderBuilder(){
+  const app=$("#app");
+  app.innerHTML=`<div class="builder">
+    <h1>📤 Notion 리포트 위젯 만들기</h1>
+    <div class="lead">고른 뒤 <b>URL 복사</b> → Notion에서 <b>/임베드</b>에 붙여넣기. 위젯마다 하나씩 넣으면 됩니다. 임베드된 위젯은 <b>우상단에서 기간을 직접 바꿀 수</b> 있습니다.</div>
+    <div class="row"><label>시트 URL</label><input type="text" id="b_sheet" placeholder="구글 스프레드시트 URL">
+      <button class="btn ghost" id="b_load">프로젝트 불러오기</button></div>
+    <div class="row"><label>프로젝트</label><select id="b_game" style="min-width:160px"><option value="">시트 URL 입력 후 불러오기</option></select></div>
+    <div class="row"><label>위젯</label><span class="seg" id="b_view">
+      <button data-v="summary" class="active">요약 KPI</button><button data-v="trend">추이</button>
+      <button data-v="channel">채널 구성</button><button data-v="monthly">월별</button>
+      <button data-v="top">TOP 실적일</button><button data-v="country">국가별</button></span></div>
+    <div class="row"><label>기본 기간</label><span class="seg" id="b_period">
+      <button data-p="30" class="active">30일</button><button data-p="90">90일</button>
+      <button data-p="180">180일</button><button data-p="all">전체</button></span>
+      <span class="w-sub">임베드 후 위젯 우상단에서 변경 가능</span></div>
+    <div class="row"><label>테마</label><span class="seg" id="b_theme">
+      <button data-t="" class="active">자동</button><button data-t="light">라이트</button><button data-t="dark">다크</button></span></div>
+    <div class="out"><div style="font-size:12px;color:var(--mut);margin-bottom:6px">임베드 URL</div>
+      <div class="u" id="b_url"></div>
+      <div style="margin-top:10px;display:flex;gap:8px"><button class="btn" id="b_copy">URL 복사</button>
+      <button class="btn ghost" id="b_open">새 탭에서 열기</button></div></div>
+    <div class="preview"><div class="pl">미리보기</div><iframe id="b_prev" style="width:100%;height:360px;border:0;border-radius:8px"></iframe></div>
+  </div>`;
+  const b={sheet:sheetParam(),game:"",view:"summary",period:"30",theme:""};
+  $("#b_sheet").value=b.sheet;
+  const build=()=>{ const p=new URLSearchParams({sheet:b.sheet,game:b.game||"POTC",view:b.view,period:b.period}); if(b.theme)p.set("theme",b.theme);
+    return location.origin+location.pathname+"?"+p.toString(); };
+  const refresh=()=>{ const u=build(); $("#b_url").textContent=u; if(b.sheet&&b.game) $("#b_prev").src=u; };
+  const loadGames=async()=>{
+    if(!b.sheet){ alert("시트 URL을 입력하세요."); return; }
+    const sel=$("#b_game"); sel.innerHTML=`<option>불러오는 중…</option>`; gamesCache=null;
+    try{ const gs=await discoverGames(b.sheet);
+      sel.innerHTML=`<option value="ALL">🌐 전체 게임</option>`+gs.map(g=>`<option value="${g}">${g}</option>`).join("");
+      b.game=gs[0]||"ALL"; sel.value=b.game; refresh();
+    }catch(e){ sel.innerHTML=`<option value="">불러오기 실패</option>`; alert("프로젝트 불러오기 실패: "+e.message); }
+  };
+  $("#b_sheet").addEventListener("input",e=>{b.sheet=e.target.value.trim();});
+  $("#b_load").addEventListener("click",loadGames);
+  $("#b_game").addEventListener("change",e=>{b.game=e.target.value;refresh();});
+  const seg=(id,key)=>document.querySelectorAll("#"+id+" button").forEach(x=>x.addEventListener("click",()=>{
+    document.querySelectorAll("#"+id+" button").forEach(y=>y.classList.remove("active")); x.classList.add("active");
+    b[key]=x.dataset.v||x.dataset.p||x.dataset.t||""; refresh(); }));
+  seg("b_view","view"); seg("b_period","period"); seg("b_theme","theme");
+  $("#b_copy").addEventListener("click",()=>navigator.clipboard.writeText(build()).then(()=>{$("#b_copy").textContent="✅ 복사됨";setTimeout(()=>$("#b_copy").textContent="URL 복사",1500);}));
+  $("#b_open").addEventListener("click",()=>window.open(build(),"_blank"));
+  if(b.sheet) loadGames(); else refresh();
+}
+
+/* ================= 시작 ================= */
+applyTheme();
+if(qp.get("view")){
+  state.sheet=sheetParam(); state.game=(qp.get("game")||"").toUpperCase(); state.view=qp.get("view"); state.period=qp.get("period")||"30";
+  if(!state.sheet||!state.game) $("#app").innerHTML=`<div class="w"><div class="msg err">sheet·game 파라미터가 필요합니다.</div></div>`;
+  else renderCurrent();
+} else renderBuilder();
+</script>
+</body>
+</html>
