@@ -287,16 +287,18 @@ function wDaily(rows,el){
   const el0=cur.length,actRev=sum(cur,r=>r.d2c),avgPu=avg(cur,r=>r.pu),avgAr=sum(cur,r=>r.pu)?actRev/sum(cur,r=>r.pu):0;
   const revRate=el0?actRev/(dayT*el0)*100:0,puRate=q.tgtPu?avgPu/q.tgtPu*100:0,arRate=q.tgtArppu?avgAr/q.tgtArppu*100:0;
   const rc=v=>v>=100?"var(--green)":v>=85?"var(--peak)":"var(--down)";
-  const stats=el0?`<div class="kpis" style="margin-bottom:12px">
-    <div class="kpi"><div class="l">매출 달성률(누적)</div><div class="v" style="color:${rc(revRate)}">${revRate.toFixed(0)}<small>%</small></div><div class="d flat">${억(actRev)} / ${억(dayT*el0)}</div></div>
-    <div class="kpi"><div class="l">평균 PU 달성률</div><div class="v" style="color:${rc(puRate)}">${puRate.toFixed(0)}<small>%</small></div><div class="d flat">${N(avgPu)} / ${N(q.tgtPu)}명</div></div>
-    <div class="kpi"><div class="l">평균 ARPPU 달성률</div><div class="v" style="color:${rc(arRate)}">${arRate.toFixed(0)}<small>%</small></div><div class="d flat">${만(avgAr)} / ${만(q.tgtArppu)}원</div></div>
-    </div>`:`<div class="note">${ym.replace("-",".")}월 실적 데이터가 아직 없습니다. 목표: 일 ${만(dayT)}원 · PU ${N(q.tgtPu)}명 · ARPPU ${만(q.tgtArppu)}원</div>`;
+  // 목표(일) vs 실제(평균) 표
+  const tbl=`<table style="margin-bottom:12px"><thead><tr><th>지표 (일 기준)</th><th>목표</th><th>실제(평균)</th><th>달성률</th></tr></thead><tbody>
+    <tr><td>결제금액</td><td>${만(dayT)}원</td><td>${만(el0?actRev/el0:0)}원</td><td style="color:${rc(revRate)};font-weight:600">${revRate.toFixed(0)}%</td></tr>
+    <tr><td>PU</td><td>${N(q.tgtPu)}명</td><td>${N(avgPu)}명</td><td style="color:${rc(puRate)};font-weight:600">${puRate.toFixed(0)}%</td></tr>
+    <tr><td>ARPPU</td><td>${만(q.tgtArppu)}원</td><td>${만(avgAr)}원</td><td style="color:${rc(arRate)};font-weight:600">${arRate.toFixed(0)}%</td></tr>
+  </tbody></table>`;
+  const stats=el0?tbl:`<div class="note">${ym.replace("-",".")}월 실적 데이터가 아직 없습니다. 일 목표 — 결제금액 ${만(dayT)}원 · PU ${N(q.tgtPu)}명 · ARPPU ${만(q.tgtArppu)}원</div>`;
   el.innerHTML=shell(gLabel()+" 일별 목표 트래킹",ym.replace("-",".")+"월 · "+SCEN[state.scen],"trackmonth",
     stats+`<div class="chart-box"><canvas id="c"></canvas></div>
     <div class="note">막대=일 자체결제 / 초록=누적 실적 / 노랑 점선=누적 목표(월 ${억(q.tD2c)}÷${days}일). 대상월·목표는 임베드 URL 파라미터로 설정.</div>`);wireTools();
   chart=new Chart($("#c"),{data:{labels,datasets:[
-    {type:"bar",label:"일 자체결제",data:dailyRev,backgroundColor:cssv('--accent'),yAxisID:"y",order:2,borderRadius:2},
+    {type:"bar",label:"일 자체결제",data:dailyRev,backgroundColor:cssv('--accent')+"66",yAxisID:"y",order:2,borderRadius:2},
     {type:"line",label:"누적 실적",data:cumAct,borderColor:cssv('--green'),borderWidth:2.5,pointRadius:0,tension:.2,yAxisID:"y2",order:0},
     {type:"line",label:"누적 목표",data:cumTgt,borderColor:cssv('--peak'),borderWidth:2,borderDash:[6,4],pointRadius:0,yAxisID:"y2",order:1}]},
     options:baseOpts({x:{grid:{display:false},ticks:{maxTicksLimit:16}},y:{ticks:{callback:v=>만(v)}},y2:{position:"right",grid:{display:false},ticks:{callback:v=>억(v)}}},
