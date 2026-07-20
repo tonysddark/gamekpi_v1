@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>데이터 업로드 — 시트 자동 반영</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="assets/gsheet.js"></script>
+<style>
+  :root{--bg:#0f1420;--panel:#1a2132;--panel-2:#212a40;--border:#2c3752;--text:#e8ecf5;--muted:#8b96ad;--accent:#4f8cff;--green:#34d399;--peak:#fbbf24;--down:#f87171;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Pretendard','Malgun Gothic',sans-serif;padding:20px clamp(12px,3vw,36px) 60px;}
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+  h1{font-size:20px;margin:0;} .spacer{flex:1;}
+  a.btn,button.btn{background:var(--panel);border:1px solid var(--border);color:var(--accent);padding:7px 14px;border-radius:8px;font-size:13px;text-decoration:none;cursor:pointer;font-family:inherit;}
+  button.primary{background:var(--accent);color:#fff;border:none;}
+  button.primary:disabled{opacity:.45;cursor:not-allowed;}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px;}
+  .banner{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:11px 15px;font-size:12.5px;line-height:1.75;margin-bottom:16px;color:var(--muted);}
+  .banner b{color:var(--text);}
+  .drop{border:2px dashed var(--border);border-radius:14px;padding:34px 20px;text-align:center;color:var(--muted);background:var(--panel);transition:.15s;cursor:pointer;margin-bottom:16px;}
+  .drop.over{border-color:var(--accent);background:var(--panel-2);color:var(--text);}
+  .drop .big{font-size:15px;color:var(--text);margin-bottom:6px;}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px;}
+  .panel h2{font-size:15px;margin-bottom:10px;}
+  .setup-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  input.txt{flex:1;min-width:220px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;font-family:inherit;}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  th,td{padding:9px 11px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:middle;}
+  th{font-size:11px;color:var(--muted);font-weight:600;}
+  td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .pill{font-size:11px;padding:2px 9px;border-radius:20px;border:1px solid var(--border);background:var(--panel-2);color:var(--muted);}
+  .pill.ok{color:var(--green);border-color:var(--green);}
+  .pill.warn{color:var(--peak);border-color:var(--peak);}
+  .pill.err{color:var(--down);border-color:var(--down);}
+  select.mini{background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px;}
+  .status{font-size:13px;margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border);color:var(--muted);display:none;}
+  .status.show{display:block;}
+  .foot{color:var(--muted);font-size:12px;line-height:1.7;margin-top:8px;}
+  .foot code{background:var(--panel-2);padding:1px 6px;border-radius:5px;color:var(--text);}
+  details{margin-top:8px;} summary{cursor:pointer;color:var(--accent);font-size:13px;}
+  .gs-guide{font-size:12.5px;color:var(--muted);line-height:1.8;margin-top:8px;}
+  .gs-guide pre{background:#0b0f1a;border:1px solid var(--border);border-radius:8px;padding:12px;overflow:auto;font-size:11.5px;color:#cbd5e1;white-space:pre;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📥 데이터 업로드</h1>
+  <div class="spacer"></div>
+  <a class="btn" href="index.html">📊 대시보드</a>
+  <a class="btn" href="kpi-planner.html">🎯 KPI 플래너</a>
+  <a class="btn" href="overview.html">📊 전사 비교</a>
+</header>
+<div class="sub">다운로드한 KPI 엑셀을 드롭하면 <b>신규 날짜만</b> 구글시트에 자동 반영합니다.</div>
+
+<div class="banner">
+  인식 대상 · <b>결제사(pg)·플랫폼별</b> 파일 → <code>코드-kpi</code> 탭 · <b>daily_kpi 자체결제</b> 파일 → <code>코드</code> 요약 탭.
+  파일명 앞부분으로 프로젝트를 자동 감지합니다(예: <code>potc_결제사…</code> → POTC). 기존 시트의 최종 날짜와 대조해 <b>겹치지 않는 새 날짜만</b> 추가합니다.
+</div>
+
+<div class="panel">
+  <h2>1) 연결 설정</h2>
+  <div class="setup-row" style="margin-bottom:10px;">
+    <span style="font-size:13px;color:var(--muted);min-width:96px;">구글시트 URL</span>
+    <input class="txt" id="sheetUrl" placeholder="대시보드/플래너와 동일 시트 URL">
+  </div>
+  <div class="setup-row">
+    <span style="font-size:13px;color:var(--muted);min-width:96px;">쓰기 웹훅</span>
+    <input class="txt" id="hookUrl" placeholder="Apps Script 웹앱 URL (미설정 시 CSV 다운로드로 폴백)">
+    <button class="btn" id="saveCfg">저장</button>
+  </div>
+  <details>
+    <summary>웹훅(Apps Script) 1회 설정 방법 — 진짜 자동 반영</summary>
+    <div class="gs-guide" id="gsGuide"></div>
+  </details>
+</div>
+
+<div class="drop" id="drop">
+  <div class="big">📂 여기에 엑셀 파일을 드롭 (여러 개 동시 가능)</div>
+  <div>또는 클릭해서 선택 · .xlsx</div>
+  <input type="file" id="file" accept=".xlsx,.xls" multiple style="display:none;">
+</div>
+
+<div class="panel" id="filesPanel" style="display:none;">
+  <h2>2) 감지된 파일 · 신규 날짜</h2>
+  <table id="filesTbl"><thead><tr><th>파일</th><th>프로젝트</th><th>대상 탭</th><th class="num">전체 행</th><th class="num">신규 날짜</th><th>기간</th><th>상태</th></tr></thead><tbody></tbody></table>
+  <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <button class="btn primary" id="applyBtn" disabled>시트에 반영 (신규만)</button>
+    <button class="btn" id="csvBtn" disabled>신규 행 CSV 내려받기</button>
+    <button class="btn" id="clearBtn">비우기</button>
+  </div>
+  <div class="status" id="status"></div>
+</div>
+
+<div class="foot">
+  · 신규 여부는 <b>대상 탭의 기존 datekey</b>와 대조해 판정합니다(중복 미추가). · 파싱·대조는 모두 이 브라우저 안에서 수행되며, 웹훅 미설정 시 데이터는 어디로도 전송되지 않습니다.
+  · 자동 반영을 켜려면 위 "웹훅 설정"을 1회 완료하세요. 켜기 전에도 CSV 내려받기로 시트에 붙여넣을 수 있습니다.
+</div>
+
+<script>
+const DASH_LS="d2c-dashboard-v2", HOOK_LS="kpi-webhook", SHEET_LS="kpiplanner-sheet";
+const KNOWN=GSheet.KNOWN_CODES, fetchGrid=GSheet.fetchTab, toNum=GSheet.toNum, normDate=GSheet.normDate, headerOf=GSheet.headerOf;
+const N=v=>v==null?'':Math.round(v).toLocaleString('ko-KR');
+
+const DETAIL_H=["datekey","market_name_KR","platform_device_name_KR","pg_id","pg_name_KR","PU","revenue"];
+const SUMMARY_H=["datekey","DAU","전체 IAP 매출","자체 결제 매출","자체 결제 매출 비중","자체 결제 PU","자체 결제 ARPPU","자체 결제 ARPDAU"];
+
+let FILES=[]; // {name, code, kind, tab, header, rows(all), newRows, dateMin, dateMax, status}
+
+function getSheetUrl(){
+  const el=document.getElementById("sheetUrl").value.trim(); if(el)return el;
+  try{const s=JSON.parse(localStorage.getItem(DASH_LS));if(s&&s.masterSheetUrl)return s.masterSheetUrl;}catch(e){}
+  return localStorage.getItem(SHEET_LS)||"";
+}
+function toISO(v){
+  if(v instanceof Date && !isNaN(v)) return v.getFullYear()+"-"+String(v.getMonth()+1).padStart(2,"0")+"-"+String(v.getDate()).padStart(2,"0");
+  if(typeof v==="number" && v>20000 && v<80000){ const e=new Date(Date.UTC(1899,11,30)+Math.round(v)*86400000); return e.getUTCFullYear()+"-"+String(e.getUTCMonth()+1).padStart(2,"0")+"-"+String(e.getUTCDate()).padStart(2,"0"); }
+  return normDate(v);
+}
+function codeFromName(name){
+  const pre=name.split(/[_\s.]/)[0].toUpperCase().replace("PTOC","POTC");
+  return KNOWN.includes(pre)?pre:"";
+}
+function detectKind(hdrLower){
+  if(hdrLower.some(h=>h.includes("market_name"))) return "detail";
+  if(hdrLower.some(h=>h.replace(/\s/g,"").includes("자체결제pu")||h.replace(/\s/g,"").includes("자체결제매출"))) return "summary";
+  return "";
+}
+
+async function parseFile(file){
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:"array"});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
+  if(!aoa.length) throw new Error("빈 파일");
+  const hdr=aoa[0].map(x=>String(x||"").trim());
+  const hdrLower=hdr.map(x=>x.toLowerCase());
+  const kind=detectKind(hdrLower);
+  if(!kind) throw new Error("알 수 없는 형식(결제사/자체결제 파일이 아님)");
+  const code=codeFromName(file.name);
+  const targetH = kind==="detail"?DETAIL_H:SUMMARY_H;
+  // datekey 열 위치
+  const di=hdrLower.findIndex(h=>h.includes("datekey")||h.includes("date")||h.includes("날짜"));
+  const rows=[];
+  for(let i=1;i<aoa.length;i++){
+    const r=aoa[i]; const iso=toISO(r[di]); if(!iso) continue;
+    // 열 순서가 소스=타깃 이라고 가정, datekey만 ISO로 치환하고 숫자는 정규화
+    const out=[iso];
+    for(let c=0;c<targetH.length;c++){ if(c===0)continue; const v=r[c]; out.push(typeof v==="string"?(toNum(v)??v):v); }
+    rows.push(out);
+  }
+  const dates=rows.map(r=>r[0]).sort();
+  return {name:file.name, code, kind, tab: kind==="detail"?(code+"-kpi"):code, header:targetH, rows, dateMin:dates[0], dateMax:dates[dates.length-1]};
+}
+
+async function existingDates(url, tab){
+  try{ const grid=await fetchGrid(url, tab, "select A"); const set=new Set();
+    for(let i=1;i<grid.length;i++){ const d=normDate(grid[i][0]); if(d)set.add(d); } return set;
+  }catch(e){ return null; } // 탭 없음 → 전부 신규
+}
+function render(){
+  const tb=document.querySelector("#filesTbl tbody"); tb.innerHTML="";
+  let anyNew=false;
+  FILES.forEach((f,idx)=>{
+    const codeSel=`<select class="mini" data-i="${idx}">`+["",...KNOWN].map(c=>`<option ${c===f.code?"selected":""}>${c||"(선택)"}</option>`).join("")+`</select>`;
+    const nNew=f.newRows?f.newRows.length:0; if(nNew>0)anyNew=true;
+    let st, cls;
+    if(!f.code){st="프로젝트 미인식";cls="err";}
+    else if(f.newRows==null){st="대조 대기";cls="warn";}
+    else if(nNew===0){st="최신 (추가 없음)";cls="ok";}
+    else {st=`신규 ${nNew}일`;cls="ok";}
+    const range=f.newRows&&nNew?`${f.newRows[0][0]} ~ ${f.newRows[nNew-1][0]}`:`${f.dateMin} ~ ${f.dateMax}`;
+    tb.insertAdjacentHTML("beforeend",`<tr>
+      <td>${f.name}</td><td>${codeSel}</td><td><code>${f.tab||"-"}</code> <span class="pill">${f.kind==="detail"?"결제사":"자체결제"}</span></td>
+      <td class="num">${N(f.rows.length)}</td><td class="num">${f.newRows==null?'…':N(nNew)}</td>
+      <td>${range||"-"}</td><td><span class="pill ${cls}">${st}</span></td></tr>`);
+  });
+  tb.querySelectorAll("select.mini").forEach(s=>s.addEventListener("change",async e=>{
+    const i=+e.target.dataset.i; const c=e.target.value; FILES[i].code=c||"";
+    FILES[i].tab = c ? (FILES[i].kind==="detail"?c+"-kpi":c) : "";
+    await diffOne(FILES[i]); render();
+  }));
+  document.getElementById("applyBtn").disabled=!anyNew;
+  document.getElementById("csvBtn").disabled=!anyNew;
+}
+async function diffOne(f){
+  if(!f.code||!f.tab){f.newRows=null;return;}
+  const url=getSheetUrl(); if(!url){f.newRows=f.rows.slice();return;}
+  const ex=await existingDates(url,f.tab);
+  f.newRows = ex==null ? f.rows.slice() : f.rows.filter(r=>!ex.has(r[0]));
+  f.newRows.sort((a,b)=>a[0]<b[0]?-1:1);
+}
+async function addFiles(list){
+  for(const file of list){
+    try{ const f=await parseFile(file); FILES.push(f); render(); await diffOne(f); render(); }
+    catch(e){ FILES.push({name:file.name,code:"",kind:"",tab:"",header:[],rows:[],newRows:[],dateMin:"",dateMax:"",err:e.message});
+      const tb=document.querySelector("#filesTbl tbody"); render(); }
+  }
+  document.getElementById("filesPanel").style.display="";
+}
+
+/* ---- 반영 (웹훅) ---- */
+async function applyToSheet(){
+  const hook=document.getElementById("hookUrl").value.trim();
+  const status=document.getElementById("status"); status.className="status show";
+  const targets=FILES.filter(f=>f.code&&f.newRows&&f.newRows.length);
+  if(!targets.length){status.textContent="반영할 신규 행이 없습니다.";return;}
+  if(!hook){ status.innerHTML="웹훅이 설정되지 않았습니다. <b>CSV 내려받기</b>로 시트에 붙여넣거나, 위에서 웹훅을 설정하세요."; return; }
+  status.textContent="시트에 반영 중…";
+  let done=0, added=0, errs=[];
+  for(const f of targets){
+    try{
+      const res=await fetch(hook,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+        body:JSON.stringify({sheet:f.tab, header:f.header, rows:f.newRows})});
+      const j=await res.json();
+      if(j.ok){ added+=j.added||0; f.newRows=[]; }
+      else errs.push(`${f.tab}: ${j.error||"실패"}`);
+    }catch(e){ errs.push(`${f.tab}: ${e.message}`); }
+    done++; status.textContent=`반영 중… (${done}/${targets.length})`;
+  }
+  render();
+  status.innerHTML = `✅ 완료 · 신규 <b>${added}</b>행 추가` + (errs.length?`<br>⚠️ ${errs.join("<br>")}`:"") +
+    `<br><span style="color:var(--muted)">대시보드/플래너/전사비교를 새로고침하면 반영됩니다.</span>`;
+}
+/* ---- CSV 폴백 ---- */
+function downloadCsv(){
+  const targets=FILES.filter(f=>f.code&&f.newRows&&f.newRows.length);
+  if(!targets.length)return;
+  targets.forEach(f=>{
+    const lines=[f.header.join(",")].concat(f.newRows.map(r=>r.map(v=>{
+      const s=String(v??""); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+    }).join(",")));
+    const blob=new Blob(["﻿"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download=`${f.tab}_신규_${f.newRows[0][0]}_${f.newRows[f.newRows.length-1][0]}.csv`; a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  document.getElementById("status").className="status show";
+  document.getElementById("status").innerHTML=`신규 행 CSV를 내려받았습니다. 각 <code>탭</code> 하단 빈 행에 붙여넣으세요(헤더 제외). ${targets.map(f=>f.tab).join(", ")}`;
+}
+
+/* ---- 이벤트 ---- */
+const drop=document.getElementById("drop"), fileInput=document.getElementById("file");
+drop.addEventListener("click",()=>fileInput.click());
+drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("over");});
+drop.addEventListener("dragleave",()=>drop.classList.remove("over"));
+drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("over");addFiles([...e.dataTransfer.files]);});
+fileInput.addEventListener("change",e=>addFiles([...e.target.files]));
+document.getElementById("applyBtn").addEventListener("click",applyToSheet);
+document.getElementById("csvBtn").addEventListener("click",downloadCsv);
+document.getElementById("clearBtn").addEventListener("click",()=>{FILES=[];document.querySelector("#filesTbl tbody").innerHTML="";document.getElementById("filesPanel").style.display="none";document.getElementById("status").className="status";});
+document.getElementById("saveCfg").addEventListener("click",()=>{
+  const u=document.getElementById("sheetUrl").value.trim(), h=document.getElementById("hookUrl").value.trim();
+  if(u)localStorage.setItem(SHEET_LS,u); if(h)localStorage.setItem(HOOK_LS,h);
+  try{const s=JSON.parse(localStorage.getItem(DASH_LS))||{};if(u)s.masterSheetUrl=u;localStorage.setItem(DASH_LS,JSON.stringify(s));}catch(e){}
+  alert("저장했습니다.");
+});
+
+/* 초기값 + 가이드 */
+document.getElementById("sheetUrl").value=getSheetUrl();
+document.getElementById("hookUrl").value=localStorage.getItem(HOOK_LS)||"";
+document.getElementById("gsGuide").innerHTML=`
+1. 구글시트 → <b>확장 프로그램 → Apps Script</b> 열기<br>
+2. 아래 코드를 붙여넣고 저장 →  <b>배포 → 새 배포 → 유형: 웹 앱</b><br>
+3. 액세스 권한 <b>"모든 사용자"</b>로 배포 → 생성된 <b>웹 앱 URL</b>을 위 "쓰기 웹훅"에 붙여넣고 저장<br>
+<pre>function doPost(e){
+  try{
+    var body = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName(body.sheet);
+    if(!sh){ sh = ss.insertSheet(body.sheet); sh.appendRow(body.header); }
+    // 기존 datekey(A열) 수집 → 중복 방지
+    var last = sh.getLastRow();
+    var seen = {};
+    if(last > 1){
+      var col = sh.getRange(2,1,last-1,1).getValues();
+      for(var i=0;i<col.length;i++){ seen[iso_(col[i][0])] = true; }
+    }
+    var out = [], added = 0;
+    (body.rows||[]).forEach(function(r){
+      var key = iso_(r[0]); if(!key || seen[key]) return; seen[key] = true;
+      var row = r.slice(); row[0] = new Date(r[0] + "T00:00:00"); // datekey → Date
+      out.push(row); added++;
+    });
+    if(out.length) sh.getRange(sh.getLastRow()+1,1,out.length,out[0].length).setValues(out);
+    return json_({ok:true, added:added});
+  }catch(err){ return json_({ok:false, error:String(err)}); }
+}
+function iso_(v){
+  if(v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  var s = String(v||"").trim(); var d = new Date(s);
+  if(!isNaN(d)) return Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  return s;
+}
+function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }</pre>
+`;
+</script>
+</body>
+</html>

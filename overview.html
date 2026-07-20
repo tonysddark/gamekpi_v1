@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>프로젝트별 ARPPU·PU 비교</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="assets/gsheet.js"></script>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#1a2132; --panel-2:#212a40; --border:#2c3752;
+    --text:#e8ecf5; --muted:#8b96ad; --accent:#4f8cff; --green:#34d399;
+    --peak:#fbbf24; --down:#f87171; --purple:#c084fc;
+    --p-potc:#4f8cff; --p-imgn:#34d399; --p-gbtw:#fbbf24; --p-wwm:#5eead4; --p-ds:#c084fc; --p-resu:#f87171;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Pretendard','Malgun Gothic',sans-serif;padding:20px clamp(12px,3vw,36px) 60px;}
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+  h1{font-size:20px;margin:0;}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px;}
+  select,button.btn{background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:7px 12px;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;}
+  a.btn{background:var(--panel);border:1px solid var(--border);color:var(--accent);padding:7px 14px;border-radius:8px;font-size:13px;text-decoration:none;}
+  .spacer{flex:1;}
+  .banner{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:11px 15px;font-size:12.5px;line-height:1.75;margin-bottom:16px;color:var(--muted);}
+  .banner b{color:var(--text);}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin-bottom:18px;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:13px 15px;border-left:3px solid var(--accent);}
+  .card .l{font-size:12px;color:var(--muted);margin-bottom:5px;}
+  .card .v{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;}
+  .card .v small{font-size:12px;color:var(--muted);font-weight:500;}
+  .card .s{font-size:11.5px;margin-top:4px;font-variant-numeric:tabular-nums;}
+  .up{color:var(--green);} .dn{color:var(--down);}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px;}
+  .panel h2{font-size:15px;margin-bottom:4px;}
+  .panel h2 span{color:var(--muted);font-size:12px;font-weight:400;margin-left:8px;}
+  .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin:8px 0 14px;}
+  .seg button{background:transparent;border:none;color:var(--muted);padding:7px 13px;font-size:12.5px;cursor:pointer;font-family:inherit;}
+  .seg button.active{background:var(--accent);color:#fff;}
+  .tbl-wrap{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:13px;min-width:560px;}
+  th,td{padding:8px 11px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  th{font-size:11px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--panel);}
+  th:first-child,td:first-child{text-align:left;}
+  tbody tr{border-bottom:1px solid rgba(255,255,255,.05);}
+  tbody tr:last-child{border-bottom:none;}
+  td.mon,td.pj{font-weight:600;color:var(--text);}
+  .grp{border-left:1px solid var(--border);}
+  .heat{border-radius:6px;font-weight:700;padding:3px 8px;display:inline-block;min-width:52px;color:#fff;}
+  .prov{font-size:10px;color:var(--peak);border:1px solid var(--peak);border-radius:5px;padding:0 5px;margin-left:5px;vertical-align:1px;}
+  .chart-box{position:relative;height:320px;margin-top:8px;}
+  .legend{display:flex;flex-wrap:wrap;gap:13px;font-size:12px;color:var(--muted);margin:2px 0 8px;}
+  .legend span{display:flex;align-items:center;gap:5px;}
+  .legend i{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .foot{color:var(--muted);font-size:12px;line-height:1.7;margin-top:8px;}
+  #setup{display:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 프로젝트별 ARPPU·PU 비교</h1>
+  <select id="pjSel" title="전체 비교 / 프로젝트 선택"></select>
+  <select id="yearSel" title="연도"></select>
+  <div class="spacer"></div>
+  <a class="btn" href="index.html">📊 대시보드</a>
+  <a class="btn" href="kpi-planner.html">🎯 KPI 플래너</a>
+  <a class="btn" href="upload.html">📥 데이터 업로드</a>
+</header>
+<div class="sub" id="range">구글시트에서 데이터를 불러오는 중…</div>
+
+<div class="banner">
+  <b>일평균 PU</b> = 월 PU합 ÷ 일수 · <b>ARPPU</b> = 월 IAP매출 ÷ PU · <b>자체결제</b> = PG 다날·엑솔라·페이레터·페이레터 PPAY (PU는 채널 합산 기준) ·
+  <b>자체결제 PU비중</b> = 자체결제 일평균PU ÷ 전체 일평균PU. 데이터는 구글시트 <b>코드-kpi</b> 탭에서 매번 자동 로드.
+</div>
+
+<div class="panel" id="setup">
+  <h2>🔗 데이터 시트 연결</h2>
+  <div id="setupMsg" style="color:var(--muted);font-size:13px;margin:8px 0 12px;"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <input id="setupUrl" placeholder="구글 스프레드시트 URL (대시보드/플래너와 동일 시트)" style="flex:1;min-width:240px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;">
+    <button class="btn" style="background:var(--accent);color:#fff;border:none;" id="setupGo">연결</button>
+  </div>
+</div>
+
+<div id="main" style="display:none;">
+  <!-- 전체 비교 -->
+  <div id="allView">
+    <div class="cards" id="allCards"></div>
+    <div class="panel">
+      <h2>지표별 프로젝트 비교 <span id="allSub"></span></h2>
+      <div class="seg" id="metricSeg">
+        <button data-m="puShare" class="active">자체결제 PU비중</button>
+        <button data-m="revShare">자체결제 매출비중</button>
+        <button data-m="totARPPU">전체 ARPPU</button>
+        <button data-m="d2cARPPU">자체결제 ARPPU</button>
+        <button data-m="totPU">전체 일평균PU</button>
+      </div>
+      <div class="tbl-wrap"><table id="allTable"></table></div>
+      <div class="legend" id="allLegend"></div>
+      <div class="chart-box"><canvas id="allChart" role="img" aria-label="프로젝트별 선택 지표 월별 추이"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 프로젝트별 상세 -->
+  <div id="oneView" style="display:none;">
+    <div class="cards" id="oneCards"></div>
+    <div class="panel">
+      <h2><span id="oneName"></span> 월별 상세 <span id="oneSub"></span></h2>
+      <div class="tbl-wrap"><table id="oneTable"></table></div>
+    </div>
+    <div class="panel">
+      <h2>자체결제 PU비중 · 매출비중 추이 <span>월별</span></h2>
+      <div class="chart-box"><canvas id="oneChart1" role="img" aria-label="자체결제 PU비중 매출비중 추이"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>ARPPU 비교 <span>전체 vs 자체결제</span></h2>
+      <div class="chart-box"><canvas id="oneChart2" role="img" aria-label="전체 대 자체결제 ARPPU"></canvas></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    자체결제 = 다날·엑솔라·페이레터·페이레터 PPAY(마켓 라벨 무관) · PU는 채널 합산 기준(순 결제자보다 소폭 상회 가능) · 당월 진행 중이면 <span class="prov">진행중</span> 표시.
+    데이터는 이 브라우저 밖으로 전송되지 않으며 구글시트에서만 읽습니다.
+  </div>
+</div>
+
+<script>
+const DASH_LS="d2c-dashboard-v2";
+const D2C_PGS=["다날","엑솔라","페이레터","페이레터 PPAY"];
+const fetchGrid=GSheet.fetchTab, toNum=GSheet.toNum, normDate=GSheet.normDate, headerOf=GSheet.headerOf, KNOWN_CODES=GSheet.KNOWN_CODES;
+const isDetailGrid=g=>headerOf(g).some(h=>h.includes("market_name"));
+const PJHUE={POTC:'var(--p-potc)',IMGN:'var(--p-imgn)',GBTW:'var(--p-gbtw)',WWM:'var(--p-wwm)',DS:'var(--p-ds)',RESU:'var(--p-resu)'};
+const HEX={POTC:'#4f8cff',IMGN:'#34d399',GBTW:'#fbbf24',WWM:'#5eead4',DS:'#c084fc',RESU:'#f87171'};
+const N=v=>Math.round(v).toLocaleString('ko-KR');
+const P=v=>v.toFixed(1)+'%';
+
+let SHEET_URL="", CODES=[], AGG={}, YEARS=[], curYear="", curMetric="puShare", chart=null, c1=null, c2=null, LATEST="";
+
+function getMasterUrl(){ try{const s=JSON.parse(localStorage.getItem(DASH_LS));if(s&&s.masterSheetUrl)return s.masterSheetUrl;}catch(e){} return localStorage.getItem("kpiplanner-sheet")||""; }
+function showSetup(msg){ document.getElementById("setup").style.display=""; document.getElementById("main").style.display="none"; document.getElementById("setupMsg").innerHTML=msg; document.getElementById("range").textContent="데이터 미연결"; }
+
+async function loadCodes(url){
+  try{
+    const grid=await fetchGrid(url,"index"); const h=headerOf(grid);
+    if(!h.some(x=>/start|end|title|memo|market_name|datekey/.test(x))){
+      const gi=Math.max(0,h.findIndex(x=>x.includes("game")||x.includes("게임")||x.includes("project")));
+      const codes=[]; for(let i=1;i<grid.length;i++){const g=String(grid[i][gi]||"").trim();if(g)codes.push(g.toUpperCase());}
+      if(codes.length)return [...new Set(codes)];
+    }
+  }catch(e){}
+  const checks=await Promise.all(KNOWN_CODES.map(async c=>{try{return isDetailGrid(await fetchGrid(url,c+"-kpi","limit 1"))?c:null;}catch(e){return null;}}));
+  const codes=checks.filter(Boolean).sort();
+  if(!codes.length)throw new Error("상세(-kpi) 탭을 찾지 못했습니다. 대시보드/플래너에서 시트를 먼저 연결했는지 확인하세요.");
+  return codes;
+}
+async function loadDetail(url,code){
+  const grid=await fetchGrid(url,code+"-kpi"); if(!isDetailGrid(grid))throw new Error(code+"-kpi 포맷 아님");
+  const h=headerOf(grid);
+  const ci={date:h.findIndex(x=>x.includes("datekey")||x.includes("date")||x.includes("날짜")),
+    platform:h.findIndex(x=>x.includes("platform")||x.includes("device")),
+    pg:h.findIndex(x=>x.includes("pg_name")),
+    pu:h.findIndex(x=>x==="pu"||x.includes("pu")),
+    rev:h.findIndex(x=>x.includes("revenue")||x.includes("매출"))};
+  const agg={}; // 'YYYY-MM' -> {days:Set, totPU,totRev,d2cPU,d2cRev}
+  for(let i=1;i<grid.length;i++){
+    const g=grid[i]; const date=normDate(g[ci.date]); const rev=toNum(g[ci.rev]); if(!date||rev==null)continue;
+    const pu=toNum(g[ci.pu])||0; const pg=String(g[ci.pg]||"").trim(); const m=date.slice(0,7);
+    const o=agg[m]=agg[m]||{days:new Set(),totPU:0,totRev:0,d2cPU:0,d2cRev:0};
+    o.days.add(date); o.totPU+=pu; o.totRev+=rev;
+    if(D2C_PGS.includes(pg)){o.d2cPU+=pu; o.d2cRev+=rev;}
+  }
+  return agg;
+}
+function metricVal(o,m){
+  const days=o.days.size||1;
+  const totPU=o.totPU/days, d2cPU=o.d2cPU/days;
+  switch(m){
+    case 'puShare': return o.totPU? o.d2cPU/o.totPU*100 : null;
+    case 'revShare': return o.totRev? o.d2cRev/o.totRev*100 : null;
+    case 'totARPPU': return o.totPU? o.totRev/o.totPU : null;
+    case 'd2cARPPU': return o.d2cPU? o.d2cRev/o.d2cPU : null;
+    case 'totPU': return totPU;
+  }
+}
+const isPct=m=>m==='puShare'||m==='revShare';
+const fmtMetric=(v,m)=> v==null?'–' : (isPct(m)?P(v):N(v));
+
+function monthsOfYear(y){ const ms=[]; for(let i=1;i<=12;i++){const k=y+"-"+String(i).padStart(2,'0'); if(CODES.some(c=>AGG[c][k]))ms.push(k);} return ms; }
+function isProvisional(m,o){ if(m!==LATEST)return false; const y=+m.slice(0,4),mo=+m.slice(5,7); const dim=new Date(y,mo,0).getDate(); return o.days.size<dim; }
+
+/* ---------- 전체 비교 뷰 ---------- */
+function renderAll(){
+  const ms=monthsOfYear(curYear); const last=ms[ms.length-1];
+  document.getElementById("allSub").textContent = curYear+"년 · "+(last?last.slice(5,7)+"월 기준":"");
+  // KPI 카드 (프로젝트별 최신월 자체결제 PU비중 + 연초 대비)
+  const cards=document.getElementById("allCards"); cards.innerHTML="";
+  CODES.forEach(c=>{
+    const withData=ms.filter(m=>AGG[c][m]); if(!withData.length)return;
+    const lm=withData[withData.length-1], fm=withData[0];
+    const lv=metricVal(AGG[c][lm],'puShare'), fv=metricVal(AGG[c][fm],'puShare');
+    const d=(lv!=null&&fv!=null)?lv-fv:null; const up=d>=0;
+    cards.innerHTML+=`<div class="card" style="border-left-color:${HEX[c]}"><div class="l">${c}</div>
+      <div class="v">${lv==null?'–':lv.toFixed(1)}<small>%</small></div>
+      <div class="s">${d==null?'':`<span class="${up?'up':'dn'}">${up?'▲':'▼'} ${Math.abs(d).toFixed(1)}p</span> <span style="color:var(--muted)">vs ${fm.slice(5,7)}월</span>`}</div></div>`;
+  });
+  // 표: 행=프로젝트, 열=월
+  const t=document.getElementById("allTable");
+  let head="<thead><tr><th>프로젝트</th>"+ms.map(m=>`<th>${+m.slice(5,7)}월</th>`).join("")+"</tr></thead>";
+  let body="<tbody>";
+  CODES.forEach(c=>{
+    body+=`<tr><td class="pj" style="color:${HEX[c]}">${c}</td>`;
+    ms.forEach(m=>{
+      const o=AGG[c][m]; if(!o){body+="<td>–</td>";return;}
+      const v=metricVal(o,curMetric); const prov=isProvisional(m,o);
+      if(curMetric==='puShare'&&v!=null){
+        const t2=Math.max(0,Math.min(1,v/35)); const a=(0.18+t2*0.7).toFixed(2);
+        body+=`<td><span class="heat" style="background:rgba(79,140,255,${a})">${P(v)}${prov?'<span class="prov">진행중</span>':''}</span></td>`;
+      } else {
+        body+=`<td>${fmtMetric(v,curMetric)}${prov?'<span class="prov">진행중</span>':''}</td>`;
+      }
+    });
+    body+="</tr>";
+  });
+  body+="</tbody>"; t.innerHTML=head+body;
+  // 범례 + 차트
+  const leg=document.getElementById("allLegend"); leg.innerHTML=CODES.map(c=>`<span><i style="background:${HEX[c]}"></i>${c}</span>`).join("");
+  const ds=CODES.map(c=>({label:c,data:ms.map(m=>AGG[c][m]?metricVal(AGG[c][m],curMetric):null),borderColor:HEX[c],backgroundColor:HEX[c],borderWidth:2,tension:.3,spanGaps:false,pointRadius:3}));
+  drawLine('allChart',ms.map(m=>+m.slice(5,7)+"월"),ds,curMetric,r=>chart=r,chart);
+}
+
+/* ---------- 프로젝트 상세 뷰 ---------- */
+function renderOne(code){
+  document.getElementById("oneName").textContent=code;
+  const ms=Object.keys(AGG[code]).filter(m=>m.slice(0,4)===curYear).sort();
+  document.getElementById("oneSub").textContent=curYear+"년";
+  // 카드: 최신월 요약
+  const lm=ms[ms.length-1]; const o=lm?AGG[code][lm]:null;
+  const cards=document.getElementById("oneCards"); cards.innerHTML="";
+  if(o){
+    const defs=[['전체 일평균PU',N(metricVal(o,'totPU')),''],['전체 ARPPU',N(metricVal(o,'totARPPU'))+'원',''],
+      ['자체결제 일평균PU',N(o.d2cPU/o.days.size),''],['자체결제 ARPPU',N(metricVal(o,'d2cARPPU'))+'원',''],
+      ['자체결제 PU비중',P(metricVal(o,'puShare')),'accent'],['자체결제 매출비중',P(metricVal(o,'revShare')),'accent']];
+    cards.innerHTML=defs.map(d=>`<div class="card" style="border-left-color:${d[2]==='accent'?'var(--accent)':HEX[code]}"><div class="l">${d[0]} <span style="color:var(--muted)">(${lm.slice(5,7)}월)</span></div><div class="v">${d[1]}</div></div>`).join("");
+  }
+  // 표
+  const t=document.getElementById("oneTable");
+  let head="<thead><tr><th>월</th><th>전체 일평균PU</th><th>전체 ARPPU</th><th class='grp'>자체 일평균PU</th><th>자체 ARPPU</th><th class='grp'>자체 PU비중</th><th>자체 매출비중</th></tr></thead>";
+  let body="<tbody>";
+  ms.forEach(m=>{const o=AGG[code][m];const prov=isProvisional(m,o);
+    body+=`<tr><td class="mon">${+m.slice(5,7)}월${prov?'<span class="prov">진행중</span>':''}</td>
+      <td>${N(metricVal(o,'totPU'))}</td><td>${N(metricVal(o,'totARPPU'))}</td>
+      <td class="grp">${N(o.d2cPU/o.days.size)}</td><td>${N(metricVal(o,'d2cARPPU'))}</td>
+      <td class="grp"><span class="heat" style="background:rgba(79,140,255,${(0.18+Math.min(1,metricVal(o,'puShare')/35)*0.7).toFixed(2)})">${P(metricVal(o,'puShare'))}</span></td>
+      <td style="color:var(--accent);font-weight:600">${P(metricVal(o,'revShare'))}</td></tr>`;});
+  body+="</tbody>"; t.innerHTML=head+body;
+  const lab=ms.map(m=>+m.slice(5,7)+"월");
+  drawLine('oneChart1',lab,[
+    {label:'PU비중',data:ms.map(m=>metricVal(AGG[code][m],'puShare')),borderColor:'#4f8cff',backgroundColor:'#4f8cff',borderWidth:2,tension:.3,pointRadius:3},
+    {label:'매출비중',data:ms.map(m=>metricVal(AGG[code][m],'revShare')),borderColor:'#c084fc',backgroundColor:'#c084fc',borderWidth:2,tension:.3,pointRadius:3,borderDash:[5,4]}
+  ],'puShare',r=>c1=r,c1);
+  drawLine('oneChart2',lab,[
+    {label:'전체 ARPPU',data:ms.map(m=>metricVal(AGG[code][m],'totARPPU')),borderColor:'#8b96ad',backgroundColor:'#8b96ad',borderWidth:2,tension:.3,pointRadius:3},
+    {label:'자체결제 ARPPU',data:ms.map(m=>metricVal(AGG[code][m],'d2cARPPU')),borderColor:'#34d399',backgroundColor:'#34d399',borderWidth:2,tension:.3,pointRadius:3}
+  ],'totARPPU',r=>c2=r,c2);
+}
+
+function drawLine(id,labels,datasets,metric,setter,prev){
+  if(prev)prev.destroy();
+  const pct=isPct(metric);
+  const r=new Chart(document.getElementById(id),{type:'line',data:{labels,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:datasets.length>1,labels:{color:'#8b96ad',boxWidth:12,font:{size:11}}},
+        tooltip:{callbacks:{label:c=>c.dataset.label+': '+(pct?(c.parsed.y==null?'–':c.parsed.y.toFixed(1)+'%'):N(c.parsed.y)+(metric.includes('ARPPU')?'원':''))}}},
+      scales:{y:{beginAtZero:pct,grid:{color:'rgba(255,255,255,.06)'},ticks:{color:'#8b96ad',callback:v=>pct?v+'%':(v>=1000?(v/1000)+'K':v)}},
+        x:{grid:{display:false},ticks:{color:'#8b96ad'}}}}});
+  setter(r);
+}
+
+function render(){
+  const sel=document.getElementById("pjSel").value;
+  if(sel==="ALL"){document.getElementById("allView").style.display="";document.getElementById("oneView").style.display="none";renderAll();}
+  else{document.getElementById("allView").style.display="none";document.getElementById("oneView").style.display="";renderOne(sel);}
+}
+
+async function boot(url){
+  SHEET_URL=url;
+  try{
+    document.getElementById("range").textContent="프로젝트 목록 확인 중…";
+    CODES=await loadCodes(url);
+    document.getElementById("range").textContent=CODES.length+"개 프로젝트 상세 로드 중… ("+CODES.join(", ")+")";
+    const results=await Promise.all(CODES.map(async c=>{try{return [c,await loadDetail(url,c)];}catch(e){return [c,null];}}));
+    AGG={}; CODES=[];
+    results.forEach(([c,a])=>{if(a){AGG[c]=a;CODES.push(c);}});
+    if(!CODES.length)throw new Error("상세 데이터를 불러오지 못했습니다.");
+    const ord=["POTC","IMGN","GBTW","WWM","DS","RESU"]; CODES.sort((a,b)=>{const ia=ord.indexOf(a),ib=ord.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);});
+    // 연도 목록
+    const yset=new Set(); CODES.forEach(c=>Object.keys(AGG[c]).forEach(m=>yset.add(m.slice(0,4))));
+    YEARS=[...yset].sort(); curYear=YEARS[YEARS.length-1];
+    document.getElementById("yearSel").innerHTML=YEARS.map(y=>`<option ${y===curYear?"selected":""}>${y}</option>`).join("");
+    document.getElementById("pjSel").innerHTML=`<option value="ALL">전체 비교</option>`+CODES.map(c=>`<option value="${c}">${c}</option>`).join("");
+    // 범위 표기
+    let mn="9999-99",mx="0000-00"; CODES.forEach(c=>Object.keys(AGG[c]).forEach(m=>{if(m<mn)mn=m;if(m>mx)mx=m;})); LATEST=mx;
+    document.getElementById("range").textContent=`${CODES.length}개 프로젝트 · ${mn} ~ ${mx} · 자체결제 = ${D2C_PGS.join("·")}`;
+    document.getElementById("setup").style.display="none"; document.getElementById("main").style.display="";
+    localStorage.setItem("kpiplanner-sheet",url);
+    try{const s=JSON.parse(localStorage.getItem(DASH_LS))||{};if(s.masterSheetUrl!==url){s.masterSheetUrl=url;localStorage.setItem(DASH_LS,JSON.stringify(s));}}catch(e){}
+    render();
+  }catch(e){ showSetup("❌ "+e.message+'<br><br>시트 공유("링크가 있는 모든 사용자: 뷰어")와 <b>코드-kpi</b> 탭을 확인한 뒤 다시 연결하세요.'); }
+}
+
+document.getElementById("pjSel").addEventListener("change",render);
+document.getElementById("yearSel").addEventListener("change",e=>{curYear=e.target.value;render();});
+document.getElementById("metricSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;curMetric=b.dataset.m;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderAll();});
+document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
+
+(function(){
+  let url="";
+  try{const p=new URLSearchParams(location.search).get("sheet");if(p){url=p.trim();history.replaceState(null,"",location.pathname);}}catch(e){}
+  if(!url)url=getMasterUrl();
+  if(url){const el=document.getElementById("setupUrl");if(el)el.value=url;boot(url);}
+  else showSetup("연결된 시트가 없습니다. 대시보드/플래너에서 시트를 연결했다면 자동으로 이어지며, 아니면 아래에 시트 URL을 입력하세요.");
+})();
+</script>
+</body>
+</html>
