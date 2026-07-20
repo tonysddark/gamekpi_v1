@@ -3,42 +3,45 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>데이터 업로드 — 시트 자동 반영</title>
+<title>데이터 업로드 — 변경분만 반영</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="assets/gsheet.js"></script>
 <style>
-  :root{--bg:#0f1420;--panel:#1a2132;--panel-2:#212a40;--border:#2c3752;--text:#e8ecf5;--muted:#8b96ad;--accent:#4f8cff;--green:#34d399;--peak:#fbbf24;--down:#f87171;}
+  :root{--bg:#0f1420;--panel:#1a2132;--panel-2:#212a40;--border:#2c3752;--text:#e8ecf5;--muted:#8b96ad;--accent:#4f8cff;--green:#34d399;--peak:#fbbf24;--down:#f87171;--purple:#c084fc;}
   *{margin:0;padding:0;box-sizing:border-box;}
   body{background:var(--bg);color:var(--text);font-family:'Pretendard','Malgun Gothic',sans-serif;padding:20px clamp(12px,3vw,36px) 60px;}
   header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
   h1{font-size:20px;margin:0;} .spacer{flex:1;}
   a.btn,button.btn{background:var(--panel);border:1px solid var(--border);color:var(--accent);padding:7px 14px;border-radius:8px;font-size:13px;text-decoration:none;cursor:pointer;font-family:inherit;}
-  button.primary{background:var(--accent);color:#fff;border:none;}
-  button.primary:disabled{opacity:.45;cursor:not-allowed;}
+  button.primary{background:var(--accent);color:#fff;border:none;} button.primary:disabled{opacity:.45;cursor:not-allowed;}
   .sub{color:var(--muted);font-size:13px;margin-bottom:16px;}
   .banner{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:11px 15px;font-size:12.5px;line-height:1.75;margin-bottom:16px;color:var(--muted);}
-  .banner b{color:var(--text);}
-  .drop{border:2px dashed var(--border);border-radius:14px;padding:34px 20px;text-align:center;color:var(--muted);background:var(--panel);transition:.15s;cursor:pointer;margin-bottom:16px;}
+  .banner b{color:var(--text);} .banner code{background:var(--panel);padding:1px 6px;border-radius:5px;color:var(--text);}
+  .drop{border:2px dashed var(--border);border-radius:14px;padding:32px 20px;text-align:center;color:var(--muted);background:var(--panel);transition:.15s;cursor:pointer;margin-bottom:16px;}
   .drop.over{border-color:var(--accent);background:var(--panel-2);color:var(--text);}
   .drop .big{font-size:15px;color:var(--text);margin-bottom:6px;}
   .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px;}
   .panel h2{font-size:15px;margin-bottom:10px;}
-  .setup-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .setup-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;}
   input.txt{flex:1;min-width:220px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:13px;font-family:inherit;}
-  table{border-collapse:collapse;width:100%;font-size:13px;}
-  th,td{padding:9px 11px;text-align:left;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:middle;}
-  th{font-size:11px;color:var(--muted);font-weight:600;}
-  td.num{text-align:right;font-variant-numeric:tabular-nums;}
-  .pill{font-size:11px;padding:2px 9px;border-radius:20px;border:1px solid var(--border);background:var(--panel-2);color:var(--muted);}
-  .pill.ok{color:var(--green);border-color:var(--green);}
-  .pill.warn{color:var(--peak);border-color:var(--peak);}
-  .pill.err{color:var(--down);border-color:var(--down);}
-  select.mini{background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px;}
-  .status{font-size:13px;margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border);color:var(--muted);display:none;}
+  .fcard{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--panel-2);}
+  .fhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .fname{font-size:13px;font-weight:600;} .fmeta{font-size:12px;color:var(--muted);}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;}
+  .chip{font-size:11.5px;padding:2px 10px;border-radius:20px;border:1px solid var(--border);color:var(--muted);}
+  .chip.new{color:var(--green);border-color:var(--green);} .chip.chg{color:var(--peak);border-color:var(--peak);}
+  .chip.same{color:var(--muted);} .chip.err{color:var(--down);border-color:var(--down);}
+  select.mini{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px;}
+  details.diff{margin-top:10px;} details.diff summary{cursor:pointer;color:var(--accent);font-size:12.5px;}
+  table.diff{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px;}
+  table.diff th,table.diff td{padding:6px 10px;text-align:right;border-bottom:1px solid rgba(255,255,255,.06);font-variant-numeric:tabular-nums;}
+  table.diff th{color:var(--muted);font-weight:600;font-size:11px;} table.diff td:first-child,table.diff th:first-child{text-align:left;}
+  .tag-new{color:var(--green);} .tag-chg{color:var(--peak);}
+  .up{color:var(--green);} .dn{color:var(--down);}
+  .status{font-size:13px;margin-top:6px;padding:10px 12px;border-radius:8px;background:var(--panel-2);border:1px solid var(--border);color:var(--muted);display:none;}
   .status.show{display:block;}
   .foot{color:var(--muted);font-size:12px;line-height:1.7;margin-top:8px;}
-  .foot code{background:var(--panel-2);padding:1px 6px;border-radius:5px;color:var(--text);}
-  details{margin-top:8px;} summary{cursor:pointer;color:var(--accent);font-size:13px;}
+  details.guide{margin-top:8px;} details.guide summary{cursor:pointer;color:var(--accent);font-size:13px;}
   .gs-guide{font-size:12.5px;color:var(--muted);line-height:1.8;margin-top:8px;}
   .gs-guide pre{background:#0b0f1a;border:1px solid var(--border);border-radius:8px;padding:12px;overflow:auto;font-size:11.5px;color:#cbd5e1;white-space:pre;}
 </style>
@@ -52,61 +55,56 @@
   <a class="btn" href="kpi-planner.html">🎯 KPI 플래너</a>
   <a class="btn" href="overview.html">📊 전사 비교</a>
 </header>
-<div class="sub">다운로드한 KPI 엑셀을 드롭하면 <b>신규 날짜만</b> 구글시트에 자동 반영합니다.</div>
+<div class="sub">최근 30일 엑셀을 드롭 → 시트와 <b>비교</b> → <b>신규·변경된 날짜만</b> 반영합니다. 그 이전 과거 이력은 절대 건드리지 않습니다.</div>
 
 <div class="banner">
-  인식 대상 · <b>결제사(pg)·플랫폼별</b> 파일 → <code>코드-kpi</code> 탭 · <b>daily_kpi 자체결제</b> 파일 → <code>코드</code> 요약 탭.
-  파일명 앞부분으로 프로젝트를 자동 감지합니다(예: <code>potc_결제사…</code> → POTC). 기존 시트의 최종 날짜와 대조해 <b>겹치지 않는 새 날짜만</b> 추가합니다.
+  인식 · <b>결제사(pg)·플랫폼별</b> 파일 → <code>코드-kpi</code> 탭 · <b>daily_kpi 자체결제</b> 파일 → <code>코드</code> 요약 탭.
+  겹치는 날은 값이 <b>바뀐 경우에만</b> 교체(정산 지연 수정치 반영), 동일하면 건너뜀. 파일에 없는 과거 날짜는 그대로 보존.
 </div>
 
 <div class="panel">
   <h2>1) 연결 설정</h2>
-  <div class="setup-row" style="margin-bottom:10px;">
-    <span style="font-size:13px;color:var(--muted);min-width:96px;">구글시트 URL</span>
-    <input class="txt" id="sheetUrl" placeholder="대시보드/플래너와 동일 시트 URL">
-  </div>
-  <div class="setup-row">
-    <span style="font-size:13px;color:var(--muted);min-width:96px;">쓰기 웹훅</span>
-    <input class="txt" id="hookUrl" placeholder="Apps Script 웹앱 URL (미설정 시 CSV 다운로드로 폴백)">
-    <button class="btn" id="saveCfg">저장</button>
-  </div>
-  <details>
-    <summary>웹훅(Apps Script) 1회 설정 방법 — 진짜 자동 반영</summary>
-    <div class="gs-guide" id="gsGuide"></div>
-  </details>
+  <div class="setup-row"><span style="font-size:13px;color:var(--muted);min-width:96px;">구글시트 URL</span>
+    <input class="txt" id="sheetUrl" placeholder="대시보드/플래너와 동일 시트 URL"></div>
+  <div class="setup-row"><span style="font-size:13px;color:var(--muted);min-width:96px;">쓰기 웹훅</span>
+    <input class="txt" id="hookUrl" placeholder="Apps Script 웹앱 URL (미설정 시 CSV 폴백)"><button class="btn" id="saveCfg">저장</button></div>
+  <details class="guide"><summary>웹훅(Apps Script) 1회 설정 — 진짜 자동 반영</summary><div class="gs-guide" id="gsGuide"></div></details>
 </div>
 
 <div class="drop" id="drop">
-  <div class="big">📂 여기에 엑셀 파일을 드롭 (여러 개 동시 가능)</div>
+  <div class="big">📂 엑셀 파일 드롭 (여러 개 동시 가능)</div>
   <div>또는 클릭해서 선택 · .xlsx</div>
   <input type="file" id="file" accept=".xlsx,.xls" multiple style="display:none;">
 </div>
 
 <div class="panel" id="filesPanel" style="display:none;">
-  <h2>2) 감지된 파일 · 신규 날짜</h2>
-  <table id="filesTbl"><thead><tr><th>파일</th><th>프로젝트</th><th>대상 탭</th><th class="num">전체 행</th><th class="num">신규 날짜</th><th>기간</th><th>상태</th></tr></thead><tbody></tbody></table>
-  <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-    <button class="btn primary" id="applyBtn" disabled>시트에 반영 (신규만)</button>
-    <button class="btn" id="csvBtn" disabled>신규 행 CSV 내려받기</button>
+  <h2>2) 변경 비교</h2>
+  <div id="fileList"></div>
+  <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <button class="btn primary" id="applyBtn" disabled>변경분 반영 (신규+변경만)</button>
+    <button class="btn" id="csvBtn" disabled>변경분 CSV 내려받기</button>
     <button class="btn" id="clearBtn">비우기</button>
   </div>
   <div class="status" id="status"></div>
 </div>
 
 <div class="foot">
-  · 신규 여부는 <b>대상 탭의 기존 datekey</b>와 대조해 판정합니다(중복 미추가). · 파싱·대조는 모두 이 브라우저 안에서 수행되며, 웹훅 미설정 시 데이터는 어디로도 전송되지 않습니다.
-  · 자동 반영을 켜려면 위 "웹훅 설정"을 1회 완료하세요. 켜기 전에도 CSV 내려받기로 시트에 붙여넣을 수 있습니다.
+  · 비교·판정은 이 브라우저 안에서 수행됩니다. · <b>신규</b>=시트에 없는 날짜, <b>변경</b>=시트에 있으나 매출/PU가 달라진 날짜, <b>동일</b>=변화 없음(건너뜀).
+  · 반영 시 <b>신규+변경 날짜만</b> 교체하고 나머지는 그대로 둡니다. 웹훅 미설정 시 CSV로 내려받아 붙여넣을 수 있습니다.
 </div>
 
 <script>
 const DASH_LS="d2c-dashboard-v2", HOOK_LS="kpi-webhook", SHEET_LS="kpiplanner-sheet";
-const KNOWN=GSheet.KNOWN_CODES, fetchGrid=GSheet.fetchTab, toNum=GSheet.toNum, normDate=GSheet.normDate, headerOf=GSheet.headerOf;
-const N=v=>v==null?'':Math.round(v).toLocaleString('ko-KR');
+const KNOWN=GSheet.KNOWN_CODES, fetchGrid=GSheet.fetchTab, toNum=GSheet.toNum, normDate=GSheet.normDate;
+const num=v=>{const n=toNum(v);return n==null?0:n;};
+const N=v=>Math.round(v).toLocaleString('ko-KR');
+const money=v=>{const a=Math.abs(v); if(a>=1e8)return (v/1e8).toFixed(2)+'억'; if(a>=1e4)return Math.round(v/1e4).toLocaleString()+'만'; return N(v);};
 
 const DETAIL_H=["datekey","market_name_KR","platform_device_name_KR","pg_id","pg_name_KR","PU","revenue"];
 const SUMMARY_H=["datekey","DAU","전체 IAP 매출","자체 결제 매출","자체 결제 매출 비중","자체 결제 PU","자체 결제 ARPPU","자체 결제 ARPDAU"];
+const SELECT={detail:"A, F, G", summary:"A, B, C, D, F"};
 
-let FILES=[]; // {name, code, kind, tab, header, rows(all), newRows, dateMin, dateMax, status}
+let FILES=[];
 
 function getSheetUrl(){
   const el=document.getElementById("sheetUrl").value.trim(); if(el)return el;
@@ -118,130 +116,134 @@ function toISO(v){
   if(typeof v==="number" && v>20000 && v<80000){ const e=new Date(Date.UTC(1899,11,30)+Math.round(v)*86400000); return e.getUTCFullYear()+"-"+String(e.getUTCMonth()+1).padStart(2,"0")+"-"+String(e.getUTCDate()).padStart(2,"0"); }
   return normDate(v);
 }
-function codeFromName(name){
-  const pre=name.split(/[_\s.]/)[0].toUpperCase().replace("PTOC","POTC");
-  return KNOWN.includes(pre)?pre:"";
-}
-function detectKind(hdrLower){
-  if(hdrLower.some(h=>h.includes("market_name"))) return "detail";
-  if(hdrLower.some(h=>h.replace(/\s/g,"").includes("자체결제pu")||h.replace(/\s/g,"").includes("자체결제매출"))) return "summary";
-  return "";
-}
+const codeFromName=name=>{const p=name.split(/[_\s.]/)[0].toUpperCase().replace("PTOC","POTC");return KNOWN.includes(p)?p:"";};
+function detectKind(hl){ if(hl.some(h=>h.includes("market_name")))return "detail";
+  if(hl.some(h=>{const x=h.replace(/\s/g,"");return x.includes("자체결제pu")||x.includes("자체결제매출");}))return "summary"; return ""; }
 
 async function parseFile(file){
-  const buf=await file.arrayBuffer();
-  const wb=XLSX.read(buf,{type:"array"});
-  const ws=wb.Sheets[wb.SheetNames[0]];
-  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:""});
-  if(!aoa.length) throw new Error("빈 파일");
-  const hdr=aoa[0].map(x=>String(x||"").trim());
-  const hdrLower=hdr.map(x=>x.toLowerCase());
-  const kind=detectKind(hdrLower);
-  if(!kind) throw new Error("알 수 없는 형식(결제사/자체결제 파일이 아님)");
-  const code=codeFromName(file.name);
-  const targetH = kind==="detail"?DETAIL_H:SUMMARY_H;
-  // datekey 열 위치
-  const di=hdrLower.findIndex(h=>h.includes("datekey")||h.includes("date")||h.includes("날짜"));
+  const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
+  const aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""});
+  if(!aoa.length)throw new Error("빈 파일");
+  const hdr=aoa[0].map(x=>String(x||"").trim()), hl=hdr.map(x=>x.toLowerCase());
+  const kind=detectKind(hl); if(!kind)throw new Error("알 수 없는 형식");
+  const code=codeFromName(file.name), targetH=kind==="detail"?DETAIL_H:SUMMARY_H;
+  const di=hl.findIndex(h=>h.includes("datekey")||h.includes("date")||h.includes("날짜"));
   const rows=[];
-  for(let i=1;i<aoa.length;i++){
-    const r=aoa[i]; const iso=toISO(r[di]); if(!iso) continue;
-    // 열 순서가 소스=타깃 이라고 가정, datekey만 ISO로 치환하고 숫자는 정규화
-    const out=[iso];
-    for(let c=0;c<targetH.length;c++){ if(c===0)continue; const v=r[c]; out.push(typeof v==="string"?(toNum(v)??v):v); }
-    rows.push(out);
-  }
-  const dates=rows.map(r=>r[0]).sort();
-  return {name:file.name, code, kind, tab: kind==="detail"?(code+"-kpi"):code, header:targetH, rows, dateMin:dates[0], dateMax:dates[dates.length-1]};
+  for(let i=1;i<aoa.length;i++){ const r=aoa[i]; const iso=toISO(r[di]); if(!iso)continue;
+    const out=[iso]; for(let c=1;c<targetH.length;c++){ const v=r[c]; out.push(typeof v==="string"?(toNum(v)??v):v); } rows.push(out); }
+  return {name:file.name,code,kind,tab:kind==="detail"?code+"-kpi":code,header:targetH,rows};
 }
 
-async function existingDates(url, tab){
-  try{ const grid=await fetchGrid(url, tab, "select A"); const set=new Set();
-    for(let i=1;i<grid.length;i++){ const d=normDate(grid[i][0]); if(d)set.add(d); } return set;
-  }catch(e){ return null; } // 탭 없음 → 전부 신규
-}
-function render(){
-  const tb=document.querySelector("#filesTbl tbody"); tb.innerHTML="";
-  let anyNew=false;
-  FILES.forEach((f,idx)=>{
-    const codeSel=`<select class="mini" data-i="${idx}">`+["",...KNOWN].map(c=>`<option ${c===f.code?"selected":""}>${c||"(선택)"}</option>`).join("")+`</select>`;
-    const nNew=f.newRows?f.newRows.length:0; if(nNew>0)anyNew=true;
-    let st, cls;
-    if(!f.code){st="프로젝트 미인식";cls="err";}
-    else if(f.newRows==null){st="대조 대기";cls="warn";}
-    else if(nNew===0){st="최신 (추가 없음)";cls="ok";}
-    else {st=`신규 ${nNew}일`;cls="ok";}
-    const range=f.newRows&&nNew?`${f.newRows[0][0]} ~ ${f.newRows[nNew-1][0]}`:`${f.dateMin} ~ ${f.dateMax}`;
-    tb.insertAdjacentHTML("beforeend",`<tr>
-      <td>${f.name}</td><td>${codeSel}</td><td><code>${f.tab||"-"}</code> <span class="pill">${f.kind==="detail"?"결제사":"자체결제"}</span></td>
-      <td class="num">${N(f.rows.length)}</td><td class="num">${f.newRows==null?'…':N(nNew)}</td>
-      <td>${range||"-"}</td><td><span class="pill ${cls}">${st}</span></td></tr>`);
+// 파일/시트를 날짜별 집계로
+function fileByDate(f){ const by={};
+  f.rows.forEach(r=>{ const o=by[r[0]]=by[r[0]]||{rev:0,pu:0,cnt:0,dau:0,iap:0,d2c:0};
+    if(f.kind==="detail"){ o.pu+=num(r[5]); o.rev+=num(r[6]); o.cnt++; }
+    else { o.dau=num(r[1]); o.iap=num(r[2]); o.d2c=num(r[3]); o.pu=num(r[5]); o.cnt=1; } });
+  return by; }
+async function sheetByDate(url,tab,kind){
+  try{ const grid=await fetchGrid(url,tab,"select "+SELECT[kind]); const by={};
+    for(let i=1;i<grid.length;i++){ const d=normDate(grid[i][0]); if(!d)continue;
+      const o=by[d]=by[d]||{rev:0,pu:0,cnt:0,dau:0,iap:0,d2c:0};
+      if(kind==="detail"){ o.pu+=num(grid[i][1]); o.rev+=num(grid[i][2]); o.cnt++; }
+      else { o.dau=num(grid[i][1]); o.iap=num(grid[i][2]); o.d2c=num(grid[i][3]); o.pu=num(grid[i][4]); o.cnt=1; } }
+    return by;
+  }catch(e){ return null; } }
+const sig=(kind,o)=> kind==="detail" ? Math.round(o.rev)+"|"+Math.round(o.pu)+"|"+o.cnt
+                                      : Math.round(o.d2c)+"|"+Math.round(o.pu)+"|"+Math.round(o.dau)+"|"+Math.round(o.iap);
+const disp=(kind,o)=> kind==="detail"?o.rev:o.d2c;
+
+async function diffFile(f){
+  if(!f.code||!f.tab){ f.diffErr="프로젝트 미인식"; return; }
+  f.diffErr=null;
+  const url=getSheetUrl(); const fb=fileByDate(f); const sb=await sheetByDate(url,f.tab,f.kind);
+  f.newD=[]; f.chg=[]; f.same=0;
+  Object.keys(fb).sort().forEach(d=>{
+    if(!sb||!sb[d]) f.newD.push({date:d,newV:disp(f.kind,fb[d])});
+    else if(sig(f.kind,fb[d])!==sig(f.kind,sb[d])) f.chg.push({date:d,oldV:disp(f.kind,sb[d]),newV:disp(f.kind,fb[d])});
+    else f.same++;
   });
-  tb.querySelectorAll("select.mini").forEach(s=>s.addEventListener("change",async e=>{
-    const i=+e.target.dataset.i; const c=e.target.value; FILES[i].code=c||"";
-    FILES[i].tab = c ? (FILES[i].kind==="detail"?c+"-kpi":c) : "";
-    await diffOne(FILES[i]); render();
-  }));
-  document.getElementById("applyBtn").disabled=!anyNew;
-  document.getElementById("csvBtn").disabled=!anyNew;
-}
-async function diffOne(f){
-  if(!f.code||!f.tab){f.newRows=null;return;}
-  const url=getSheetUrl(); if(!url){f.newRows=f.rows.slice();return;}
-  const ex=await existingDates(url,f.tab);
-  f.newRows = ex==null ? f.rows.slice() : f.rows.filter(r=>!ex.has(r[0]));
-  f.newRows.sort((a,b)=>a[0]<b[0]?-1:1);
-}
-async function addFiles(list){
-  for(const file of list){
-    try{ const f=await parseFile(file); FILES.push(f); render(); await diffOne(f); render(); }
-    catch(e){ FILES.push({name:file.name,code:"",kind:"",tab:"",header:[],rows:[],newRows:[],dateMin:"",dateMax:"",err:e.message});
-      const tb=document.querySelector("#filesTbl tbody"); render(); }
-  }
-  document.getElementById("filesPanel").style.display="";
+  const set=new Set([...f.newD.map(x=>x.date),...f.chg.map(x=>x.date)]);
+  f.applyRows=f.rows.filter(r=>set.has(r[0])).sort((a,b)=>a[0]<b[0]?-1:1);
+  f.applyDates=[...set];
+  f.tabMissing = sb==null;
 }
 
-/* ---- 반영 (웹훅) ---- */
+function render(){
+  const wrap=document.getElementById("fileList"); wrap.innerHTML="";
+  let anyApply=false;
+  FILES.forEach((f,idx)=>{
+    const codeSel=`<select class="mini" data-i="${idx}">`+["",...KNOWN].map(c=>`<option ${c===f.code?"selected":""}>${c||"(프로젝트)"}</option>`).join("")+`</select>`;
+    let chips="", diff="";
+    if(f.parseErr){ chips=`<span class="chip err">${f.parseErr}</span>`; }
+    else if(f.diffErr){ chips=`<span class="chip err">${f.diffErr}</span>`; }
+    else if(!f.newD){ chips=`<span class="chip">비교 중…</span>`; }
+    else {
+      const nN=f.newD.length,nC=f.chg.length;
+      if(nN)anyApply=true; if(nC)anyApply=true;
+      chips=`<span class="chip new">신규 ${nN}일</span><span class="chip chg">변경 ${nC}일</span><span class="chip same">동일 ${f.same}일</span>`+(f.tabMissing?`<span class="chip">새 탭 생성</span>`:``);
+      if(nN||nC){
+        let rowsH="";
+        f.chg.forEach(c=>{const d=c.newV-c.oldV,up=d>=0;rowsH+=`<tr><td>${c.date}</td><td class="tag-chg">변경</td><td>${money(c.oldV)}</td><td>${money(c.newV)}</td><td class="${up?'up':'dn'}">${up?'+':''}${money(d)}</td></tr>`;});
+        f.newD.forEach(c=>{rowsH+=`<tr><td>${c.date}</td><td class="tag-new">신규</td><td>–</td><td>${money(c.newV)}</td><td class="up">+${money(c.newV)}</td></tr>`;});
+        diff=`<details class="diff"><summary>변경 상세 ${nN+nC}일 (${f.kind==='detail'?'매출':'자체결제 매출'} 기준)</summary>
+          <table class="diff"><thead><tr><th>날짜</th><th>구분</th><th>기존</th><th>신규</th><th>Δ</th></tr></thead><tbody>${rowsH}</tbody></table></details>`;
+      }
+    }
+    wrap.insertAdjacentHTML("beforeend",`<div class="fcard">
+      <div class="fhead"><span class="fname">${f.name}</span> ${codeSel}
+        <span class="fmeta">${f.tab?`<code>${f.tab}</code> · ${f.kind==="detail"?"결제사":"자체결제"}`:""}</span>
+        <span class="chips">${chips}</span></div>${diff}</div>`);
+  });
+  wrap.querySelectorAll("select.mini").forEach(s=>s.addEventListener("change",async e=>{
+    const i=+e.target.dataset.i,c=e.target.value; FILES[i].code=c||""; FILES[i].tab=c?(FILES[i].kind==="detail"?c+"-kpi":c):"";
+    FILES[i].newD=null; render(); await diffFile(FILES[i]); render();
+  }));
+  document.getElementById("applyBtn").disabled=!anyApply;
+  document.getElementById("csvBtn").disabled=!anyApply;
+}
+
+async function addFiles(list){
+  document.getElementById("filesPanel").style.display="";
+  for(const file of list){
+    let f;
+    try{ f=await parseFile(file); }catch(e){ f={name:file.name,parseErr:e.message,rows:[]}; FILES.push(f); render(); continue; }
+    FILES.push(f); render(); await diffFile(f); render();
+  }
+}
+
 async function applyToSheet(){
-  const hook=document.getElementById("hookUrl").value.trim();
-  const status=document.getElementById("status"); status.className="status show";
-  const targets=FILES.filter(f=>f.code&&f.newRows&&f.newRows.length);
-  if(!targets.length){status.textContent="반영할 신규 행이 없습니다.";return;}
-  if(!hook){ status.innerHTML="웹훅이 설정되지 않았습니다. <b>CSV 내려받기</b>로 시트에 붙여넣거나, 위에서 웹훅을 설정하세요."; return; }
-  status.textContent="시트에 반영 중…";
-  let done=0, added=0, errs=[];
+  const hook=document.getElementById("hookUrl").value.trim(), status=document.getElementById("status");
+  status.className="status show";
+  const targets=FILES.filter(f=>f.applyRows&&f.applyRows.length);
+  if(!targets.length){ status.textContent="반영할 신규·변경 항목이 없습니다."; return; }
+  if(!hook){ status.innerHTML="웹훅 미설정 — <b>변경분 CSV 내려받기</b>로 시트에 반영하거나, 위에서 웹훅을 설정하세요."; return; }
+  let done=0,added=0,repl=0,errs=[];
   for(const f of targets){
+    status.textContent=`반영 중… (${done}/${targets.length}) ${f.tab}`;
     try{
       const res=await fetch(hook,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
-        body:JSON.stringify({sheet:f.tab, header:f.header, rows:f.newRows})});
+        body:JSON.stringify({sheet:f.tab,header:f.header,replaceDates:f.applyDates,rows:f.applyRows})});
       const j=await res.json();
-      if(j.ok){ added+=j.added||0; f.newRows=[]; }
+      if(j.ok){ added+=j.added||0; repl+=(f.chg?f.chg.length:0); f.newD=[];f.chg=[];f.applyRows=[]; }
       else errs.push(`${f.tab}: ${j.error||"실패"}`);
     }catch(e){ errs.push(`${f.tab}: ${e.message}`); }
-    done++; status.textContent=`반영 중… (${done}/${targets.length})`;
+    done++;
   }
   render();
-  status.innerHTML = `✅ 완료 · 신규 <b>${added}</b>행 추가` + (errs.length?`<br>⚠️ ${errs.join("<br>")}`:"") +
-    `<br><span style="color:var(--muted)">대시보드/플래너/전사비교를 새로고침하면 반영됩니다.</span>`;
+  status.innerHTML=`✅ 완료 · <b>${added}</b>행 반영(변경 ${repl}일 교체 포함)`+(errs.length?`<br>⚠️ ${errs.join("<br>")}`:"")+`<br><span style="color:var(--muted)">대시보드/플래너/전사비교 새로고침 시 반영됩니다.</span>`;
 }
-/* ---- CSV 폴백 ---- */
 function downloadCsv(){
-  const targets=FILES.filter(f=>f.code&&f.newRows&&f.newRows.length);
-  if(!targets.length)return;
+  const targets=FILES.filter(f=>f.applyRows&&f.applyRows.length); if(!targets.length)return;
   targets.forEach(f=>{
-    const lines=[f.header.join(",")].concat(f.newRows.map(r=>r.map(v=>{
-      const s=String(v??""); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
-    }).join(",")));
-    const blob=new Blob(["﻿"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
-    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-    a.download=`${f.tab}_신규_${f.newRows[0][0]}_${f.newRows[f.newRows.length-1][0]}.csv`; a.click();
-    URL.revokeObjectURL(a.href);
+    const lines=[f.header.join(",")].concat(f.applyRows.map(r=>r.map(v=>{const s=String(v??"");return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(",")));
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+lines.join("\n")],{type:"text/csv;charset=utf-8"}));
+    a.download=`${f.tab}_변경분_${f.applyRows[0][0]}_${f.applyRows[f.applyRows.length-1][0]}.csv`; a.click(); URL.revokeObjectURL(a.href);
   });
-  document.getElementById("status").className="status show";
-  document.getElementById("status").innerHTML=`신규 행 CSV를 내려받았습니다. 각 <code>탭</code> 하단 빈 행에 붙여넣으세요(헤더 제외). ${targets.map(f=>f.tab).join(", ")}`;
+  const st=document.getElementById("status"); st.className="status show";
+  st.innerHTML=`변경분 CSV를 내려받았습니다. 각 탭에서 해당 날짜 행을 교체/추가하세요: ${targets.map(f=>f.tab).join(", ")}`;
 }
 
-/* ---- 이벤트 ---- */
-const drop=document.getElementById("drop"), fileInput=document.getElementById("file");
+const drop=document.getElementById("drop"),fileInput=document.getElementById("file");
 drop.addEventListener("click",()=>fileInput.click());
 drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("over");});
 drop.addEventListener("dragleave",()=>drop.classList.remove("over"));
@@ -249,51 +251,47 @@ drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("over"
 fileInput.addEventListener("change",e=>addFiles([...e.target.files]));
 document.getElementById("applyBtn").addEventListener("click",applyToSheet);
 document.getElementById("csvBtn").addEventListener("click",downloadCsv);
-document.getElementById("clearBtn").addEventListener("click",()=>{FILES=[];document.querySelector("#filesTbl tbody").innerHTML="";document.getElementById("filesPanel").style.display="none";document.getElementById("status").className="status";});
+document.getElementById("clearBtn").addEventListener("click",()=>{FILES=[];document.getElementById("fileList").innerHTML="";document.getElementById("filesPanel").style.display="none";document.getElementById("status").className="status";});
 document.getElementById("saveCfg").addEventListener("click",()=>{
-  const u=document.getElementById("sheetUrl").value.trim(), h=document.getElementById("hookUrl").value.trim();
+  const u=document.getElementById("sheetUrl").value.trim(),h=document.getElementById("hookUrl").value.trim();
   if(u)localStorage.setItem(SHEET_LS,u); if(h)localStorage.setItem(HOOK_LS,h);
   try{const s=JSON.parse(localStorage.getItem(DASH_LS))||{};if(u)s.masterSheetUrl=u;localStorage.setItem(DASH_LS,JSON.stringify(s));}catch(e){}
   alert("저장했습니다.");
 });
-
-/* 초기값 + 가이드 */
 document.getElementById("sheetUrl").value=getSheetUrl();
 document.getElementById("hookUrl").value=localStorage.getItem(HOOK_LS)||"";
 document.getElementById("gsGuide").innerHTML=`
-1. 구글시트 → <b>확장 프로그램 → Apps Script</b> 열기<br>
-2. 아래 코드를 붙여넣고 저장 →  <b>배포 → 새 배포 → 유형: 웹 앱</b><br>
-3. 액세스 권한 <b>"모든 사용자"</b>로 배포 → 생성된 <b>웹 앱 URL</b>을 위 "쓰기 웹훅"에 붙여넣고 저장<br>
+1. 구글시트 → <b>확장 프로그램 → Apps Script</b><br>
+2. 아래 코드 붙여넣기 → 저장 → <b>배포 → 새 배포 → 웹 앱</b>, 액세스 <b>"모든 사용자"</b><br>
+3. 생성된 <b>웹 앱 URL</b>을 위 "쓰기 웹훅"에 붙여넣고 저장<br>
 <pre>function doPost(e){
   try{
-    var body = JSON.parse(e.postData.contents);
+    var b = JSON.parse(e.postData.contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sh = ss.getSheetByName(body.sheet);
-    if(!sh){ sh = ss.insertSheet(body.sheet); sh.appendRow(body.header); }
-    // 기존 datekey(A열) 수집 → 중복 방지
-    var last = sh.getLastRow();
-    var seen = {};
+    var sh = ss.getSheetByName(b.sheet);
+    if(!sh){ sh = ss.insertSheet(b.sheet); sh.appendRow(b.header); }
+    var ncol = b.header.length;
+    var repl = {}; (b.replaceDates||[]).forEach(function(d){ repl[d] = true; });
+    var last = sh.getLastRow(), keep = [];
     if(last > 1){
-      var col = sh.getRange(2,1,last-1,1).getValues();
-      for(var i=0;i<col.length;i++){ seen[iso_(col[i][0])] = true; }
+      var data = sh.getRange(2,1,last-1,ncol).getValues();
+      for(var i=0;i<data.length;i++){ if(!repl[iso_(data[i][0])]) keep.push(data[i]); }
     }
-    var out = [], added = 0;
-    (body.rows||[]).forEach(function(r){
-      var key = iso_(r[0]); if(!key || seen[key]) return; seen[key] = true;
-      var row = r.slice(); row[0] = new Date(r[0] + "T00:00:00"); // datekey → Date
-      out.push(row); added++;
-    });
-    if(out.length) sh.getRange(sh.getLastRow()+1,1,out.length,out[0].length).setValues(out);
-    return json_({ok:true, added:added});
+    var incoming = (b.rows||[]).map(function(r){ var row=r.slice(); row[0]=parseDate_(r[0]); return row; });
+    var merged = keep.concat(incoming);
+    merged.sort(function(a,b){ return a[0]-b[0]; });      // 날짜 오름차순 정렬
+    if(last > 1) sh.getRange(2,1,last-1,ncol).clearContent();
+    if(merged.length) sh.getRange(2,1,merged.length,ncol).setValues(merged);
+    return json_({ok:true, added:incoming.length, kept:keep.length});
   }catch(err){ return json_({ok:false, error:String(err)}); }
 }
+function parseDate_(iso){ var p=String(iso).split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
 function iso_(v){
   if(v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
-  var s = String(v||"").trim(); var d = new Date(s);
-  if(!isNaN(d)) return Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd");
-  return s;
+  var d = new Date(String(v)); return isNaN(d) ? String(v) : Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd");
 }
 function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }</pre>
+<b>동작</b>: 시트 전체를 읽어 → 반영 대상 날짜(신규+변경) 행만 제거 → 파일 행 추가 → 날짜순 재정렬. 대상 밖 과거 날짜는 그대로 유지됩니다.
 `;
 </script>
 </body>
