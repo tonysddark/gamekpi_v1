@@ -150,7 +150,7 @@ function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).set
 <section id="s4">
   <h2><span class="n">4</span>주기 업무 — 데이터 업데이트 <a class="top" href="#top">↑ 위로</a></h2>
   <ol class="steps">
-    <li>사내 지표에서 각 프로젝트 엑셀 다운로드 — <b>결제사·플랫폼별</b> 파일과 <b>daily_kpi 자체결제</b> 파일</li>
+    <li>사내 지표에서 각 프로젝트 엑셀 다운로드 — <b>결제사·플랫폼별</b> · <b>daily_kpi 자체결제</b> · <b>daily_kpi(순수)</b> 파일 (세 유형 모두 자동 인식)</li>
     <li>업로드 페이지에 <b>여러 개 한 번에 드롭</b> (파일명 앞부분으로 프로젝트 자동 인식)</li>
     <li>파일별로 <span class="pill new">신규 N일</span> <span class="pill chg">변경 M일</span> <span class="pill">동일 K일</span> 자동 표시 → <b>"변경 상세"</b>로 기존→신규 매출 확인</li>
     <li><b>변경분 반영</b> 버튼 클릭 → 신규+변경 날짜만 시트에 반영</li>
@@ -184,7 +184,7 @@ function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).set
     <tr><td><b>자체결제 매출비중</b></td><td>자체결제 매출 ÷ 전체 IAP 매출</td></tr>
     <tr><td><b>자체결제 PU비중</b></td><td>자체결제 일평균 PU ÷ 전체 일평균 PU</td></tr>
   </table>
-  <div class="callout">PU는 <b>채널 합산 기준</b>(한 유저가 여러 PG로 결제하면 중복 포함)이라, 순 결제자 기준 지표보다 소폭 클 수 있습니다. 대시보드·플래너·전사비교 모두 같은 기준이라 상호 일관됩니다.</div>
+  <div class="callout"><b>PU 기준 두 가지</b> — 결제사 탭 기반 지표(대시보드·플래너·자체결제 PU)는 <b>채널 합산</b>(여러 PG 결제 중복 포함). 전사 비교의 <b>전체 PU·ARPPU는 daily_kpi 순결제자 기준</b>(해당 월 <code>코드-daily</code> 데이터가 있을 때, 없으면 채널합산 폴백). 그래서 전사비교 전체 PU가 결제사 합산보다 작을 수 있습니다.</div>
 </section>
 
 <section id="s7">
@@ -193,6 +193,7 @@ function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).set
     <tr><th>탭</th><th>공급 파일</th><th>컬럼</th><th>읽는 페이지</th></tr>
     <tr><td><code>코드-kpi</code><br>(예: POTC-kpi)</td><td>결제사·플랫폼별 xlsx</td><td>datekey · market_name_KR · platform_device_name_KR · pg_id · pg_name_KR · PU · revenue</td><td>플래너 · 전사비교</td></tr>
     <tr><td><code>코드</code><br>(예: POTC)</td><td>daily_kpi 자체결제 xlsx</td><td>datekey · DAU · 전체 IAP 매출 · 자체 결제 매출 · 비중 · 자체 결제 PU · ARPPU · ARPDAU</td><td>대시보드</td></tr>
+    <tr><td><code>코드-daily</code><br>(예: POTC-daily)</td><td>daily_kpi(순수) xlsx</td><td>datekey · DAU · DRU · <b>PU(순결제자)</b> · 총/IAP/마켓/자체결제/IAA 매출 · PUR · <b>ARPPU(전체)</b> · ARPDAU · Install · NNPU…</td><td>전사 비교(전체 PU·ARPPU)</td></tr>
     <tr><td><code>index</code></td><td>수동</td><td>game · start · end · title · memo (게임 목록/이벤트)</td><td>게임 자동 발견</td></tr>
   </table>
   <p class="muted">프로젝트 추가 = 시트에 <code>코드-kpi</code>·<code>코드</code> 탭을 만들고 첫 데이터를 업로드하면 자동 인식됩니다.</p>

@@ -59,7 +59,7 @@
 <div class="sub">최근 30일 엑셀을 드롭 → 시트와 <b>비교</b> → <b>신규·변경된 날짜만</b> 반영합니다. 그 이전 과거 이력은 절대 건드리지 않습니다.</div>
 
 <div class="banner">
-  인식 · <b>결제사(pg)·플랫폼별</b> 파일 → <code>코드-kpi</code> 탭 · <b>daily_kpi 자체결제</b> 파일 → <code>코드</code> 요약 탭.
+  인식 · <b>결제사(pg)·플랫폼별</b> → <code>코드-kpi</code> · <b>daily_kpi 자체결제</b> → <code>코드</code> · <b>daily_kpi(순수)</b> → <code>코드-daily</code>(DAU·순결제자 PU·전체 ARPPU·광고).
   겹치는 날은 값이 <b>바뀐 경우에만</b> 교체(정산 지연 수정치 반영), 동일하면 건너뜀. 파일에 없는 과거 날짜는 그대로 보존.
 </div>
 
@@ -103,7 +103,10 @@ const money=v=>{const a=Math.abs(v); if(a>=1e8)return (v/1e8).toFixed(2)+'억'; 
 
 const DETAIL_H=["datekey","market_name_KR","platform_device_name_KR","pg_id","pg_name_KR","PU","revenue"];
 const SUMMARY_H=["datekey","DAU","전체 IAP 매출","자체 결제 매출","자체 결제 매출 비중","자체 결제 PU","자체 결제 ARPPU","자체 결제 ARPDAU"];
-const SELECT={detail:"A, F, G", summary:"A, B, C, D, F"};
+const DAILY_H=["datekey","DAU","DRU","PU","총 매출_IAP IAA 합계","IAP 매출액","마켓 매출액","자체 결재 매출액","IAA 매출액","PUR","ARPPU","ARPDAU","공통로그 기준 Install","MMP 기준 Install","NNPUR","NNPU","NNPU 매출"];
+const HEADERS={detail:DETAIL_H,summary:SUMMARY_H,daily:DAILY_H};
+const KIND_LABEL={detail:"결제사",summary:"자체결제",daily:"일별KPI"};
+const SELECT={detail:"A, F, G", summary:"A, B, C, D, F", daily:"A, D, F, H"};
 
 let FILES=[];
 
@@ -118,8 +121,11 @@ function toISO(v){
   return normDate(v);
 }
 const codeFromName=name=>{const p=name.split(/[_\s.]/)[0].toUpperCase().replace("PTOC","POTC");return KNOWN.includes(p)?p:"";};
-function detectKind(hl){ if(hl.some(h=>h.includes("market_name")))return "detail";
-  if(hl.some(h=>{const x=h.replace(/\s/g,"");return x.includes("자체결제pu")||x.includes("자체결제매출");}))return "summary"; return ""; }
+function detectKind(hl){
+  if(hl.some(h=>h.includes("market_name")))return "detail";
+  if(hl.some(h=>{const x=h.replace(/\s/g,"");return x==="dru"||x.includes("iaa")||x.includes("install")||x.includes("nnpu")||x==="pur";}))return "daily";
+  if(hl.some(h=>{const x=h.replace(/\s/g,"");return x.includes("자체결제pu")||x.includes("자체결제매출");}))return "summary";
+  return ""; }
 
 async function parseFile(file){
   const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
@@ -127,18 +133,20 @@ async function parseFile(file){
   if(!aoa.length)throw new Error("빈 파일");
   const hdr=aoa[0].map(x=>String(x||"").trim()), hl=hdr.map(x=>x.toLowerCase());
   const kind=detectKind(hl); if(!kind)throw new Error("알 수 없는 형식");
-  const code=codeFromName(file.name), targetH=kind==="detail"?DETAIL_H:SUMMARY_H;
+  const code=codeFromName(file.name), targetH=HEADERS[kind];
   const di=hl.findIndex(h=>h.includes("datekey")||h.includes("date")||h.includes("날짜"));
   const rows=[];
   for(let i=1;i<aoa.length;i++){ const r=aoa[i]; const iso=toISO(r[di]); if(!iso)continue;
     const out=[iso]; for(let c=1;c<targetH.length;c++){ const v=r[c]; out.push(typeof v==="string"?(toNum(v)??v):v); } rows.push(out); }
-  return {name:file.name,code,kind,tab:kind==="detail"?code+"-kpi":code,header:targetH,rows};
+  const tab = kind==="detail"?code+"-kpi" : kind==="daily"?code+"-daily" : code;
+  return {name:file.name,code,kind,tab,header:targetH,rows};
 }
 
 // 파일/시트를 날짜별 집계로
 function fileByDate(f){ const by={};
   f.rows.forEach(r=>{ const o=by[r[0]]=by[r[0]]||{rev:0,pu:0,cnt:0,dau:0,iap:0,d2c:0};
     if(f.kind==="detail"){ o.pu+=num(r[5]); o.rev+=num(r[6]); o.cnt++; }
+    else if(f.kind==="daily"){ o.pu=num(r[3]); o.iap=num(r[5]); o.d2c=num(r[7]); o.dau=num(r[1]); o.cnt=1; }
     else { o.dau=num(r[1]); o.iap=num(r[2]); o.d2c=num(r[3]); o.pu=num(r[5]); o.cnt=1; } });
   return by; }
 async function sheetByDate(url,tab,kind){
@@ -146,12 +154,14 @@ async function sheetByDate(url,tab,kind){
     for(let i=1;i<grid.length;i++){ const d=normDate(grid[i][0]); if(!d)continue;
       const o=by[d]=by[d]||{rev:0,pu:0,cnt:0,dau:0,iap:0,d2c:0};
       if(kind==="detail"){ o.pu+=num(grid[i][1]); o.rev+=num(grid[i][2]); o.cnt++; }
+      else if(kind==="daily"){ o.pu=num(grid[i][1]); o.iap=num(grid[i][2]); o.d2c=num(grid[i][3]); o.cnt=1; }
       else { o.dau=num(grid[i][1]); o.iap=num(grid[i][2]); o.d2c=num(grid[i][3]); o.pu=num(grid[i][4]); o.cnt=1; } }
     return by;
   }catch(e){ return null; } }
 const sig=(kind,o)=> kind==="detail" ? Math.round(o.rev)+"|"+Math.round(o.pu)+"|"+o.cnt
+                   : kind==="daily"  ? Math.round(o.pu)+"|"+Math.round(o.iap)+"|"+Math.round(o.d2c)
                                       : Math.round(o.d2c)+"|"+Math.round(o.pu)+"|"+Math.round(o.dau)+"|"+Math.round(o.iap);
-const disp=(kind,o)=> kind==="detail"?o.rev:o.d2c;
+const disp=(kind,o)=> kind==="detail"?o.rev : kind==="daily"?o.iap : o.d2c;
 
 async function diffFile(f){
   if(!f.code||!f.tab){ f.diffErr="프로젝트 미인식"; return; }
@@ -186,17 +196,18 @@ function render(){
         let rowsH="";
         f.chg.forEach(c=>{const d=c.newV-c.oldV,up=d>=0;rowsH+=`<tr><td>${c.date}</td><td class="tag-chg">변경</td><td>${money(c.oldV)}</td><td>${money(c.newV)}</td><td class="${up?'up':'dn'}">${up?'+':''}${money(d)}</td></tr>`;});
         f.newD.forEach(c=>{rowsH+=`<tr><td>${c.date}</td><td class="tag-new">신규</td><td>–</td><td>${money(c.newV)}</td><td class="up">+${money(c.newV)}</td></tr>`;});
-        diff=`<details class="diff"><summary>변경 상세 ${nN+nC}일 (${f.kind==='detail'?'매출':'자체결제 매출'} 기준)</summary>
+        const dispLbl={detail:'매출',daily:'전체 IAP 매출',summary:'자체결제 매출'}[f.kind];
+        diff=`<details class="diff"><summary>변경 상세 ${nN+nC}일 (${dispLbl} 기준)</summary>
           <table class="diff"><thead><tr><th>날짜</th><th>구분</th><th>기존</th><th>신규</th><th>Δ</th></tr></thead><tbody>${rowsH}</tbody></table></details>`;
       }
     }
     wrap.insertAdjacentHTML("beforeend",`<div class="fcard">
       <div class="fhead"><span class="fname">${f.name}</span> ${codeSel}
-        <span class="fmeta">${f.tab?`<code>${f.tab}</code> · ${f.kind==="detail"?"결제사":"자체결제"}`:""}</span>
+        <span class="fmeta">${f.tab?`<code>${f.tab}</code> · ${KIND_LABEL[f.kind]||""}`:""}</span>
         <span class="chips">${chips}</span></div>${diff}</div>`);
   });
   wrap.querySelectorAll("select.mini").forEach(s=>s.addEventListener("change",async e=>{
-    const i=+e.target.dataset.i,c=e.target.value; FILES[i].code=c||""; FILES[i].tab=c?(FILES[i].kind==="detail"?c+"-kpi":c):"";
+    const i=+e.target.dataset.i,c=e.target.value; FILES[i].code=c||""; FILES[i].tab=c?(FILES[i].kind==="detail"?c+"-kpi":FILES[i].kind==="daily"?c+"-daily":c):"";
     FILES[i].newD=null; render(); await diffFile(FILES[i]); render();
   }));
   document.getElementById("applyBtn").disabled=!anyApply;

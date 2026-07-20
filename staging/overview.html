@@ -120,7 +120,7 @@
   </div>
 
   <div class="foot">
-    자체결제 = 다날·엑솔라·페이레터·페이레터 PPAY(마켓 라벨 무관) · PU는 채널 합산 기준(순 결제자보다 소폭 상회 가능) · 당월 진행 중이면 <span class="prov">진행중</span> 표시.
+전체 PU·ARPPU는 <b>daily_kpi(순결제자) 기준</b>(해당 월 daily 데이터가 있을 때), 없으면 결제사 채널합산으로 표시 · 자체결제 PU는 채널 합산 기준 · 자체결제 = 다날·엑솔라·페이레터·페이레터 PPAY(마켓 라벨 무관) · 당월 진행 중이면 <span class="prov">진행중</span> 표시.
     데이터는 이 브라우저 밖으로 전송되지 않으며 구글시트에서만 읽습니다.
   </div>
 </div>
@@ -135,7 +135,7 @@ const HEX={POTC:'#4f8cff',IMGN:'#34d399',GBTW:'#fbbf24',WWM:'#5eead4',DS:'#c084f
 const N=v=>Math.round(v).toLocaleString('ko-KR');
 const P=v=>v.toFixed(1)+'%';
 
-let SHEET_URL="", CODES=[], AGG={}, YEARS=[], curYear="", curMetric="puShare", chart=null, c1=null, c2=null, LATEST="";
+let SHEET_URL="", CODES=[], AGG={}, DLY={}, YEARS=[], curYear="", curMetric="puShare", chart=null, c1=null, c2=null, LATEST="";
 
 function getMasterUrl(){ try{const s=JSON.parse(localStorage.getItem(DASH_LS));if(s&&s.masterSheetUrl)return s.masterSheetUrl;}catch(e){} return localStorage.getItem("kpiplanner-sheet")||""; }
 function showSetup(msg){ document.getElementById("setup").style.display=""; document.getElementById("main").style.display="none"; document.getElementById("setupMsg").innerHTML=msg; document.getElementById("range").textContent="데이터 미연결"; }
@@ -172,17 +172,37 @@ async function loadDetail(url,code){
   }
   return agg;
 }
-function metricVal(o,m){
+// 순수 daily_kpi 탭({code}-daily): 전체 PU(순결제자)·전체 IAP매출. 없으면 결제사(채널합산)로 폴백.
+async function loadDaily(url,code){
+  try{
+    const grid=await fetchGrid(url,code+"-daily","select A, D, F"); // datekey, PU, IAP매출
+    if(!grid||grid.length<2)return {};
+    const agg={};
+    for(let i=1;i<grid.length;i++){ const d=normDate(grid[i][0]); if(!d)continue;
+      const pu=toNum(grid[i][1]), iap=toNum(grid[i][2]); const m=d.slice(0,7);
+      const o=agg[m]=agg[m]||{days:new Set(),pu:0,iap:0};
+      o.days.add(d); if(pu!=null)o.pu+=pu; if(iap!=null)o.iap+=iap; }
+    Object.keys(agg).forEach(m=>agg[m].days=agg[m].days.size);
+    return agg;
+  }catch(e){ return {}; }
+}
+// dly(있으면 순결제자 기준)로 전체 PU/ARPPU 계산, 없으면 o(결제사 채널합산) 사용
+function metricVal(o,m,dly){
   const days=o.days.size||1;
-  const totPU=o.totPU/days, d2cPU=o.d2cPU/days;
+  const totPUsum = dly ? dly.pu : o.totPU;
+  const totRev   = dly ? dly.iap : o.totRev;
+  const totDays  = dly ? (dly.days||days) : days;
+  const totPU = totPUsum!=null ? totPUsum/totDays : null;
+  const d2cPU = o.d2cPU/days;
   switch(m){
-    case 'puShare': return o.totPU? o.d2cPU/o.totPU*100 : null;
+    case 'puShare': return totPU? d2cPU/totPU*100 : null;
     case 'revShare': return o.totRev? o.d2cRev/o.totRev*100 : null;
-    case 'totARPPU': return o.totPU? o.totRev/o.totPU : null;
+    case 'totARPPU': return totPUsum? totRev/totPUsum : null;
     case 'd2cARPPU': return o.d2cPU? o.d2cRev/o.d2cPU : null;
     case 'totPU': return totPU;
   }
 }
+const dlyOf=(code,m)=>DLY[code]&&DLY[code][m];
 const isPct=m=>m==='puShare'||m==='revShare';
 const fmtMetric=(v,m)=> v==null?'–' : (isPct(m)?P(v):N(v));
 
@@ -198,7 +218,7 @@ function renderAll(){
   CODES.forEach(c=>{
     const withData=ms.filter(m=>AGG[c][m]); if(!withData.length)return;
     const lm=withData[withData.length-1], fm=withData[0];
-    const lv=metricVal(AGG[c][lm],'puShare'), fv=metricVal(AGG[c][fm],'puShare');
+    const lv=metricVal(AGG[c][lm],'puShare',dlyOf(c,lm)), fv=metricVal(AGG[c][fm],'puShare',dlyOf(c,fm));
     const d=(lv!=null&&fv!=null)?lv-fv:null; const up=d>=0;
     cards.innerHTML+=`<div class="card" style="border-left-color:${HEX[c]}"><div class="l">${c}</div>
       <div class="v">${lv==null?'–':lv.toFixed(1)}<small>%</small></div>
@@ -212,7 +232,7 @@ function renderAll(){
     body+=`<tr><td class="pj" style="color:${HEX[c]}">${c}</td>`;
     ms.forEach(m=>{
       const o=AGG[c][m]; if(!o){body+="<td>–</td>";return;}
-      const v=metricVal(o,curMetric); const prov=isProvisional(m,o);
+      const v=metricVal(o,curMetric,dlyOf(c,m)); const prov=isProvisional(m,o);
       if(curMetric==='puShare'&&v!=null){
         const t2=Math.max(0,Math.min(1,v/35)); const a=(0.18+t2*0.7).toFixed(2);
         body+=`<td><span class="heat" style="background:rgba(79,140,255,${a})">${P(v)}${prov?'<span class="prov">진행중</span>':''}</span></td>`;
@@ -225,7 +245,7 @@ function renderAll(){
   body+="</tbody>"; t.innerHTML=head+body;
   // 범례 + 차트
   const leg=document.getElementById("allLegend"); leg.innerHTML=CODES.map(c=>`<span><i style="background:${HEX[c]}"></i>${c}</span>`).join("");
-  const ds=CODES.map(c=>({label:c,data:ms.map(m=>AGG[c][m]?metricVal(AGG[c][m],curMetric):null),borderColor:HEX[c],backgroundColor:HEX[c],borderWidth:2,tension:.3,spanGaps:false,pointRadius:3}));
+  const ds=CODES.map(c=>({label:c,data:ms.map(m=>AGG[c][m]?metricVal(AGG[c][m],curMetric,dlyOf(c,m)):null),borderColor:HEX[c],backgroundColor:HEX[c],borderWidth:2,tension:.3,spanGaps:false,pointRadius:3}));
   drawLine('allChart',ms.map(m=>+m.slice(5,7)+"월"),ds,curMetric,r=>chart=r,chart);
 }
 
@@ -235,33 +255,33 @@ function renderOne(code){
   const ms=Object.keys(AGG[code]).filter(m=>m.slice(0,4)===curYear).sort();
   document.getElementById("oneSub").textContent=curYear+"년";
   // 카드: 최신월 요약
-  const lm=ms[ms.length-1]; const o=lm?AGG[code][lm]:null;
+  const lm=ms[ms.length-1]; const o=lm?AGG[code][lm]:null; const dl=lm?dlyOf(code,lm):null;
   const cards=document.getElementById("oneCards"); cards.innerHTML="";
   if(o){
-    const defs=[['전체 일평균PU',N(metricVal(o,'totPU')),''],['전체 ARPPU',N(metricVal(o,'totARPPU'))+'원',''],
-      ['자체결제 일평균PU',N(o.d2cPU/o.days.size),''],['자체결제 ARPPU',N(metricVal(o,'d2cARPPU'))+'원',''],
-      ['자체결제 PU비중',P(metricVal(o,'puShare')),'accent'],['자체결제 매출비중',P(metricVal(o,'revShare')),'accent']];
+    const defs=[['전체 일평균PU',N(metricVal(o,'totPU',dl)),''],['전체 ARPPU',N(metricVal(o,'totARPPU',dl))+'원',''],
+      ['자체결제 일평균PU',N(o.d2cPU/o.days.size),''],['자체결제 ARPPU',N(metricVal(o,'d2cARPPU',dl))+'원',''],
+      ['자체결제 PU비중',P(metricVal(o,'puShare',dl)),'accent'],['자체결제 매출비중',P(metricVal(o,'revShare',dl)),'accent']];
     cards.innerHTML=defs.map(d=>`<div class="card" style="border-left-color:${d[2]==='accent'?'var(--accent)':HEX[code]}"><div class="l">${d[0]} <span style="color:var(--muted)">(${lm.slice(5,7)}월)</span></div><div class="v">${d[1]}</div></div>`).join("");
   }
   // 표
   const t=document.getElementById("oneTable");
   let head="<thead><tr><th>월</th><th>전체 일평균PU</th><th>전체 ARPPU</th><th class='grp'>자체 일평균PU</th><th>자체 ARPPU</th><th class='grp'>자체 PU비중</th><th>자체 매출비중</th></tr></thead>";
   let body="<tbody>";
-  ms.forEach(m=>{const o=AGG[code][m];const prov=isProvisional(m,o);
+  ms.forEach(m=>{const o=AGG[code][m];const dl=dlyOf(code,m);const prov=isProvisional(m,o);const ps=metricVal(o,'puShare',dl);
     body+=`<tr><td class="mon">${+m.slice(5,7)}월${prov?'<span class="prov">진행중</span>':''}</td>
-      <td>${N(metricVal(o,'totPU'))}</td><td>${N(metricVal(o,'totARPPU'))}</td>
-      <td class="grp">${N(o.d2cPU/o.days.size)}</td><td>${N(metricVal(o,'d2cARPPU'))}</td>
-      <td class="grp"><span class="heat" style="background:rgba(79,140,255,${(0.18+Math.min(1,metricVal(o,'puShare')/35)*0.7).toFixed(2)})">${P(metricVal(o,'puShare'))}</span></td>
-      <td style="color:var(--accent);font-weight:600">${P(metricVal(o,'revShare'))}</td></tr>`;});
+      <td>${N(metricVal(o,'totPU',dl))}</td><td>${N(metricVal(o,'totARPPU',dl))}</td>
+      <td class="grp">${N(o.d2cPU/o.days.size)}</td><td>${N(metricVal(o,'d2cARPPU',dl))}</td>
+      <td class="grp"><span class="heat" style="background:rgba(79,140,255,${(0.18+Math.min(1,ps/35)*0.7).toFixed(2)})">${P(ps)}</span></td>
+      <td style="color:var(--accent);font-weight:600">${P(metricVal(o,'revShare',dl))}</td></tr>`;});
   body+="</tbody>"; t.innerHTML=head+body;
   const lab=ms.map(m=>+m.slice(5,7)+"월");
   drawLine('oneChart1',lab,[
-    {label:'PU비중',data:ms.map(m=>metricVal(AGG[code][m],'puShare')),borderColor:'#4f8cff',backgroundColor:'#4f8cff',borderWidth:2,tension:.3,pointRadius:3},
-    {label:'매출비중',data:ms.map(m=>metricVal(AGG[code][m],'revShare')),borderColor:'#c084fc',backgroundColor:'#c084fc',borderWidth:2,tension:.3,pointRadius:3,borderDash:[5,4]}
+    {label:'PU비중',data:ms.map(m=>metricVal(AGG[code][m],'puShare',dlyOf(code,m))),borderColor:'#4f8cff',backgroundColor:'#4f8cff',borderWidth:2,tension:.3,pointRadius:3},
+    {label:'매출비중',data:ms.map(m=>metricVal(AGG[code][m],'revShare',dlyOf(code,m))),borderColor:'#c084fc',backgroundColor:'#c084fc',borderWidth:2,tension:.3,pointRadius:3,borderDash:[5,4]}
   ],'puShare',r=>c1=r,c1);
   drawLine('oneChart2',lab,[
-    {label:'전체 ARPPU',data:ms.map(m=>metricVal(AGG[code][m],'totARPPU')),borderColor:'#8b96ad',backgroundColor:'#8b96ad',borderWidth:2,tension:.3,pointRadius:3},
-    {label:'자체결제 ARPPU',data:ms.map(m=>metricVal(AGG[code][m],'d2cARPPU')),borderColor:'#34d399',backgroundColor:'#34d399',borderWidth:2,tension:.3,pointRadius:3}
+    {label:'전체 ARPPU',data:ms.map(m=>metricVal(AGG[code][m],'totARPPU',dlyOf(code,m))),borderColor:'#8b96ad',backgroundColor:'#8b96ad',borderWidth:2,tension:.3,pointRadius:3},
+    {label:'자체결제 ARPPU',data:ms.map(m=>metricVal(AGG[code][m],'d2cARPPU',dlyOf(code,m))),borderColor:'#34d399',backgroundColor:'#34d399',borderWidth:2,tension:.3,pointRadius:3}
   ],'totARPPU',r=>c2=r,c2);
 }
 
@@ -293,6 +313,8 @@ async function boot(url){
     AGG={}; CODES=[];
     results.forEach(([c,a])=>{if(a){AGG[c]=a;CODES.push(c);}});
     if(!CODES.length)throw new Error("상세 데이터를 불러오지 못했습니다.");
+    // 순수 daily_kpi 탭(있으면 전체 PU·ARPPU를 순결제자 기준으로 사용). 없으면 결제사 폴백.
+    DLY={}; await Promise.all(CODES.map(async c=>{ DLY[c]=await loadDaily(url,c); }));
     const ord=["POTC","IMGN","GBTW","WWM","DS","RESU"]; CODES.sort((a,b)=>{const ia=ord.indexOf(a),ib=ord.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);});
     // 연도 목록
     const yset=new Set(); CODES.forEach(c=>Object.keys(AGG[c]).forEach(m=>yset.add(m.slice(0,4))));
