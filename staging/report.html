@@ -278,6 +278,28 @@ function wTarget(rows,el){
     <div class="kpi gd"><div class="l">목표 ARPPU</div><div class="v">${만(q.tgtArppu)}<small> 원</small></div><div class="d" style="color:${mc(arMult)}">기준월 ${만(b.arppu)}원 → ×${arMult.toFixed(2)}</div></div>
   </div><div class="note">기준월 <b>${b.ym.replace("-",".")}</b> 실적(일평균 PU ${N(b.puDay)}명·ARPPU ${만(b.arppu)}원)에서 시나리오 <b>${SCEN[state.scen]}</b>로 목표 분해. 대상월은 우상단에서 변경.</div>`);wireTools();}
 
+/* ---- 이벤트 밴드 (일별 트래킹 차트 오버레이) ---- */
+function hexA(hex,a){hex=String(hex||"").replace('#','');if(hex.length===3)hex=hex.split('').map(c=>c+c).join('');if(hex.length<6)return 'rgba(251,191,36,'+a+')';const n=parseInt(hex,16);return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')';}
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+const eventBandPlugin={id:'eventBands',beforeDatasetsDraw(chart){
+  const bands=chart.$eventBands; if(!bands||!bands.length)return;
+  const x=chart.scales.x; if(!x)return;
+  const ctx=chart.ctx, ca=chart.chartArea, peak=cssv('--peak')||'#fbbf24';
+  const unit=Math.abs(x.getPixelForValue(1)-x.getPixelForValue(0))||10, half=unit/2;
+  ctx.save();
+  bands.forEach((bd,i)=>{
+    const p0=x.getPixelForValue(bd.a), p1=x.getPixelForValue(bd.b);
+    const x0=Math.max(ca.left,Math.min(p0,p1)-half), x1=Math.min(ca.right,Math.max(p0,p1)+half);
+    ctx.fillStyle=hexA(peak,0.13); ctx.fillRect(x0,ca.top,x1-x0,ca.bottom-ca.top);
+    ctx.fillStyle=hexA(peak,0.85); ctx.fillRect(x0,ca.top,1.5,ca.bottom-ca.top);
+    ctx.font="600 10px 'Pretendard','Malgun Gothic',sans-serif";
+    const t=bd.title.length>13?bd.title.slice(0,12)+'…':bd.title, tw=ctx.measureText(t).width, ly=ca.top+3+(i%4)*15;
+    ctx.fillStyle=peak; roundRect(ctx,x0+2,ly,tw+8,14,3); ctx.fill();
+    ctx.fillStyle='#1a2132'; ctx.textBaseline='top'; ctx.fillText(t,x0+6,ly+2.5);
+  });
+  ctx.restore();
+}};
+
 /* ---- 일별 목표 트래킹 ---- */
 function wDaily(rows,el){
   const q=planParams(rows);const ym=q.ym,days=q.days,dayT=q.dayT;
@@ -297,13 +319,21 @@ function wDaily(rows,el){
   const stats=el0?tbl:`<div class="note">${ym.replace("-",".")}월 실적 데이터가 아직 없습니다. 일 목표 — 결제금액 ${만(dayT)}원 · PU ${N(q.tgtPu)}명 · ARPPU ${만(q.tgtArppu)}원</div>`;
   el.innerHTML=shell(gLabel()+" 일별 목표 트래킹",ym.replace("-",".")+"월 · "+SCEN[state.scen],"trackmonth",
     stats+`<div class="chart-box"><canvas id="c"></canvas></div>
-    <div class="note">막대=일 자체결제 / 초록=누적 실적 / 노랑 점선=누적 목표(월 ${억(q.tD2c)}÷${days}일). 대상월·목표는 임베드 URL 파라미터로 설정.</div>`);wireTools();
-  chart=new Chart($("#c"),{data:{labels,datasets:[
+    <div class="note">막대=일 자체결제 / 초록=누적 실적 / 노랑 점선=누적 목표(월 ${억(q.tD2c)}÷${days}일) · <b style="color:var(--peak)">주황 밴드=이벤트 기간</b>. 대상월·목표는 임베드 URL 파라미터로 설정.</div>`);wireTools();
+  chart=new Chart($("#c"),{plugins:[eventBandPlugin],data:{labels,datasets:[
     {type:"bar",label:"일 자체결제",data:dailyRev,backgroundColor:cssv('--accent')+"66",yAxisID:"y",order:2,borderRadius:2},
     {type:"line",label:"누적 실적",data:cumAct,borderColor:cssv('--green'),borderWidth:2.5,pointRadius:0,tension:.2,yAxisID:"y2",order:0},
     {type:"line",label:"누적 목표",data:cumTgt,borderColor:cssv('--peak'),borderWidth:2,borderDash:[6,4],pointRadius:0,yAxisID:"y2",order:1}]},
     options:baseOpts({x:{grid:{display:false},ticks:{maxTicksLimit:16}},y:{ticks:{callback:v=>만(v)}},y2:{position:"right",grid:{display:false},ticks:{callback:v=>억(v)}}},
-      c=>` ${c.dataset.label}: ${c.parsed.y==null?"-":N(c.parsed.y)+"원"}`)});}
+      c=>` ${c.dataset.label}: ${c.parsed.y==null?"-":N(c.parsed.y)+"원"}`)});
+  const _ch=chart;
+  loadEvents().then(all=>{ try{
+    if(chart!==_ch)return;
+    const evs=(all||[]).filter(e=>(state.game==="ALL"||e.game===state.game||e.game==="ALL")&&e.end>=ym+"-01"&&e.start<=ym+"-31");
+    const bands=evs.map(e=>{const sD=e.start.slice(0,7)===ym?parseInt(e.start.slice(8,10),10):1;const eD=e.end.slice(0,7)===ym?parseInt(e.end.slice(8,10),10):days;return {a:Math.max(0,sD-1),b:Math.min(days-1,eD-1),title:e.title};}).filter(b=>b.b>=b.a);
+    _ch.$eventBands=bands; _ch.update();
+  }catch(e){} }).catch(()=>{});
+}
 
 async function wCountry(el){let games=[state.game];if(state.game==="ALL")games=await discoverGames(state.sheet);
   const agg={};let any=false,hdr="";
