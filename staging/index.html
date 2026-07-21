@@ -768,14 +768,28 @@ const sheetCsvUrl    = GSheet.csvUrl;
 const sheetTabCsvUrl = GSheet.tabCsvUrl;
 const parseCsv       = GSheet.parseCsv;
 const normDate       = GSheet.normDate;
+function inferEventType(t) {
+  t = String(t || "");
+  if (/점검|장애|이슈/.test(t)) return "점검";
+  if (/업데이트|출시|런칭|오픈|추가/.test(t)) return "업데이트";
+  if (/프로모션|쿠폰|할인|1\+1|젬|충전|보너스|결제|판매|이벤트|상점/.test(t)) return "프로모션";
+  return "기타";
+}
 async function syncEvents(silent) {
-  if (!eventSheetUrl) return;
-  const url = sheetCsvUrl(eventSheetUrl);
-  if (!url) { alert("구글시트 URL 형식을 인식하지 못했습니다."); return; }
+  const useMaster = !eventSheetUrl;                 // 별도 이벤트 시트 미연결 → 마스터 시트 events 탭 사용
+  const srcUrl = eventSheetUrl || masterSheetUrl;
+  if (!srcUrl) return;
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const grid = parseCsv(await res.text());
+    let grid;
+    if (useMaster) {
+      grid = await fetchTabGrid(srcUrl, "events");   // 마스터 시트 events 탭 (리포트·Notion 동기화와 동일 소스)
+    } else {
+      const url = sheetCsvUrl(eventSheetUrl);
+      if (!url) { if (!silent) alert("구글시트 URL 형식을 인식하지 못했습니다."); return; }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      grid = parseCsv(await res.text());
+    }
     if (!grid.length) throw new Error("시트가 비어 있습니다.");
     const header = grid[0].map(h => String(h || "").trim().toLowerCase());
     const col = names => header.findIndex(h => names.some(n => h.includes(n)));
@@ -795,7 +809,7 @@ async function syncEvents(silent) {
         game: String(ci.game >= 0 ? g[ci.game] || "" : "").trim().toUpperCase() || "ALL",
         start,
         end: normDate(ci.end >= 0 ? g[ci.end] : null) || start,
-        type: String(ci.type >= 0 ? g[ci.type] || "" : "").trim() || "기타",
+        type: String(ci.type >= 0 ? g[ci.type] || "" : "").trim() || inferEventType(title),
         title,
         memo: String(ci.memo >= 0 ? g[ci.memo] || "" : "").trim()
       });
@@ -1698,6 +1712,7 @@ async function connectMasterSheet(url, silent) {
       activeGame = Object.keys(games).length > 1 ? "ALL" : (Object.keys(games)[0] || "ALL");
       saveState(); renderAll();
     }
+    if (!eventSheetUrl) syncEvents(true); // 별도 이벤트 시트 없으면 마스터 events 탭에서 이벤트 자동 로드
     if (!silent) {
       if (ok.length) toast(`🔗 메인 시트 · ${ok.length}개 프로젝트 로드: ${ok.join(" · ")}${fail.length ? " / 실패: " + fail.join(", ") : ""}`);
       else alert("불러오기 실패: " + fail.join(", "));
