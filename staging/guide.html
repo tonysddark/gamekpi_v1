@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>사용 가이드 — 자체결제 KPI 대시보드</title>
+<style>
+  :root{--bg:#0f1420;--panel:#1a2132;--panel-2:#212a40;--border:#2c3752;--text:#e8ecf5;--muted:#8b96ad;--accent:#4f8cff;--green:#34d399;--peak:#fbbf24;--down:#f87171;--purple:#c084fc;}
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Pretendard','Malgun Gothic',sans-serif;line-height:1.7;}
+  .wrap{max-width:900px;margin:0 auto;padding:20px clamp(12px,3vw,32px) 80px;}
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+  h1{font-size:21px;margin:0;} .spacer{flex:1;}
+  a.btn{background:var(--panel);border:1px solid var(--border);color:var(--accent);padding:7px 14px;border-radius:8px;font-size:13px;text-decoration:none;}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:20px;}
+  .toc{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:22px;}
+  .toc b{font-size:13px;color:var(--muted);display:block;margin-bottom:8px;letter-spacing:.04em;}
+  .toc ol{margin:0;padding-left:20px;columns:2;column-gap:28px;}
+  .toc li{margin:3px 0;} .toc a{color:var(--text);text-decoration:none;font-size:13.5px;}
+  .toc a:hover{color:var(--accent);}
+  section{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:16px;scroll-margin-top:16px;}
+  h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:9px;}
+  h2 .n{background:var(--panel-2);border:1px solid var(--border);color:var(--accent);width:26px;height:26px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex:none;}
+  h3{font-size:14.5px;margin:16px 0 8px;color:var(--text);}
+  p,li{font-size:14px;color:var(--text);} p{margin:8px 0;}
+  ul,ol{margin:8px 0;padding-left:22px;} li{margin:5px 0;}
+  .muted{color:var(--muted);} b{font-weight:700;}
+  code{background:var(--panel-2);border:1px solid var(--border);padding:1px 6px;border-radius:5px;font-size:12.5px;color:#dbeafe;}
+  .steps{counter-reset:s;list-style:none;padding:0;}
+  .steps>li{counter-increment:s;position:relative;padding:12px 0 12px 44px;border-bottom:1px solid rgba(255,255,255,.06);}
+  .steps>li:last-child{border-bottom:none;}
+  .steps>li::before{content:counter(s);position:absolute;left:0;top:11px;width:28px;height:28px;border-radius:8px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;}
+  .callout{border-left:3px solid var(--peak);background:var(--panel-2);border-radius:0 8px 8px 0;padding:10px 14px;margin:12px 0;font-size:13px;color:var(--muted);}
+  .callout.ok{border-left-color:var(--green);} .callout.info{border-left-color:var(--accent);}
+  .callout b{color:var(--text);}
+  .flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:14px 0;}
+  .flow .box{flex:1;min-width:120px;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:12.5px;}
+  .flow .box .t{font-weight:700;font-size:13px;margin-bottom:3px;}
+  .flow .arrow{display:flex;align-items:center;color:var(--muted);font-size:18px;}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0;}
+  th,td{padding:8px 11px;text-align:left;border-bottom:1px solid rgba(255,255,255,.07);vertical-align:top;}
+  th{color:var(--muted);font-size:11.5px;font-weight:700;background:var(--panel-2);}
+  td code{white-space:nowrap;}
+  pre{background:#0b0f1a;border:1px solid var(--border);border-radius:8px;padding:14px;overflow:auto;font-size:11.5px;color:#cbd5e1;white-space:pre;margin:10px 0;line-height:1.55;}
+  .pill{font-size:11px;padding:2px 9px;border-radius:20px;border:1px solid var(--border);color:var(--muted);}
+  .pill.new{color:var(--green);border-color:var(--green);} .pill.chg{color:var(--peak);border-color:var(--peak);}
+  .top{color:var(--muted);font-size:12px;text-decoration:none;float:right;} .top:hover{color:var(--accent);}
+  .faq dt{font-weight:700;margin-top:12px;color:var(--text);font-size:13.5px;}
+  .faq dd{margin:4px 0 0;color:var(--muted);font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap" id="top">
+
+<header>
+  <h1>📖 사용 가이드</h1>
+  <div class="spacer"></div>
+  <a class="btn" href="index.html">📊 대시보드</a>
+  <a class="btn" href="overview.html">📊 전사 비교</a>
+  <a class="btn" href="upload.html">📥 데이터 업로드</a>
+</header>
+<div class="sub">자체결제 KPI 대시보드 운영·사용 안내 · 데이터 업데이트와 웹훅 설정 중심</div>
+
+<div class="toc">
+  <b>목차</b>
+  <ol>
+    <li><a href="#s1">전체 개요</a></li>
+    <li><a href="#s2">데이터 흐름</a></li>
+    <li><a href="#s3">처음 한 번 — 연결·웹훅 설정</a></li>
+    <li><a href="#s4">주기 업무 — 데이터 업데이트</a></li>
+    <li><a href="#s5">페이지별 사용법</a></li>
+    <li><a href="#s6">지표 정의</a></li>
+    <li><a href="#s7">구글시트 구조</a></li>
+    <li><a href="#s8">문제 해결(FAQ)</a></li>
+    <li><a href="#s9">개발·배포·롤백</a></li>
+  </ol>
+</div>
+
+<section id="s1">
+  <h2><span class="n">1</span>전체 개요 <a class="top" href="#top">↑ 위로</a></h2>
+  <p>4개의 페이지로 구성됩니다. 모든 데이터는 <b>구글시트에서 매번 자동 로드</b>되며, 코드/사이트에는 실데이터가 저장되지 않습니다.</p>
+  <table>
+    <tr><th>페이지</th><th>용도</th></tr>
+    <tr><td><code>index.html</code> 📊 대시보드</td><td>단일 게임의 일별 매출·자체결제 비중·추이. 게임 탭 전환.</td></tr>
+    <tr><td><code>kpi-planner.html</code> 🎯 KPI 플래너</td><td>단일 게임 자체결제 <b>안착 목표·시뮬레이터·일별 트래킹·TOP10</b>.</td></tr>
+    <tr><td><code>overview.html</code> 📊 전사 비교</td><td>6개 프로젝트 <b>월별 ARPPU·PU·자체결제 PU비중</b> 비교. 드롭다운으로 전체/프로젝트별.</td></tr>
+    <tr><td><code>upload.html</code> 📥 데이터 업로드</td><td>다운로드한 엑셀을 시트와 <b>비교 후 신규·변경분만 반영</b>.</td></tr>
+  </table>
+</section>
+
+<section id="s2">
+  <h2><span class="n">2</span>데이터 흐름 <a class="top" href="#top">↑ 위로</a></h2>
+  <div class="flow">
+    <div class="box"><div class="t">① KPI 추출</div>사내 지표에서 엑셀(.xlsx) 다운로드 (최근 30일)</div>
+    <div class="arrow">→</div>
+    <div class="box"><div class="t">② 업로드 페이지</div>드롭 → 시트와 비교 → 변경분 반영</div>
+    <div class="arrow">→</div>
+    <div class="box"><div class="t">③ 구글시트</div>탭별로 데이터 누적 (원본)</div>
+    <div class="arrow">→</div>
+    <div class="box"><div class="t">④ 대시보드/플래너/전사비교</div>열 때마다 시트에서 자동 로드</div>
+  </div>
+  <div class="callout info">핵심: <b>구글시트가 유일한 원본(single source)</b>입니다. 사이트는 시트를 읽기만 하고, 업로드 페이지만 시트에 씁니다.</div>
+</section>
+
+<section id="s3">
+  <h2><span class="n">3</span>처음 한 번 — 연결·웹훅 설정 <a class="top" href="#top">↑ 위로</a></h2>
+  <h3>3-1. 시트 연결</h3>
+  <p>아무 페이지에서든 구글시트 URL을 한 번 연결하면 <b>모든 페이지가 같은 시트를 공유</b>합니다(브라우저에 저장). 시트는 <b>"링크가 있는 모든 사용자 — 뷰어"</b>로 공유되어 있어야 읽을 수 있습니다.</p>
+
+  <h3>3-2. 쓰기 웹훅(Apps Script) — 자동 반영을 켜려면</h3>
+  <p>사이트는 정적 페이지라 시트에 <b>직접 쓸 수 없습니다.</b> 아래 Apps Script를 <b>1회</b> 배포해 "쓰기 통로"를 열면, 이후엔 엑셀 드롭 → 반영이 자동으로 됩니다. (설정 전에도 <b>CSV 내려받기</b>로 수동 반영 가능)</p>
+  <ol class="steps">
+    <li>구글시트 → 상단 메뉴 <b>확장 프로그램 → Apps Script</b></li>
+    <li>기본 코드를 지우고 아래 코드를 붙여넣고 <b>저장</b>(💾)</li>
+    <li>우측 상단 <b>배포 → 새 배포</b> → 유형 <b>웹 앱</b> 선택</li>
+    <li>실행 계정 <b>나</b>, 액세스 권한 <b>모든 사용자</b> → <b>배포</b> (최초 1회 권한 승인)</li>
+    <li>생성된 <b>웹 앱 URL</b>(<code>…/exec</code>)을 복사</li>
+    <li>업로드 페이지 → "쓰기 웹훅"에 붙여넣고 <b>저장</b></li>
+  </ol>
+  <pre>function doPost(e){
+  try{
+    var b = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName(b.sheet);
+    if(!sh){ sh = ss.insertSheet(b.sheet); sh.appendRow(b.header); }
+    var ncol = b.header.length;
+    var repl = {}; (b.replaceDates||[]).forEach(function(d){ repl[d] = true; });
+    var last = sh.getLastRow(), keep = [];
+    if(last > 1){
+      var data = sh.getRange(2,1,last-1,ncol).getValues();
+      for(var i=0;i&lt;data.length;i++){ if(!repl[iso_(data[i][0])]) keep.push(data[i]); }
+    }
+    var incoming = (b.rows||[]).map(function(r){ var row=r.slice(); row[0]=parseDate_(r[0]); return row; });
+    var merged = keep.concat(incoming);
+    merged.sort(function(a,b){ return a[0]-b[0]; });
+    if(last > 1) sh.getRange(2,1,last-1,ncol).clearContent();
+    if(merged.length) sh.getRange(2,1,merged.length,ncol).setValues(merged);
+    return json_({ok:true, added:incoming.length, kept:keep.length});
+  }catch(err){ return json_({ok:false, error:String(err)}); }
+}
+function parseDate_(iso){ var p=String(iso).split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
+function iso_(v){
+  if(v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  var d = new Date(String(v)); return isNaN(d) ? String(v) : Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd");
+}
+function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }</pre>
+  <div class="callout ok">이 코드는 <b>대상 날짜 행만 제거 후 파일 행을 추가하고 날짜순으로 재정렬</b>합니다. 파일에 없는 과거 날짜는 절대 건드리지 않습니다.</div>
+</section>
+
+<section id="s4">
+  <h2><span class="n">4</span>주기 업무 — 데이터 업데이트 <a class="top" href="#top">↑ 위로</a></h2>
+  <ol class="steps">
+    <li>사내 지표에서 각 프로젝트 엑셀 다운로드 — <b>결제사·플랫폼별</b> · <b>daily_kpi 자체결제</b> · <b>daily_kpi(순수)</b> 파일 (세 유형 모두 자동 인식)</li>
+    <li>업로드 페이지에 <b>여러 개 한 번에 드롭</b> (파일명 앞부분으로 프로젝트 자동 인식)</li>
+    <li>파일별로 <span class="pill new">신규 N일</span> <span class="pill chg">변경 M일</span> <span class="pill">동일 K일</span> 자동 표시 → <b>"변경 상세"</b>로 기존→신규 매출 확인</li>
+    <li><b>변경분 반영</b> 버튼 클릭 → 신규+변경 날짜만 시트에 반영</li>
+    <li>대시보드/플래너/전사비교를 새로고침하면 반영됨</li>
+  </ol>
+  <div class="callout"><b>30일 규칙</b> — 다운로드가 최근 30일치만 담기므로, <b>업로드 간격이 30일을 넘기면 그 사이 날짜가 비어버립니다.</b> 최소 30일에 한 번은 올려주세요.</div>
+  <div class="callout ok"><b>덮어쓰기 걱정 없음</b> — 겹치는 날은 값이 <b>바뀐 경우에만</b> 교체(정산 지연 수정치 반영), 동일하면 건너뜁니다. 과거 이력은 보존됩니다.</div>
+</section>
+
+<section id="s5">
+  <h2><span class="n">5</span>페이지별 사용법 <a class="top" href="#top">↑ 위로</a></h2>
+  <h3>📊 전사 비교 (overview)</h3>
+  <ul>
+    <li>상단 <b>드롭다운</b>: <b>전체 비교</b>(6개 프로젝트 나란히) / <b>프로젝트 선택</b>(월별 상세)</li>
+    <li><b>연도</b> 선택 · 지표 토글: 자체결제 PU비중 · 매출비중 · 전체 ARPPU · 자체결제 ARPPU · 전체 PU</li>
+    <li>히트맵 표(진할수록 비중↑) + 추이 차트. 최신월은 <span class="pill">진행중</span> 표시</li>
+  </ul>
+  <h3>🎯 KPI 플래너 (planner)</h3>
+  <ul><li>단일 게임 선택 → 자체결제 안착 목표·시뮬레이터·일별 트래킹·과거 최고 실적일(TOP10)</li></ul>
+  <h3>📊 대시보드 (index)</h3>
+  <ul><li>게임 탭 전환 → 일별 매출·자체결제 비중·PU/ARPPU 추이. 기간(7/14/30/90/전체) 선택</li></ul>
+</section>
+
+<section id="s6">
+  <h2><span class="n">6</span>지표 정의 <a class="top" href="#top">↑ 위로</a></h2>
+  <table>
+    <tr><th>지표</th><th>정의</th></tr>
+    <tr><td><b>자체결제</b></td><td>결제수단(PG)이 <b>다날·엑솔라·페이레터·페이레터 PPAY</b>인 매출 (마켓 라벨 Google/Apple과 무관)</td></tr>
+    <tr><td><b>일평균 PU</b></td><td>월 PU합 ÷ 일수 (PU는 채널 합산 기준)</td></tr>
+    <tr><td><b>ARPPU</b></td><td>IAP 매출 ÷ PU (광고 IAA 제외)</td></tr>
+    <tr><td><b>자체결제 매출비중</b></td><td>자체결제 매출 ÷ 전체 IAP 매출</td></tr>
+    <tr><td><b>자체결제 PU비중</b></td><td>자체결제 일평균 PU ÷ 전체 일평균 PU</td></tr>
+  </table>
+  <div class="callout"><b>PU 기준 두 가지</b> — 결제사 탭 기반 지표(대시보드·플래너·자체결제 PU)는 <b>채널 합산</b>(여러 PG 결제 중복 포함). 전사 비교의 <b>전체 PU·ARPPU는 daily_kpi 순결제자 기준</b>(해당 월 <code>코드-daily</code> 데이터가 있을 때, 없으면 채널합산 폴백). 그래서 전사비교 전체 PU가 결제사 합산보다 작을 수 있습니다.</div>
+</section>
+
+<section id="s7">
+  <h2><span class="n">7</span>구글시트 구조 <a class="top" href="#top">↑ 위로</a></h2>
+  <table>
+    <tr><th>탭</th><th>공급 파일</th><th>컬럼</th><th>읽는 페이지</th></tr>
+    <tr><td><code>코드-kpi</code><br>(예: POTC-kpi)</td><td>결제사·플랫폼별 xlsx</td><td>datekey · market_name_KR · platform_device_name_KR · pg_id · pg_name_KR · PU · revenue</td><td>플래너 · 전사비교</td></tr>
+    <tr><td><code>코드</code><br>(예: POTC)</td><td>daily_kpi 자체결제 xlsx</td><td>datekey · DAU · 전체 IAP 매출 · 자체 결제 매출 · 비중 · 자체 결제 PU · ARPPU · ARPDAU</td><td>대시보드</td></tr>
+    <tr><td><code>코드-daily</code><br>(예: POTC-daily)</td><td>daily_kpi(순수) xlsx</td><td>datekey · DAU · DRU · <b>PU(순결제자)</b> · 총/IAP/마켓/자체결제/IAA 매출 · PUR · <b>ARPPU(전체)</b> · ARPDAU · Install · NNPU…</td><td>전사 비교(전체 PU·ARPPU)</td></tr>
+    <tr><td><code>index</code></td><td>수동</td><td>game · start · end · title · memo (게임 목록/이벤트)</td><td>게임 자동 발견</td></tr>
+  </table>
+  <p class="muted">프로젝트 추가 = 시트에 <code>코드-kpi</code>·<code>코드</code> 탭을 만들고 첫 데이터를 업로드하면 자동 인식됩니다.</p>
+</section>
+
+<section id="s8">
+  <h2><span class="n">8</span>문제 해결 (FAQ) <a class="top" href="#top">↑ 위로</a></h2>
+  <dl class="faq">
+    <dt>데이터가 안 보여요 / "데이터 미연결"</dt>
+    <dd>시트 URL 연결 여부와 시트 공유 설정("링크가 있는 모든 사용자 — 뷰어")을 확인하세요. 대시보드·플래너에서 한 번 연결하면 다른 페이지도 이어집니다.</dd>
+    <dt>업로드했는데 "동일 N일"만 나와요</dt>
+    <dd>정상입니다. 이미 시트에 있는 날짜와 값이 같으면 반영할 게 없습니다. 값이 바뀐 날만 <span class="pill chg">변경</span>으로 잡힙니다.</dd>
+    <dt>"프로젝트 미인식"</dt>
+    <dd>파일명 앞부분이 프로젝트 코드가 아니면 못 잡습니다. 파일 카드의 드롭다운에서 직접 선택하세요.</dd>
+    <dt>웹훅 반영이 실패해요</dt>
+    <dd>Apps Script를 <b>"모든 사용자" 액세스</b>로 배포했는지, 웹 앱 URL이 <code>/exec</code>로 끝나는지 확인하세요. 코드 수정 후에는 <b>새 배포</b>(또는 배포 관리에서 버전 갱신)가 필요합니다. 임시로는 <b>CSV 내려받기</b>로 반영하세요.</dd>
+    <dt>중간 날짜가 비어요</dt>
+    <dd>다운로드가 최근 30일치라, 업로드 간격이 30일을 넘기면 공백이 생깁니다. 30일 안에 한 번씩 올리세요.</dd>
+  </dl>
+</section>
+
+<section id="s9">
+  <h2><span class="n">9</span>개발·배포·롤백 <a class="top" href="#top">↑ 위로</a></h2>
+  <ul>
+    <li><b>개발</b>은 <code>dev</code> 브랜치에서 → 변경분을 <code>/staging/</code>에 미러해 테스트 → 이상 없으면 <code>main</code> 머지 → 운영 반영</li>
+    <li><b>운영 URL</b>: <code>https://tonysddark.github.io/gamekpi_v1/</code> (main 기준)</li>
+    <li><b>실데이터 커밋 금지</b> — 데이터는 구글시트에만. 코드/페이지만 커밋</li>
+    <li><b>롤백</b>: 안정 기준점 태그 <code>stable-1.11.0</code>. 문제 시 <code>git revert -m 1 &lt;머지커밋&gt;</code> 한 번으로 복구</li>
+  </ul>
+</section>
+
+<p class="muted" style="text-align:center;font-size:12px;margin-top:10px;">자체결제 KPI 대시보드 · Live Strategy</p>
+</div>
+</body>
+</html>
