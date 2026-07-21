@@ -123,28 +123,52 @@
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sh = ss.getSheetByName(b.sheet);
     if(!sh){ sh = ss.insertSheet(b.sheet); sh.appendRow(b.header); }
-    var ncol = b.header.length;
+    var ncol = b.header.length, last = sh.getLastRow();
+    var fmtRow = last >= 2 ? sh.getRange(2,1,1,ncol).getNumberFormats()[0] : null;   // 기존 표시서식 캡처
     var repl = {}; (b.replaceDates||[]).forEach(function(d){ repl[d] = true; });
-    var last = sh.getLastRow(), keep = [];
+    var keep = [];
     if(last > 1){
       var data = sh.getRange(2,1,last-1,ncol).getValues();
-      for(var i=0;i&lt;data.length;i++){ if(!repl[iso_(data[i][0])]) keep.push(data[i]); }
+      for(var i=0;i&lt;data.length;i++){ if(!repl[iso_(data[i][0])]){ data[i][0]=toDate_(data[i][0]); keep.push(data[i]); } }
     }
-    var incoming = (b.rows||[]).map(function(r){ var row=r.slice(); row[0]=parseDate_(r[0]); return row; });
+    var incoming = (b.rows||[]).map(function(r){ var row=r.slice(); row[0]=toDate_(r[0]); return row; });
     var merged = keep.concat(incoming);
-    merged.sort(function(a,b){ return a[0]-b[0]; });
-    if(last > 1) sh.getRange(2,1,last-1,ncol).clearContent();
-    if(merged.length) sh.getRange(2,1,merged.length,ncol).setValues(merged);
+    merged.sort(function(a,b){ return a[0]-b[0]; });         // 날짜 실제값 기준 정렬
+    writeSorted_(sh, merged, ncol, fmtRow);
     return json_({ok:true, added:incoming.length, kept:keep.length});
   }catch(err){ return json_({ok:false, error:String(err)}); }
 }
-function parseDate_(iso){ var p=String(iso).split("-"); return new Date(+p[0], +p[1]-1, +p[2]); }
-function iso_(v){
-  if(v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd");
-  var d = new Date(String(v)); return isNaN(d) ? String(v) : Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd");
+// 이미 들어간 데이터의 순서·서식을 한 번에 정리 (편집기에서 fixAll 실행)
+function fixAll(){
+  var ss = SpreadsheetApp.getActiveSpreadsheet(), n = 0;
+  ss.getSheets().forEach(function(sh){
+    if(sh.getLastRow() &lt; 2 || sh.getLastColumn() &lt; 1) return;
+    if(String(sh.getRange(1,1).getValue()).toLowerCase().indexOf("datekey") &lt; 0) return;  // 데이터 탭만
+    var ncol = sh.getLastColumn(), last = sh.getLastRow();
+    var fmtRow = sh.getRange(2,1,1,ncol).getNumberFormats()[0];
+    var data = sh.getRange(2,1,last-1,ncol).getValues();
+    data.forEach(function(r){ r[0] = toDate_(r[0]); });
+    data.sort(function(a,b){ return a[0]-b[0]; });
+    writeSorted_(sh, data, ncol, fmtRow); n++;
+  });
+  ss.toast(n + "개 탭 정리 완료");
 }
+function writeSorted_(sh, rows, ncol, fmtRow){
+  var last = sh.getLastRow();
+  if(last > 1) sh.getRange(2,1,last-1,ncol).clearContent();
+  if(!rows.length) return;
+  sh.getRange(2,1,rows.length,ncol).setValues(rows);
+  if(fmtRow){ var f=[]; for(var i=0;i&lt;rows.length;i++) f.push(fmtRow); sh.getRange(2,1,rows.length,ncol).setNumberFormats(f); }  // 콤마·% 등 복원
+  sh.getRange(2,1,rows.length,1).setNumberFormat("yyyy-mm-dd");   // datekey 날짜형 통일
+}
+function toDate_(v){
+  if(v instanceof Date) return v;
+  if(typeof v === "number" &amp;&amp; v > 20000 &amp;&amp; v &lt; 80000) return new Date(Date.UTC(1899,11,30) + Math.round(v)*86400000);
+  var d = new Date(String(v)); return isNaN(d) ? v : d;
+}
+function iso_(v){ var d = toDate_(v); return (d instanceof Date &amp;&amp; !isNaN(d)) ? Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(v); }
 function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }</pre>
-  <div class="callout ok">이 코드는 <b>대상 날짜 행만 제거 후 파일 행을 추가하고 날짜순으로 재정렬</b>합니다. 파일에 없는 과거 날짜는 절대 건드리지 않습니다.</div>
+  <div class="callout ok">대상 날짜 행만 교체 후 <b>날짜 실제값 기준 정렬 + 기존 표시서식(콤마·%·날짜형) 복원</b>. 파일에 없는 과거 날짜는 건드리지 않습니다. 이미 들어간 데이터가 어긋났다면 편집기에서 <b>fixAll</b>을 한 번 실행하세요.</div>
 </section>
 
 <section id="s4">
