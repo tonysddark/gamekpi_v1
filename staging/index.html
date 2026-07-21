@@ -1510,24 +1510,26 @@ function renderEvents() {
         <th>자체결제 일평균</th><th>매출 vs 직전</th><th>비중</th><th>비중 vs 직전</th><th>PU vs 직전</th>
       </tr></thead>
       <tbody>${list.map(g => {
-        const ctx = groupRowsCtx(g);
-        const eff = periodEffect(ctx.rows, g.start, g.end);
-        const evHtml = g.events.map(e =>
-          `<div style="margin:2px 0;text-align:left"><span class="ev-badge" style="background:${typeColor(e.type)}">${e.type}</span> ${e.title}${e.game !== "ALL" ? ` <span style="color:var(--muted);font-size:11px">[${e.game}]</span>` : ""}</div>`).join("");
-        return `<tr class="ev-row" data-num="${g.num}" style="cursor:pointer" title="클릭하면 상세 보기">
-          <td><span class="ev-num" style="background:${typeColor(g.events[0].type)}">${g.num}</span></td>
-          <td>${mmdd(g.start)}${g.end !== g.start ? "~" + mmdd(g.end) : ""}<br><span style="color:var(--muted);font-size:11px">${eff ? eff.days + "일" : "-"}</span></td>
-          <td style="text-align:left">${evHtml}</td>
-          <td>${ctx.label}</td>
-          <td>${eff ? fmtWon(eff.cur.d2c) + "원" : "-"}</td>
-          <td>${eff ? evDelta(eff.d2cDelta, "%") : "-"}</td>
-          <td>${eff ? fmtPct(eff.cur.ratio) : "-"}</td>
-          <td>${eff ? evDelta(eff.ratioDelta, "%p") : "-"}</td>
-          <td>${eff ? evDelta(eff.puDelta, "%") : "-"}</td>
-        </tr>`;
+        const multi = g.events.length > 1;
+        return g.events.map((e, idx) => {
+          const ctxE = groupRowsCtx({ events: [e] });      // 이벤트별 게임 컨텍스트
+          const eff = periodEffect(ctxE.rows, e.start, e.end); // 각 이벤트 자기 기간 vs 직전 동일 일수
+          const numLabel = multi ? `${g.num}-${idx + 1}` : `${g.num}`;
+          return `<tr class="ev-row" data-num="${g.num}" style="cursor:pointer" title="클릭하면 상세 보기">
+            <td><span class="ev-num" style="background:${typeColor(e.type)}">${numLabel}</span></td>
+            <td>${mmdd(e.start)}${e.end !== e.start ? "~" + mmdd(e.end) : ""}<br><span style="color:var(--muted);font-size:11px">${eff ? eff.days + "일" : "-"}</span></td>
+            <td style="text-align:left"><span class="ev-badge" style="background:${typeColor(e.type)}">${e.type}</span> ${e.title}${e.game !== "ALL" ? ` <span style="color:var(--muted);font-size:11px">[${e.game}]</span>` : ""}</td>
+            <td>${ctxE.label}</td>
+            <td>${eff ? fmtWon(eff.cur.d2c) + "원" : "-"}</td>
+            <td>${eff ? evDelta(eff.d2cDelta, "%") : "-"}</td>
+            <td>${eff ? fmtPct(eff.cur.ratio) : "-"}</td>
+            <td>${eff ? evDelta(eff.ratioDelta, "%p") : "-"}</td>
+            <td>${eff ? evDelta(eff.puDelta, "%") : "-"}</td>
+          </tr>`;
+        }).join("");
       }).join("")}</tbody>
     </table></div>
-    <div class="m-empty" style="margin-top:8px">행을 클릭하면 상세 내용을 볼 수 있습니다 · "vs 직전" = 이벤트 기간 평균을 직전 동일 일수 평균과 비교 · 겹치는 기간의 이벤트는 한 묶음으로 분석</div>`;
+    <div class="m-empty" style="margin-top:8px">행을 클릭하면 상세 내용을 볼 수 있습니다 · "vs 직전" = 이벤트 기간 평균을 직전 동일 일수 평균과 비교 · 겹치는 기간도 <b>이벤트별로 각자 기간 성과</b>를 표시(번호 6-1·6-2는 같은 차트 밴드 묶음)</div>`;
   body.querySelectorAll(".ev-row").forEach(tr => {
     tr.addEventListener("click", () => {
       const g = evPageGroups.find(x => x.num === Number(tr.dataset.num));
