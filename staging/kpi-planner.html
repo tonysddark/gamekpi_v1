@@ -271,7 +271,7 @@
   </div>
   <div id="targetInputs" style="overflow-x:auto;margin-bottom:16px"></div>
   <div class="chart-box" style="height:320px"><canvas id="chTargets"></canvas></div>
-  <div style="color:var(--muted);font-size:12px;margin-top:8px">표: 선택 채널의 목표 매출·PU·ARPPU (기준 월 비중으로 배분, 시나리오로 PU↔ARPPU 분해) · 막대: 자체결제 매출(파랑=실적 / 보라=목표) · 선: 비중(초록=실적 / 노랑=목표 / 빨강=50% 안착선). ×배수는 기준 월 대비 필요 성장.</div>
+  <div style="color:var(--muted);font-size:12px;margin-top:8px">표: 선택 채널의 목표 결제액·PU·ARPPU (기준 월 비중으로 배분, 시나리오로 PU↔ARPPU 분해). <b>채널 3개 모두 선택 시 '목표 전 채널 결제액'은 목표 자체결제와 같습니다(전 채널 합 = 자체결제 전체).</b> · 막대: 자체결제 매출(파랑=실적 / 보라=목표) · 선: 비중(초록=실적 / 노랑=목표 / 빨강=50% 안착선). ×배수는 기준 월 대비 필요 성장.</div>
 </div>
 
 <!-- 일별 차트 기간 선택 -->
@@ -687,7 +687,7 @@ function renderTargetInputs(){
   document.getElementById("targetInputs").innerHTML = `
     <table>
       <thead><tr><th>월</th><th>예상 총매출(억)</th><th>목표 비중(%)</th><th>달성 자체결제</th><th>목표 자체결제</th>
-        <th>목표 <span class="tChLbl">웹상점</span> 매출</th>
+        <th>목표 <span class="tChLbl">웹상점</span> 결제액</th>
         <th>목표 <span class="tChLbl">웹상점</span> PU/일</th>
         <th>목표 <span class="tChLbl">웹상점</span> ARPPU</th></tr></thead>
       <tbody id="targetRows"></tbody>
@@ -771,7 +771,7 @@ let dScenario = "arppu";
 const CH_NAME = { web:"WEB상점", apk:"인게임(APK)", pc:"PC" };
 const SCEN_LABEL = { arppu:"ARPPU 유지·PU 성장", pu:"PU 유지·ARPPU 성장", bal:"균형(둘 다 성장)" };
 function selChans(){ const s=["web","apk","pc"].filter(k=>dChans[k]); return s.length?s:["web","apk","pc"]; }
-function chanLabel(){ const s=selChans(); return s.length===3?"전체":s.map(k=>CH_NAME[k]).join("+"); }
+function chanLabel(){ const s=selChans(); return s.length===3?"전 채널":s.map(k=>CH_NAME[k]).join("+"); }
 function chanColor(){ const s=selChans(); return s.length===1?(s[0]==="web"?"#c084fc":s[0]==="pc"?"#34d399":"#4f8cff"):"#4f8cff"; }
 /* 선택 채널의 기준월(curBase) 일평균 기준선 */
 function chanBase(){ const cb=curBase, s=selChans(); let pu=0,rev=0; s.forEach(k=>{pu+=cb[k].pu; rev+=cb[k].dayRev;}); return { puDay:pu, dayRev:rev, arppu:pu?rev/pu:0 }; }
