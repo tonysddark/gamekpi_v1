@@ -249,7 +249,7 @@
 
 <!-- 하반기 월별 목표 -->
 <div class="panel">
-  <h2>📈 2026 월별 목표 (1~12월) <span>예상 총매출·목표 비중 입력 → 목표 매출·PU·ARPPU 자동 계산 · 달성 자체결제=실적(미발생 월 -) · 채널·시나리오 연동</span></h2>
+  <h2>📈 2026 월별 목표 (1~12월) <span>예상 총매출 기본값=지난달 확정 실적·이번달~미래 사업계획(2026-kpi 탭) · 목표 비중 입력 → 목표 매출·PU·ARPPU 자동 계산 · 달성 자체결제=실적(미발생 월 -) · 채널·시나리오 연동</span></h2>
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:8px">
       <b style="font-size:12px;color:var(--muted)">채널(복수)</b>
@@ -326,6 +326,7 @@ let CHANNEL = [];  // 일별 자체결제 채널 {date, web_pu, web_rev, apk_pu,
 let GAMES = [];    // 게임코드 목록
 let CUR_GAME = "";
 let SHEET_URL = "";
+let BIZPLAN = {};  // 사업계획 월별 전체매출(원) — 현재 게임 기준 {"2026-08":2000000000,...}
 
 /* 공통 데이터 계층(assets/gsheet.js) 별칭 — 한 곳에서 관리 */
 const sheetTabCsvUrl = GSheet.tabCsvUrl;
@@ -396,6 +397,25 @@ async function loadDetail(url, code) {
   }
   if (!rows.length) throw new Error(`'${code}-kpi' 탭에 유효한 데이터가 없습니다.`);
   return rows;
+}
+
+/* 사업계획 매출 탭('2026-kpi') 로드 — 헤더=게임코드, 1열=월, 값=전체매출(원) */
+async function loadBizPlan(url, code) {
+  BIZPLAN = {};
+  try {
+    const grid = await fetchGrid(url, "2026-kpi");
+    const hdr = (grid[0] || []).map(x => String(x || "").trim().toUpperCase());
+    const col = hdr.indexOf(String(code).toUpperCase());
+    if (col < 0) return;                       // 이 게임의 계획 열 없음
+    for (let i = 1; i < grid.length; i++) {
+      const g = grid[i]; if (!g) continue;
+      const mm = String(g[0] || "").trim().match(/(\d{4})[-.\/\s]+(\d{1,2})/); // "2026-08" 등
+      if (!mm) continue;
+      const m = mm[1] + "-" + mm[2].padStart(2, "0");
+      const v = toNum(g[col]);
+      if (v != null) BIZPLAN[m] = v;
+    }
+  } catch (e) { /* 탭 없거나 실패 시 계획 미적용(실적/기본값 사용) */ }
 }
 
 /* ===== RAW → 전 지표 계산 ===== */
@@ -680,7 +700,17 @@ const TMONTHS = Array.from({length:12},(_,i)=>"2026-"+String(i+1).padStart(2,"0"
 const monthDays = ym=>{const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate();};
 const monthLabel = ym=>(+ym.slice(5))+"월";
 const tRatioDefault = m=>{ if(DEFAULT_RATIO[m]!=null)return DEFAULT_RATIO[m]; const mo=MONTHLY[m]; return mo&&mo.total?Math.round(mo.d2c/mo.total*100):50; };
-const tTotalDefault = m=>{ const mo=MONTHLY[m]; return mo?(mo.total/1e8).toFixed(1):H1TOTAL_AVG; };
+// 현재 연-월("YYYY-MM"). 이보다 이전 월 = 완료(확정)
+const nowYM = ()=>{ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
+const isConfirmedMonth = m=> m < nowYM();  // 완전히 지난 월 → 확정 실적 사용
+// 예상 총매출 기본값: 확정월=실적, 현재·미래월=사업계획(2026-kpi 탭), 없으면 실적/평균 폴백
+const tTotalDefault = m=>{
+  const mo = MONTHLY[m];
+  if(isConfirmedMonth(m) && mo && mo.total) return (mo.total/1e8).toFixed(1); // 지난달 → 확정 실적
+  if(BIZPLAN[m]!=null) return (BIZPLAN[m]/1e8).toFixed(1);                    // 사업계획
+  if(mo && mo.total) return (mo.total/1e8).toFixed(1);                        // 폴백: 실적(진행중 포함)
+  return H1TOTAL_AVG;
+};
 let targetChart = null;
 
 function renderTargetInputs(){
@@ -1082,6 +1112,7 @@ async function loadGame(code){
   CUR_GAME = code;
   localStorage.setItem("kpiplanner-game", code);
   document.getElementById("plGame").textContent = code;
+  await loadBizPlan(SHEET_URL, code); // 사업계획 매출(미래월 예상 총매출 기본값)
   computeAll();
   initRender();
 }
