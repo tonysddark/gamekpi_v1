@@ -267,6 +267,13 @@
         <button class="scenBtn" data-s="bal">균형</button>
       </span>
     </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <b style="font-size:12px;color:var(--muted)">PU 단위</b>
+      <span class="seg">
+        <button class="puUnitBtn active" data-u="day">일</button>
+        <button class="puUnitBtn" data-u="month">월</button>
+      </span>
+    </div>
     <span style="color:var(--muted);font-size:12px">채널·시나리오는 일별 트래킹과 공유됩니다</span>
   </div>
   <div id="targetInputs" style="overflow-x:auto;margin-bottom:16px"></div>
@@ -725,7 +732,7 @@ function renderTargetInputs(){
     <table>
       <thead><tr><th>월</th><th>예상 총매출(억)</th><th>목표 비중(%)</th><th>달성 자체결제</th><th>목표 자체결제</th>
         <th>목표 <span class="tChLbl">웹상점</span> 결제액</th>
-        <th>목표 <span class="tChLbl">웹상점</span> PU/일</th>
+        <th>목표 <span class="tChLbl">웹상점</span> PU/<span class="tPuUnit">일</span></th>
         <th>목표 <span class="tChLbl">웹상점</span> ARPPU</th></tr></thead>
       <tbody id="targetRows"></tbody>
     </table>`;
@@ -760,12 +767,14 @@ function targetOf(m){ // 한 달 목표 계산 (선택 채널 + 시나리오 연
 }
 function updateTargetCells(){ // 파생 셀만 갱신 (입력 focus 유지)
   document.querySelectorAll(".tChLbl").forEach(e=>e.textContent = chanLabel());
+  document.querySelectorAll(".tPuUnit").forEach(e=>e.textContent = puUnit==="month"?"월":"일");
   TMONTHS.forEach(m=>{
     const t = targetOf(m);
     if($("t_act_"+m)) $("t_act_"+m).textContent = MONTHLY[m]?억(MONTHLY[m].d2c):"-"; // 달성(실적), 미발생 월은 -
     if($("t_d2c_"+m)) $("t_d2c_"+m).textContent = 억(t.tD2c);
     if($("t_ch_"+m)) $("t_ch_"+m).textContent = 억(t.chMonth);
-    if($("t_pu_"+m)){ $("t_pu_"+m).innerHTML = `${N(t.needPu)}명 <span style="color:var(--muted);font-size:11px">×${t.puMult.toFixed(2)}</span>`;
+    if($("t_pu_"+m)){ const puVal = puUnit==="month" ? t.needPu*monthDays(m) : t.needPu; // 일/월 전환(배수는 동일)
+      $("t_pu_"+m).innerHTML = `${N(puVal)}명 <span style="color:var(--muted);font-size:11px">×${t.puMult.toFixed(2)}</span>`;
       $("t_pu_"+m).style.color = t.puMult>2?"var(--down)":t.puMult>1.3?"var(--peak)":"var(--green)"; }
     if($("t_arppu_"+m)){ $("t_arppu_"+m).innerHTML = `${만(t.tgtArppu)}원 <span style="color:var(--muted);font-size:11px">×${t.arMult.toFixed(2)}</span>`;
       $("t_arppu_"+m).style.color = t.arMult>2?"var(--down)":t.arMult>1.3?"var(--peak)":"var(--green)"; }
@@ -805,6 +814,7 @@ function renderTargets(){ renderTargetRows(); drawTargetChart(); }
 /* ===== 채널·시나리오 공유 상태 & 헬퍼 (일별 트래킹 + 하반기 목표 공용) ===== */
 let dChans = { web:true, apk:true, pc:true };
 let dScenario = "arppu";
+let puUnit = "day"; // 목표 PU 표시 단위: "day"(일) | "month"(월)
 const CH_NAME = { web:"WEB상점", apk:"인게임(APK)", pc:"PC" };
 const SCEN_LABEL = { arppu:"ARPPU 유지·PU 성장", pu:"PU 유지·ARPPU 성장", bal:"균형(둘 다 성장)" };
 function selChans(){ const s=["web","apk","pc"].filter(k=>dChans[k]); return s.length?s:["web","apk","pc"]; }
@@ -931,6 +941,12 @@ document.querySelectorAll(".scenBtn").forEach(btn=>btn.addEventListener("click",
   dScenario = btn.dataset.s;
   document.querySelectorAll(".scenBtn").forEach(e=>e.classList.toggle("active", e.dataset.s===dScenario));
   rerenderPlanning();
+}));
+/* 목표 PU 표시 단위(일/월) 전환 — 목표표 셀만 갱신 */
+document.querySelectorAll(".puUnitBtn").forEach(btn=>btn.addEventListener("click",()=>{
+  puUnit = btn.dataset.u;
+  document.querySelectorAll(".puUnitBtn").forEach(e=>e.classList.toggle("active", e.dataset.u===puUnit));
+  updateTargetCells();
 }));
 /* 일별 차트 기간 선택 */
 document.querySelectorAll("#chartRangeSeg button").forEach(b=>b.addEventListener("click",()=>{
