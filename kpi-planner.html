@@ -249,7 +249,7 @@
 
 <!-- 하반기 월별 목표 -->
 <div class="panel">
-  <h2>📈 2026 월별 목표 (1~12월) <span>예상 총매출 기본값=지난달 확정 실적·이번달~미래 사업계획(2026-kpi 탭) · 목표 비중 입력 → 목표 매출·PU·ARPPU 자동 계산 · 달성 자체결제=실적(미발생 월 -) · 채널·시나리오 연동</span></h2>
+  <h2>📈 2026 월별 목표 (1~12월) <span>예상 총매출 기본값=지난달 확정 실적·이번달~미래 사업계획(2026-kpi 탭) · 목표 비중=시트 자동(수정 가능) → 목표 매출·PU·ARPPU 자동 계산 · 달성 자체결제=실적(미발생 월 -) · 채널·시나리오 연동</span></h2>
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:8px">
       <b style="font-size:12px;color:var(--muted)">채널(복수)</b>
@@ -327,6 +327,7 @@ let GAMES = [];    // 게임코드 목록
 let CUR_GAME = "";
 let SHEET_URL = "";
 let BIZPLAN = {};  // 사업계획 월별 전체매출(원) — 현재 게임 기준 {"2026-08":2000000000,...}
+let TARGETRATIO = {}; // 시트 '목표 비중' 열 → 월별 목표 자체결제 비중(%) {"2026-08":40,...} (전 게임 공통)
 
 /* 공통 데이터 계층(assets/gsheet.js) 별칭 — 한 곳에서 관리 */
 const sheetTabCsvUrl = GSheet.tabCsvUrl;
@@ -399,21 +400,23 @@ async function loadDetail(url, code) {
   return rows;
 }
 
-/* 사업계획 매출 탭('2026-kpi') 로드 — 헤더=게임코드, 1열=월, 값=전체매출(원) */
+/* 사업계획 매출 탭('2026-kpi') 로드 — 헤더=게임코드, 1열=월, 값=전체매출(원)
+   + '목표 비중' 열(전 게임 공통)을 TARGETRATIO 로 함께 로드 */
 async function loadBizPlan(url, code) {
-  BIZPLAN = {};
+  BIZPLAN = {}; TARGETRATIO = {};
   try {
     const grid = await fetchGrid(url, "2026-kpi");
-    const hdr = (grid[0] || []).map(x => String(x || "").trim().toUpperCase());
+    const hdrRaw = (grid[0] || []).map(x => String(x || "").trim());
+    const hdr = hdrRaw.map(x => x.toUpperCase());
     const col = hdr.indexOf(String(code).toUpperCase());
-    if (col < 0) return;                       // 이 게임의 계획 열 없음
+    const rc = hdrRaw.findIndex(x => x.includes("목표") && x.includes("비중")); // 목표 비중 열
     for (let i = 1; i < grid.length; i++) {
       const g = grid[i]; if (!g) continue;
       const mm = String(g[0] || "").trim().match(/(\d{4})[-.\/\s]+(\d{1,2})/); // "2026-08" 등
       if (!mm) continue;
       const m = mm[1] + "-" + mm[2].padStart(2, "0");
-      const v = toNum(g[col]);
-      if (v != null) BIZPLAN[m] = v;
+      if (col >= 0) { const v = toNum(g[col]); if (v != null) BIZPLAN[m] = v; }
+      if (rc >= 0) { let r = toNum(g[rc]); if (r != null) { if (r > 0 && r <= 1) r *= 100; TARGETRATIO[m] = Math.round(r); } }
     }
   } catch (e) { /* 탭 없거나 실패 시 계획 미적용(실적/기본값 사용) */ }
 }
@@ -699,7 +702,11 @@ const H1TOTAL_AVG = 20; // 억, 예상 총매출 기본값
 const TMONTHS = Array.from({length:12},(_,i)=>"2026-"+String(i+1).padStart(2,"0"));
 const monthDays = ym=>{const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate();};
 const monthLabel = ym=>(+ym.slice(5))+"월";
-const tRatioDefault = m=>{ if(DEFAULT_RATIO[m]!=null)return DEFAULT_RATIO[m]; const mo=MONTHLY[m]; return mo&&mo.total?Math.round(mo.d2c/mo.total*100):50; };
+const tRatioDefault = m=>{
+  if(TARGETRATIO[m]!=null) return TARGETRATIO[m];        // 시트 '목표 비중' 우선
+  if(DEFAULT_RATIO[m]!=null) return DEFAULT_RATIO[m];
+  const mo=MONTHLY[m]; return mo&&mo.total?Math.round(mo.d2c/mo.total*100):50; // 폴백: 과거월 실적 비중
+};
 // 현재 연-월("YYYY-MM"). 이보다 이전 월 = 완료(확정)
 const nowYM = ()=>{ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); };
 const isConfirmedMonth = m=> m < nowYM();  // 완전히 지난 월 → 확정 실적 사용
