@@ -144,9 +144,18 @@
             <option value="2026-11">11월</option><option value="2026-12" selected>12월</option>
           </select>
         </div>
-        <span>— 게임별 뷰 = 선택 월의 전 게임 비교</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <b style="color:var(--text)">우수고객 등급</b>
+          <select id="jlGrade">
+            <option value="전체" selected>전체</option>
+            <option value="CLUB">CLUB(클럽)</option>
+            <option value="실버">실버</option><option value="골드">골드</option>
+            <option value="플래티넘">플래티넘</option><option value="플래티넘MVP">플래티넘MVP</option>
+          </select>
+        </div>
+        <span>— 게임별 뷰=선택 월 전 게임 · 우수고객=PayUser 제외 · 커버리지=미전환 풀 전원 전환 시 전환 필요 충족 여부</span>
       </div>
-      <div style="overflow-x:auto"><table id="s4table" style="min-width:1420px"></table></div>
+      <div style="overflow-x:auto"><table id="s4table" style="min-width:1760px"></table></div>
       <div class="foot" id="s4foot"></div>
     </div>
   </div>
@@ -180,6 +189,20 @@ const VIP_DEFAULT={POTC:{arpu:134389,pool:4971},GBTW:{arpu:97655,pool:19262},WWM
 let VIP={};
 let TMPU={}; // 전체 월간 MPU(순결제자) — 시트 'mpu_total' 탭
 const TMPU_DEFAULT={POTC:6995,GBTW:10007,WWM:7127,DS:4411,RESU:18653,IMGN:12701}; // 2026-06 전체 MPU (탭 없을 때 기본)
+// 우수고객(JL) 등급별 [90일 과금 PU, 미전환 풀] — 20260723 스냅샷 (PayUser 제외, CLUB=클럽 포함)
+const JLGRADE={
+  POTC:{CLUB:[4437,2519],실버:[209,85],골드:[165,57],플래티넘:[70,27],플래티넘MVP:[14,3]},
+  GBTW:{CLUB:[6283,3288],실버:[191,65],골드:[112,39],플래티넘:[80,11],플래티넘MVP:[27,5]},
+  WWM:{CLUB:[2703,1954],실버:[106,39],골드:[50,20],플래티넘:[38,12],플래티넘MVP:[5,1]},
+  RESU:{CLUB:[4055,3197],실버:[29,13],골드:[6,5],플래티넘:[3,0],플래티넘MVP:[0,0]}
+};
+const JL_GRADES=["CLUB","실버","골드","플래티넘","플래티넘MVP"];
+let jlGrade="전체";
+function jlAgg(codes){ let pu=0,av=0,has=false;
+  codes.forEach(c=>{ const gg=JLGRADE[c]; if(!gg)return;
+    if(jlGrade==="전체"){ JL_GRADES.forEach(k=>{ if(gg[k]){pu+=gg[k][0];av+=gg[k][1];has=true;} }); }
+    else if(gg[jlGrade]){ pu+=gg[jlGrade][0]; av+=gg[jlGrade][1]; has=true; } });
+  return {pu,av,has}; }
 const selCodes=()=> selPj.size?CODES.filter(c=>selPj.has(c)):[]; // 선택 프로젝트(순서 유지)
 const allSelected=()=> selPj.size===CODES.length;
 
@@ -467,6 +490,11 @@ function kpiMetricCells(codes,m,b,bd){
   const ig = ingameBase(codes,b);                                       // 인게임(스토어) 결제자 = 전체−자체
   const cr = (전환!=null&&ig>0)? 전환/ig*100 : null;                     // 전환율 = 전환필요 ÷ 인게임MPU
   const crTxt = cr==null?"–": `<b style="color:${cr>100?'var(--down)':'var(--green)'}">${cr.toFixed(0)}%</b>${cr>100?' <span style="color:var(--muted);font-size:10px">풀 초과</span>':''}`;
+  // 우수고객(JL) 커버리지
+  const jl=jlAgg(codes);
+  const cov=(jl.has&&전환!=null&&전환>0)? jl.av/전환*100 : null;
+  const covTxt = !jl.has?"–": (전환==null||전환<=0? `<span style="color:var(--green)">달성</span>` :
+    (cov>=100?`<b style="color:var(--green)">달성 가능 (${cov.toFixed(1)}%)</b>`:`<b style="color:var(--peak)">추가 전략 필요 (${cov.toFixed(0)}%)</b>`));
   return `
     <td>${plan!=null?억(plan):"–"}</td>
     <td>${ratio!=null?ratio.toFixed(0)+"%":"–"}${fullComplete?' <span style="color:var(--muted);font-size:10px">실적</span>':''}</td>
@@ -478,7 +506,10 @@ function kpiMetricCells(codes,m,b,bd){
     <td>${목표PU!=null?N(목표PU):"–"}</td>
     <td style="color:var(--accent);font-weight:600">${전환!=null?"+"+N(전환):"–"}</td>
     <td>${ig?N(ig)+"명":"–"}</td>
-    <td>${crTxt}</td>`;
+    <td>${crTxt}</td>
+    <td class="grp">${jl.has?N(jl.pu)+"명":"–"}</td>
+    <td>${jl.has?N(jl.av)+"명":"–"}</td>
+    <td>${covTxt}</td>`;
 }
 function renderKPI(){
   const el=document.getElementById("s4table"), foot=document.getElementById("s4foot");
@@ -487,7 +518,8 @@ function renderKPI(){
   const months=["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
   const g1=`<th>사업 전체매출</th><th>목표 비중</th><th>목표 금액</th><th>현황(run-rate)</th><th>부족 금액</th><th>월 ARPPU(유지)</th>`;
   const g2=`<th class="grp">6월 자체결제</th><th>목표</th><th>전환 필요</th><th>미전환 풀</th><th>목표 전환율</th>`;
-  const buildHead=(c1,c2)=>`<thead><tr><th class="lbl" rowspan="2">${c1}</th><th class="lbl" rowspan="2">${c2}</th><th colspan="6">목표 · 실적</th><th colspan="5" class="grp">MPU (순결제자)</th></tr><tr>${g1}${g2}</tr></thead>`;
+  const g3=`<th class="grp">우수고객 PU</th><th>가용 대상(클럽 포함)</th><th>전원 전환시 커버리지</th>`;
+  const buildHead=(c1,c2)=>`<thead><tr><th class="lbl" rowspan="2">${c1}</th><th class="lbl" rowspan="2">${c2}</th><th colspan="6">목표 · 실적</th><th colspan="5" class="grp">MPU (순결제자)</th><th colspan="3" class="grp">우수고객(JL)</th></tr><tr>${g1}${g2}${g3}</tr></thead>`;
   const mpuNote = Object.keys(MPU).length? "월간 MPU(순결제자) 기준" : `<b style="color:var(--down)">PU 잠정</b>(mpu 미연동)`;
   let head, body, note;
   if(kpiView==="game"){
@@ -565,6 +597,7 @@ document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;t
 document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
 document.getElementById("kpiViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("kpiMonth").addEventListener("change",e=>{kpiMonth=e.target.value;renderKPI();});
+document.getElementById("jlGrade").addEventListener("change",e=>{jlGrade=e.target.value;renderKPI();});
 // 밤/낮 모드
 (function(){ if(localStorage.getItem("board-theme")==="light")document.documentElement.classList.add("light");
   document.getElementById("themeBtn").textContent=isLight()?"☀️":"🌙"; })();
