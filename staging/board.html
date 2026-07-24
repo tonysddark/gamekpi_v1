@@ -522,7 +522,7 @@ function renderKPI(){
   const sr=document.getElementById("stageRow"); if(sr) sr.style.display = kpiView==="game"?"flex":"none";
   if(!selCodes().length){ el.innerHTML=""; foot.textContent="프로젝트를 선택하세요."; return; }
   const months=["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
-  const g1=`<th>사업 전체매출</th><th>목표 비중</th><th>목표 금액</th><th>현황(run-rate)</th><th>부족 금액</th><th>월 ARPPU(유지)</th>`;
+  const g1=`<th>사업계획</th><th>목표 비중</th><th>목표 금액</th><th>현황(run-rate)</th><th>부족 금액</th><th>월 ARPPU(유지)</th>`;
   const g2=`<th class="grp">6월 자체결제</th><th>목표</th><th>전환 필요</th><th>미전환 풀</th><th>목표 전환율</th>`;
   const g3=`<th class="grp">우수고객 PU</th><th>가용 대상(클럽 포함)</th><th>전원 전환시 커버리지</th>`;
   const buildHead=(c1,c2)=>`<thead><tr><th class="lbl" rowspan="2">${c1}</th><th class="lbl" rowspan="2">${c2}</th><th colspan="6">목표 · 실적</th><th colspan="5" class="grp">MPU (순결제자)</th><th colspan="3" class="grp">우수고객(JL)</th></tr><tr>${g1}${g2}${g3}</tr></thead>`;
