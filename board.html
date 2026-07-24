@@ -114,6 +114,11 @@
       <div class="chart-box"><canvas id="s1chart" role="img" aria-label="매출 추이"></canvas></div>
       <div class="foot" id="s1foot"></div>
     </div>
+    <div class="panel sortable" data-sec="kpi" draggable="false">
+      <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 단계별 KPI <span>2026 하반기 목표(프로젝트 필터 적용 · 집계/기간/지표와 무관) · ARPPU 유지 → 필요 PU</span></h2>
+      <div style="overflow-x:auto"><table id="s4table" style="min-width:900px"></table></div>
+      <div class="foot" id="s4foot"></div>
+    </div>
   </div>
 
   <div style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:4px">다음 섹터는 여기에 이어서 함께 만들어갑니다 · 카드/추이 제목의 <b>⠿</b>를 잡고 끌면 순서가 바뀝니다</div>
@@ -126,7 +131,9 @@ const fetchGrid=GSheet.fetchTab, toNum=GSheet.toNum, normDate=GSheet.normDate, h
 const isDetailGrid=g=>headerOf(g).some(h=>h.includes("market_name"));
 const N=v=>Math.round(v).toLocaleString('ko-KR');
 const 억=v=>(v/1e8).toFixed(Math.abs(v)>=1e9?1:2)+"억";
+const 만=v=>(v/1e4).toFixed(1)+"만";
 const P=v=>(v==null?"–":v.toFixed(1)+"%");
+const nowYM=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");};
 // 채널 색상 (플래너와 일관)
 const CH_COL={web:"#c084fc",apk:"#4f8cff",pc:"#34d399"};
 const COL={total:"#4f8cff",d2c:"#4f8cff",etc:"rgba(139,150,173,.45)",ratio:"#fbbf24"};
@@ -160,16 +167,17 @@ async function loadDetailDaily(url,code){
   const ci={date:h.findIndex(x=>x.includes("datekey")||x.includes("date")||x.includes("날짜")),
     platform:h.findIndex(x=>x.includes("platform")||x.includes("device")),
     pg:h.findIndex(x=>x.includes("pg_name")),
+    pu:h.findIndex(x=>x==="pu"||x.includes("pu")),
     rev:h.findIndex(x=>x.includes("revenue")||x.includes("매출"))};
   const byDate={};
   for(let i=1;i<grid.length;i++){
     const g=grid[i]; const date=normDate(g[ci.date]); const rev=toNum(g[ci.rev]); if(!date||rev==null)continue;
-    const o=byDate[date]=byDate[date]||{total:0,web:0,apk:0,pc:0};
+    const o=byDate[date]=byDate[date]||{total:0,web:0,apk:0,pc:0,d2cpu:0};
     o.total+=rev;
     if(D2C_PGS.includes(String(g[ci.pg]||"").trim())){
       const pl=String(g[ci.platform]||"").trim().toUpperCase();
       const k=pl==="WEB"?"web":pl==="PC"?"pc":"apk";
-      o[k]+=rev;
+      o[k]+=rev; o.d2cpu+=(toNum(g[ci.pu])||0);  // 자체결제 PU (채널 합산)
     }
   }
   return byDate;
@@ -198,7 +206,7 @@ const daysInMonth=ym=>{const[y,m]=ym.split("-").map(Number);return new Date(y,m,
 function mergedByDate(){
   const codes = selCodes();
   const out={};
-  codes.forEach(c=>{ const bd=PJ[c]||{}; for(const d in bd){ const s=bd[d]; const o=out[d]=out[d]||{total:0,web:0,apk:0,pc:0}; o.total+=s.total;o.web+=s.web;o.apk+=s.apk;o.pc+=s.pc; } });
+  codes.forEach(c=>{ const bd=PJ[c]||{}; for(const d in bd){ const s=bd[d]; const o=out[d]=out[d]||{total:0,web:0,apk:0,pc:0,d2cpu:0}; o.total+=s.total;o.web+=s.web;o.apk+=s.apk;o.pc+=s.pc;o.d2cpu+=(s.d2cpu||0); } });
   return out;
 }
 // 계획매출/목표 — 월 단위. 선택 프로젝트 합산
@@ -302,6 +310,7 @@ function render(){
   else chart=new Chart(document.getElementById("s1chart"),{data:{labels,datasets:ds},options:opts});
 
   renderCards(rows);
+  renderKPI();
   document.getElementById("s1foot").textContent =
     `${rows.length}개 구간 · ${selPj.size===0?"프로젝트 미선택":allSelected()?"전 프로젝트 합산":selCodes().join("+")} · 비중(우축)=자체결제/전체매출 · 점선=목표 비중 · 목표 막대=사업계획×목표비중(2026)`;
 }
@@ -321,6 +330,63 @@ function renderCards(rows){
     <div class="card"><div class="l">PC</div><div class="v" style="color:var(--green)">${억(PC)} <small>${pct(PC)}%</small></div></div>
     <div class="card"><div class="l">최근 구간 비중</div><div class="v">${P(last.ratio)}</div><div class="s">${labelOf(last.key)}${last.tgt?` · 목표 ${P(last.tgt.ratio)}`:""}</div></div>`;
 }
+
+/* ===== ④ 단계별 KPI ===== */
+const STAGE={"2026-07":"현재","2026-08":"1단계","2026-09":"1단계","2026-10":"2단계","2026-11":"3단계","2026-12":"4단계"};
+// 선택 프로젝트 합산 기준선: 유지 ARPPU(최근 완결 3개월) + 현재 자체 PU(최근 완결월)
+function baseStats(bd){
+  const byM={};
+  for(const d in bd){ const m=d.slice(0,7); const o=byM[m]=byM[m]||{srev:0,spu:0,days:new Set()};
+    const s=bd[d]; o.srev+=s.web+s.apk+s.pc; o.spu+=(s.d2cpu||0); o.days.add(d); }
+  const completed=Object.keys(byM).filter(m=>m<nowYM()&&byM[m].days.size>=daysInMonth(m)).sort();
+  const last3=completed.slice(-3);
+  let rev=0,pu=0; last3.forEach(m=>{rev+=byM[m].srev;pu+=byM[m].spu;});
+  const lastM=completed[completed.length-1];
+  return {arppu:pu?rev/pu:0, curPU:lastM?byM[lastM].spu:0, baseLabel:last3.map(m=>+m.slice(5)+"월").join("·"), curLabel:lastM?(+lastM.slice(5)+"월"):"-", actM:byM};
+}
+function renderKPI(){
+  const el=document.getElementById("s4table"), foot=document.getElementById("s4foot");
+  if(!selPj.size){ el.innerHTML=""; foot.textContent="프로젝트를 선택하세요."; return; }
+  const bd=mergedByDate();
+  const b=baseStats(bd);
+  const A=b.arppu;
+  const months=["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
+  const head=`<thead><tr>
+    <th>단계</th><th>월</th><th>사업 전체매출</th><th>목표 비중</th><th>목표 금액</th>
+    <th>현황 금액</th><th>부족 금액</th><th>월 ARPPU(유지)</th><th>목표 월PU</th><th>전환 필요 PU</th></tr></thead>`;
+  const body=months.map(m=>{
+    const plan=planOf(m);
+    const past=m<nowYM();
+    const act=b.actM[m]?b.actM[m].srev:0;
+    // 목표 비중: 지난(완결)월=실제 비중 고정, 그 외(현재·미래)=시트 목표 비중
+    let ratio;
+    if(past){ const tot=planActualTotal(m,bd); ratio = tot? act/tot*100 : null; }
+    else { ratio = (TGTR[m]!=null? TGTR[m] : null); }
+    const 목표 = (plan!=null&&ratio!=null)? plan*ratio/100 : null;
+    const hasAct = (b.actM[m]&&b.actM[m].days.size>0);
+    const 부족 = 목표!=null? Math.max(0,목표-(hasAct?act:0)) : null;
+    const 목표PU = (목표!=null&&A)? 목표/A : null;
+    const 전환 = 목표PU!=null? Math.max(0,목표PU-b.curPU) : null;
+    const stg=STAGE[m]||"";
+    return `<tr>
+      <td class="mon" style="color:var(--peak)">${stg}</td>
+      <td class="mon">${+m.slice(5)}월</td>
+      <td>${plan!=null?억(plan):"–"}</td>
+      <td>${ratio!=null?ratio.toFixed(0)+"%":"–"}${past?' <span style="color:var(--muted);font-size:10px">실적</span>':''}</td>
+      <td style="color:var(--purple)">${목표!=null?억(목표):"–"}</td>
+      <td>${hasAct?억(act):"–"}</td>
+      <td style="color:${부족>0?'var(--peak)':'var(--green)'}">${부족!=null?억(부족):"–"}</td>
+      <td>${A?만(A)+"원":"–"}</td>
+      <td>${목표PU!=null?N(목표PU)+"명":"–"}</td>
+      <td style="color:var(--accent);font-weight:600">${전환!=null?"+"+N(전환)+"명":"–"}</td>
+    </tr>`;
+  }).join("");
+  el.innerHTML=head+"<tbody>"+body+"</tbody>";
+  foot.innerHTML=`유지 ARPPU=최근 완결 ${b.baseLabel||"-"} 자체결제 ARPPU · 전환 필요 PU=목표 월PU − 현재 자체 PU(${b.curLabel}, ${N(b.curPU)}명) · `+
+    `목표 비중은 시트값(미래)·실제비중(지난월) · <b style="color:var(--peak)">우수고객 전환 커버리지(우수고객 ARPPU·가용대상·커버리지)는 데이터 연동 후 추가 예정</b>`;
+}
+// 선택 프로젝트의 해당 월 전체매출 실적(비중 계산용)
+function planActualTotal(m,bd){ let t=0,has=false; for(const d in bd){ if(d.slice(0,7)===m){t+=bd[d].total;has=true;} } return has?t:null; }
 
 async function boot(url){
   SHEET_URL=url;
