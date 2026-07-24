@@ -555,6 +555,10 @@ function buildStageButtons(){ const seg=document.getElementById("kpiStageSeg"); 
     return `<button class="stageBtn ${m===kpiMonth?"active":""}" data-m="${m}">${lbl}</button>`; }).join(""); }
 
 async function boot(url){
+  // 미러(하드코딩 스냅샷) 모드: 시트 없이 내장 데이터 사용
+  if(window.__MIRROR__){ const D=window.__MIRROR__;
+    CODES=D.CODES.slice(); PJ=D.PJ; PLAN=D.PLAN||{}; TGTR=D.TGTR||{}; MPU=D.MPU||{}; TMPU=D.TMPU||{};
+    afterLoad(); return; }
   SHEET_URL=url;
   try{
     document.getElementById("range").textContent="프로젝트 목록 확인 중…";
@@ -568,23 +572,25 @@ async function boot(url){
     await loadPlan(url);
     await loadMPU(url);
     await loadTotalMPU(url);
-    buildStageButtons();  // TGTR 로드 후 목표 단계 버튼 생성
-    // 데이터 범위
-    MIND="9999-99-99"; MAXD="0000-00-00";
-    CODES.forEach(c=>Object.keys(PJ[c]).forEach(d=>{if(d<MIND)MIND=d;if(d>MAXD)MAXD=d;}));
-    // 목표(2026) 월까지 기간 지평 확장 → 기본값에서 미래 목표가 보이도록
-    HORIZON=MAXD;
-    Object.keys(TGTR).forEach(m=>{ const end=m+"-"+String(daysInMonth(m)).padStart(2,"0"); if(end>HORIZON)HORIZON=end; });
-    const fEl=document.getElementById("fromDate"),tEl=document.getElementById("toDate");
-    const DEF_FROM = MIND<"2026-01-01" ? "2026-01-01" : MIND;  // 기본 시작 = 26년 1월(데이터가 더 이르면)
-    fEl.min=tEl.min=MIND; fEl.max=tEl.max=HORIZON; fEl.value=DEF_FROM; tEl.value=HORIZON; fromD=DEF_FROM; toD=HORIZON;
-    curProj="ALL"; fillProjSelectors();
-    document.getElementById("range").textContent=`${CODES.length}개 프로젝트 · ${MIND} ~ ${MAXD} · 자체결제 = ${D2C_PGS.join("·")}`;
-    document.getElementById("setup").style.display="none"; document.getElementById("main").style.display="";
     localStorage.setItem("kpiplanner-sheet",url);
     try{const s=JSON.parse(localStorage.getItem(DASH_LS))||{};if(s.masterSheetUrl!==url){s.masterSheetUrl=url;localStorage.setItem(DASH_LS,JSON.stringify(s));}}catch(e){}
-    render();
+    afterLoad();
   }catch(e){ showSetup("❌ "+e.message+'<br><br>시트 공유("링크가 있는 모든 사용자: 뷰어")와 <b>코드-kpi</b> 탭을 확인한 뒤 다시 연결하세요.'); }
+}
+// 데이터 로드 후 공통 셋업 (라이브·미러 공용)
+function afterLoad(){
+  buildStageButtons();
+  MIND="9999-99-99"; MAXD="0000-00-00";
+  CODES.forEach(c=>Object.keys(PJ[c]).forEach(d=>{if(d<MIND)MIND=d;if(d>MAXD)MAXD=d;}));
+  HORIZON=MAXD;
+  Object.keys(TGTR).forEach(m=>{ const end=m+"-"+String(daysInMonth(m)).padStart(2,"0"); if(end>HORIZON)HORIZON=end; });
+  const fEl=document.getElementById("fromDate"),tEl=document.getElementById("toDate");
+  const DEF_FROM = MIND<"2026-01-01" ? "2026-01-01" : MIND;
+  fEl.min=tEl.min=MIND; fEl.max=tEl.max=HORIZON; fEl.value=DEF_FROM; tEl.value=HORIZON; fromD=DEF_FROM; toD=HORIZON;
+  curProj="ALL"; fillProjSelectors();
+  document.getElementById("range").textContent=`${CODES.length}개 프로젝트 · ${MIND} ~ ${MAXD}${window.__MIRROR__?" · 미러(스냅샷)":""} · 자체결제 = ${D2C_PGS.join("·")}`;
+  document.getElementById("setup").style.display="none"; document.getElementById("main").style.display="";
+  render();
 }
 
 // ---- 컨트롤 ----
@@ -637,6 +643,7 @@ secBox.addEventListener("dragover",e=>{
 loadOrder(); // 섹션 번호 매기기 + 저장된 순서 복원
 
 (function(){
+  if(window.__MIRROR__){ boot(); return; }  // 미러(스냅샷) 모드
   let url="";
   try{const p=new URLSearchParams(location.search).get("sheet");if(p){url=p.trim();history.replaceState(null,"",location.pathname);}}catch(e){}
   if(!url)url=getMasterUrl();
