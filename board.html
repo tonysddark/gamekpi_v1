@@ -138,7 +138,7 @@
         </div>
         <span>— 게임별 뷰는 선택 월의 전 게임 비교 · 전환율=커버리지 '현실'값 가정</span>
       </div>
-      <div style="overflow-x:auto"><table id="s4table" style="min-width:1320px"></table></div>
+      <div style="overflow-x:auto"><table id="s4table" style="min-width:1420px"></table></div>
       <div class="foot" id="s4foot"></div>
     </div>
   </div>
@@ -442,6 +442,7 @@ function kpiMetricCells(codes,m,b,bd){
     <td style="color:var(--muted)">${억(현황)}</td>
     <td style="color:${부족>0?'var(--peak)':'var(--green)'}">${부족!=null?억(부족):"–"}</td>
     <td>${A?만(A)+"원":"–"}</td>
+    <td style="color:var(--muted)">${N(b.curPU)}</td>
     <td>${목표PU!=null?N(목표PU):"–"}</td>
     <td style="color:var(--accent);font-weight:600">${전환!=null?"+"+N(전환):"–"}</td>
     <td class="grp">${v.arpu?만(v.arpu)+"원":"–"}</td>
@@ -454,7 +455,7 @@ function renderKPI(){
   const mSel=document.getElementById("kpiMonth"); if(mSel) mSel.style.display = kpiView==="game"?"":"none";
   if(!selPj.size){ el.innerHTML=""; foot.textContent="프로젝트를 선택하세요."; return; }
   const months=["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
-  const colHdr=`<th>사업 전체매출</th><th>목표 비중</th><th>목표 금액</th><th>현황(run-rate)</th><th>부족 금액</th><th>월 ARPPU(유지)</th><th>목표 MPU</th><th>전환 필요 MPU</th><th class="grp">우수 ARPU</th><th>우수 전환필요</th><th>가용 대상</th><th>전원전환 커버리지</th>`;
+  const colHdr=`<th>사업 전체매출</th><th>목표 비중</th><th>목표 금액</th><th>현황(run-rate)</th><th>부족 금액</th><th>월 ARPPU(유지)</th><th>현재 MPU(6월)</th><th>목표 MPU</th><th>전환 필요 MPU</th><th class="grp">우수 ARPU</th><th>우수 전환필요</th><th>가용 대상</th><th>전원전환 커버리지</th>`;
   const mpuNote = Object.keys(MPU).length? "월간 MPU(순결제자) 기준" : `<b style="color:var(--down)">PU 잠정</b>(mpu 미연동)`;
   let head, body, note;
   if(kpiView==="game"){
