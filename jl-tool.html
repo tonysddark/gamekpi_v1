@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JL 우수고객 데이터 가공 툴</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#1a2132; --panel-2:#212a40; --border:#2c3752;
+    --text:#e8ecf5; --muted:#8b96ad; --accent:#4f8cff; --green:#34d399;
+    --peak:#fbbf24; --down:#f87171; --purple:#c084fc;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Pretendard','Malgun Gothic',sans-serif;padding:20px clamp(12px,3vw,36px) 60px;}
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}
+  h1{font-size:20px;margin:0;}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px;}
+  a.btn,button.btn{background:var(--panel);border:1px solid var(--border);color:var(--accent);padding:8px 15px;border-radius:8px;font-size:13px;text-decoration:none;cursor:pointer;font-family:inherit;}
+  button.primary{background:var(--accent);color:#fff;border:none;font-weight:600;}
+  .spacer{flex:1;}
+  .banner{background:var(--panel-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:10px;padding:11px 15px;font-size:12.5px;line-height:1.8;margin-bottom:16px;color:var(--muted);}
+  .banner b{color:var(--text);}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:16px;}
+  .panel h2{font-size:15px;margin-bottom:10px;}
+  #drop{border:2px dashed var(--border);border-radius:12px;padding:34px 20px;text-align:center;color:var(--muted);font-size:14px;cursor:pointer;transition:all .15s;}
+  #drop.over{border-color:var(--accent);color:var(--accent);background:rgba(79,140,255,.06);}
+  table{border-collapse:collapse;width:100%;font-size:13px;}
+  th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  th{color:var(--muted);font-weight:600;}
+  th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left;}
+  .filelist{font-size:12.5px;color:var(--muted);line-height:2;}
+  .filelist b{color:var(--text);}
+  .ok{color:var(--green);} .warn{color:var(--peak);} .err{color:var(--down);}
+  select{background:var(--panel-2);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:6px;font-size:12px;}
+  .btns{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;}
+  textarea{width:100%;height:120px;background:var(--panel-2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px;font-size:12px;font-family:Consolas,monospace;margin-top:10px;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧮 JL 우수고객 데이터 가공</h1>
+  <div class="spacer"></div>
+  <a class="btn" href="board.html">🗂️ KPI 현황판</a>
+  <a class="btn" href="index.html">📊 대시보드</a>
+</header>
+<div class="sub">JL 회원 xlsx → <b>jl 탭</b>(game·grade·pu·pool) 변환 · 모든 처리는 브라우저 안에서만 (데이터 외부 전송 없음)</div>
+
+<div class="banner">
+  <b>규칙</b> — 회원번호 중복 제거 · <b>우수고객 PU</b> = 90일(당월+전월+전전월) 과금 이력 있음 ·
+  <b>미전환 풀</b> = 그중 90일 자체결제 이력 없음 · <b>PayUser 제외</b> · CLUB=클럽 · RESU는 JOY+ANX 파일을 같이 넣으면 회원 기준으로 합산됩니다.<br>
+  결과를 <b>TSV 복사 → 구글시트 jl 탭 A1에 붙여넣기(기존 내용 교체)</b> 하면 KPI 현황판이 다음 로드부터 자동 반영합니다.
+</div>
+
+<div class="panel">
+  <h2>1) 파일 넣기 <span style="color:var(--muted);font-size:12px;font-weight:400">— POTC / GBTW / WWM / DS / IMGN / RESU_JOY / RESU_ANX ... xlsx 여러 개 한번에</span></h2>
+  <div id="drop">여기로 xlsx 파일들을 드래그하거나 클릭해서 선택</div>
+  <input type="file" id="fileIn" accept=".xlsx" multiple style="display:none">
+  <div class="filelist" id="files" style="margin-top:12px"></div>
+</div>
+
+<div class="panel" id="resultPanel" style="display:none">
+  <h2>2) 결과 (jl 탭 형식)</h2>
+  <div style="overflow-x:auto"><table id="out"></table></div>
+  <div class="btns">
+    <button class="btn primary" id="copyTsv">📋 TSV 복사 (시트 붙여넣기용)</button>
+    <button class="btn" id="dlCsv">⬇ CSV 다운로드</button>
+    <span id="copyMsg" style="align-self:center;font-size:12.5px"></span>
+  </div>
+  <textarea id="tsvBox" readonly spellcheck="false"></textarea>
+</div>
+
+<script>
+"use strict";
+const GRADES=["CLUB","실버","골드","플래티넘","플래티넘MVP"];
+const KNOWN=["POTC","GBTW","WWM","DS","IMGN","RESU"];
+// 파일별 파싱 결과: {game, members:{id:{grade,paid,self}}}
+let FILES=[];
+
+// 등급 표준화 (영문 변형 대응). PayUser/빈값 → null(제외)
+function normGrade(g){
+  const s=String(g||"").trim(); if(!s)return null;
+  const low=s.toLowerCase().replace(/\s+/g,"");
+  if(low==="payuser")return null;
+  if(low.includes("mvp"))return "플래티넘MVP";
+  if(low==="club"||s==="클럽")return "CLUB";
+  if(low==="silver"||s==="실버")return "실버";
+  if(low==="gold"||s==="골드")return "골드";
+  if(low==="platinum"||s==="플래티넘")return "플래티넘";
+  return s; // 알 수 없는 등급은 원문 유지
+}
+// 파일명/게임명 열에서 게임코드 추론
+function guessGame(name,cellVal){
+  const pool=(String(cellVal||"")+" "+String(name||"")).toUpperCase();
+  if(pool.includes("RESU"))return "RESU"; // JOY/ANX 모두 RESU로 합산
+  for(const k of KNOWN){ if(pool.includes(k))return k; }
+  return "";
+}
+const num=v=>{ const n=Number(String(v==null?"":v).replace(/[,%₩원\s]/g,"")); return isNaN(n)?0:n; };
+
+function parseWorkbook(file,buf){
+  const wb=XLSX.read(buf,{type:"array"});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true});
+  if(!rows.length)throw new Error("빈 파일");
+  const h=rows[0].map(x=>String(x||"").trim());
+  const idx={
+    game:h.findIndex(x=>x.includes("게임명")),
+    mem:h.findIndex(x=>x.includes("회원번호")),
+    grade:h.findIndex(x=>x==="등급"||x.includes("등급")),
+    m0:h.findIndex(x=>x==="당월 과금액"),
+    m1:h.findIndex(x=>x==="전월 과금액"),
+    m2:h.findIndex(x=>x==="전전월 과금액"),
+    s0:h.findIndex(x=>x.includes("자체결제 당월")),
+    s1:h.findIndex(x=>x.includes("자체결제 전월")),
+    s2:h.findIndex(x=>x.includes("자체결제 전전월")),
+  };
+  const missing=Object.entries(idx).filter(([k,v])=>v<0&&k!=="game").map(([k])=>k);
+  if(missing.length)throw new Error("필수 열 누락: "+missing.join(", ")+" (헤더: 회원번호·등급·당월/전월/전전월 과금액·자체결제 당월/전월/전전월 과금액)");
+  const members={};
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i]; if(!r||r[idx.mem]==null||r[idx.mem]==="")continue;
+    const id=String(r[idx.mem]).trim();
+    if(members[id])continue; // 회원 dedupe (첫 행 = 대표 캐릭터)
+    const grade=normGrade(r[idx.grade]);
+    const paid=(num(r[idx.m0])+num(r[idx.m1])+num(r[idx.m2]))>0;
+    const self=(num(r[idx.s0])+num(r[idx.s1])+num(r[idx.s2]))>0;
+    members[id]={grade,paid,self};
+  }
+  const game=guessGame(file.name, rows[1]&&idx.game>=0?rows[1][idx.game]:"");
+  return {game, members, rowCount:rows.length-1, memCount:Object.keys(members).length};
+}
+
+function aggregate(){
+  // 게임별로 회원 병합(dedupe) 후 등급 집계
+  const byGame={};
+  FILES.forEach(f=>{
+    if(!f.game)return;
+    const g=byGame[f.game]=byGame[f.game]||{};
+    for(const id in f.members){ if(!g[id])g[id]=f.members[id]; }
+  });
+  const out=[]; // {game,grade,pu,pool}
+  Object.keys(byGame).sort((a,b)=>KNOWN.indexOf(a)-KNOWN.indexOf(b)).forEach(game=>{
+    const agg={};
+    for(const id in byGame[game]){ const m=byGame[game][id];
+      if(!m.grade||!m.paid)continue;
+      const o=agg[m.grade]=agg[m.grade]||{pu:0,pool:0};
+      o.pu++; if(!m.self)o.pool++;
+    }
+    const order=[...GRADES, ...Object.keys(agg).filter(g=>!GRADES.includes(g))];
+    order.forEach(gr=>{ if(agg[gr])out.push({game,grade:gr,pu:agg[gr].pu,pool:agg[gr].pool}); });
+  });
+  return out;
+}
+
+function renderFiles(){
+  document.getElementById("files").innerHTML=FILES.map((f,i)=>{
+    const sel=`<select data-i="${i}" class="gameSel">${["",...KNOWN].map(k=>`<option value="${k}" ${k===f.game?"selected":""}>${k||"게임 선택"}</option>`).join("")}</select>`;
+    const status=f.err?`<span class="err">❌ ${f.err}</span>`:`<span class="ok">✓ 회원 ${f.memCount.toLocaleString()}명 (${f.rowCount.toLocaleString()}행)</span>`;
+    return `<div><b>${f.name}</b> → ${sel} ${status}</div>`;
+  }).join("");
+  document.querySelectorAll(".gameSel").forEach(s=>s.addEventListener("change",e=>{FILES[+e.target.dataset.i].game=e.target.value;renderOut();}));
+}
+function renderOut(){
+  const rows=aggregate();
+  const panel=document.getElementById("resultPanel");
+  if(!rows.length){panel.style.display="none";return;}
+  panel.style.display="";
+  const tot={}; rows.forEach(r=>{const t=tot[r.game]=tot[r.game]||{pu:0,pool:0};t.pu+=r.pu;t.pool+=r.pool;});
+  document.getElementById("out").innerHTML=
+    `<thead><tr><th>game</th><th>grade</th><th>pu (90일 과금)</th><th>pool (미전환)</th></tr></thead><tbody>`+
+    rows.map(r=>`<tr><td>${r.game}</td><td>${r.grade}</td><td>${r.pu.toLocaleString()}</td><td>${r.pool.toLocaleString()}</td></tr>`).join("")+
+    Object.keys(tot).map(g=>`<tr style="color:var(--accent);font-weight:600"><td>${g}</td><td>합계</td><td>${tot[g].pu.toLocaleString()}</td><td>${tot[g].pool.toLocaleString()}</td></tr>`).join("")+
+    `</tbody>`;
+  const tsv="game\tgrade\tpu\tpool\n"+rows.map(r=>[r.game,r.grade,r.pu,r.pool].join("\t")).join("\n");
+  document.getElementById("tsvBox").value=tsv;
+}
+
+async function handleFiles(list){
+  for(const file of list){
+    if(!/\.xlsx$/i.test(file.name))continue;
+    const entry={name:file.name,game:"",members:{},rowCount:0,memCount:0,err:""};
+    try{ const buf=await file.arrayBuffer(); Object.assign(entry,parseWorkbook(file,buf)); }
+    catch(e){ entry.err=e.message; }
+    FILES.push(entry);
+  }
+  renderFiles(); renderOut();
+}
+
+const drop=document.getElementById("drop"), fin=document.getElementById("fileIn");
+drop.addEventListener("click",()=>fin.click());
+fin.addEventListener("change",e=>handleFiles([...e.target.files]));
+["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>handleFiles([...e.dataTransfer.files]));
+
+document.getElementById("copyTsv").addEventListener("click",async()=>{
+  const t=document.getElementById("tsvBox").value;
+  try{ await navigator.clipboard.writeText(t); document.getElementById("copyMsg").innerHTML='<span class="ok">복사됨 — 시트 jl 탭 A1에 붙여넣으세요 (기존 내용 교체)</span>'; }
+  catch(e){ document.getElementById("tsvBox").select(); document.execCommand("copy"); document.getElementById("copyMsg").innerHTML='<span class="ok">복사됨</span>'; }
+});
+document.getElementById("dlCsv").addEventListener("click",()=>{
+  const csv=document.getElementById("tsvBox").value.replace(/\t/g,",");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));
+  a.download="jl_tab.csv"; a.click();
+});
+// 검증용 노출
+window.__jl={parseWorkbook,aggregate,normGrade,guessGame,setFiles:f=>{FILES=f;renderFiles();renderOut();}};
+</script>
+</body>
+</html>
