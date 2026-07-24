@@ -39,6 +39,7 @@
   .card .s{font-size:11px;color:var(--muted);margin-top:3px;}
   .chart-box{position:relative;height:400px;margin-top:10px;}
   .foot{color:var(--muted);font-size:12px;line-height:1.7;margin-top:10px;}
+  #filterPanel{position:sticky;top:6px;z-index:30;box-shadow:0 8px 20px -10px rgba(0,0,0,.7);}
   .sortable{transition:box-shadow .15s;}
   .drag{cursor:grab;color:var(--muted);font-size:16px;user-select:none;margin-right:2px;padding:0 4px;}
   .drag:active{cursor:grabbing;}
@@ -76,7 +77,7 @@
 
 <div id="main" style="display:none;">
   <!-- ===== ① 필터 (고정) ===== -->
-  <div class="panel">
+  <div class="panel" id="filterPanel">
     <h2>① 필터 <span style="color:var(--peak)">고정</span> <span>선택한 기준이 아래 모든 섹션에 반영됩니다</span></h2>
     <div class="ctl">
       <div class="grp"><b>집계</b>
@@ -138,7 +139,7 @@ const nowYM=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth
 const CH_COL={web:"#c084fc",apk:"#4f8cff",pc:"#34d399"};
 const COL={total:"#4f8cff",d2c:"#4f8cff",etc:"rgba(139,150,173,.45)",ratio:"#fbbf24"};
 
-let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MIND="", MAXD="", HORIZON="", chart=null;
+let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MPU={}, MIND="", MAXD="", HORIZON="", chart=null;
 let curGran="month", selPj=new Set(), curMetric="total", fromD="", toD="";
 const selCodes=()=> selPj.size?CODES.filter(c=>selPj.has(c)):[]; // 선택 프로젝트(순서 유지)
 const allSelected=()=> selPj.size===CODES.length;
@@ -201,6 +202,22 @@ async function loadPlan(url){
   }catch(e){}
 }
 
+// 월간 자체결제 MPU(순결제자) — 별도 'mpu' 탭 (col0=월, 헤더=게임코드). 있으면 ARPPU·PU를 정확히 계산
+async function loadMPU(url){
+  MPU={};
+  try{
+    const grid=await fetchGrid(url,"mpu");
+    const hdr=(grid[0]||[]).map(x=>String(x||"").trim().toUpperCase());
+    const colOf={}; CODES.forEach(c=>colOf[c]=hdr.indexOf(c));
+    for(let i=1;i<grid.length;i++){
+      const g=grid[i]; if(!g)continue;
+      const mm=String(g[0]||"").trim().match(/(\d{4})[-.\/\s]+(\d{1,2})/); if(!mm)continue;
+      const m=mm[1]+"-"+mm[2].padStart(2,"0");
+      CODES.forEach(c=>{ if(colOf[c]>=0){ const v=toNum(g[colOf[c]]); if(v!=null)(MPU[c]=MPU[c]||{})[m]=v; } });
+    }
+  }catch(e){ /* mpu 탭 없으면 잠정(일 합산) 사용 */ }
+}
+const mpuOf=m=>{ const codes=selCodes(); let t=0,has=false; codes.forEach(c=>{ if(MPU[c]&&MPU[c][m]!=null){t+=MPU[c][m];has=true;} }); return has?t:null; };
 const daysInMonth=ym=>{const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate();};
 // 선택 프로젝트의 날짜별 합산 {date:{total,web,apk,pc}}
 function mergedByDate(){
@@ -340,9 +357,16 @@ function baseStats(bd){
     const s=bd[d]; o.srev+=s.web+s.apk+s.pc; o.spu+=(s.d2cpu||0); o.days.add(d); }
   const completed=Object.keys(byM).filter(m=>m<nowYM()&&byM[m].days.size>=daysInMonth(m)).sort();
   const last3=completed.slice(-3);
-  let rev=0,pu=0; last3.forEach(m=>{rev+=byM[m].srev;pu+=byM[m].spu;});
+  let rev=0,dailyPU=0; last3.forEach(m=>{rev+=byM[m].srev;dailyPU+=byM[m].spu;});
   const lastM=completed[completed.length-1];
-  return {arppu:pu?rev/pu:0, curPU:lastM?byM[lastM].spu:0, baseLabel:last3.map(m=>+m.slice(5)+"월").join("·"), curLabel:lastM?(+lastM.slice(5)+"월"):"-", actM:byM};
+  // 월간 MPU(순결제자)가 있으면 정확 계산, 없으면 일 합산(잠정)
+  let mpuSum=0,mpuHas=last3.length>0; last3.forEach(m=>{const v=mpuOf(m); if(v==null)mpuHas=false; else mpuSum+=v;});
+  const curMpu=lastM?mpuOf(lastM):null;
+  const useMpu=mpuHas&&mpuSum>0&&curMpu!=null;
+  return {arppu: useMpu?rev/mpuSum:(dailyPU?rev/dailyPU:0),
+    curPU: useMpu?curMpu:(lastM?byM[lastM].spu:0),
+    mpuBased:useMpu,
+    baseLabel:last3.map(m=>+m.slice(5)+"월").join("·"), curLabel:lastM?(+lastM.slice(5)+"월"):"-", actM:byM};
 }
 function renderKPI(){
   const el=document.getElementById("s4table"), foot=document.getElementById("s4foot");
@@ -382,8 +406,11 @@ function renderKPI(){
     </tr>`;
   }).join("");
   el.innerHTML=head+"<tbody>"+body+"</tbody>";
-  foot.innerHTML=`유지 ARPPU=최근 완결 ${b.baseLabel||"-"} 자체결제 ARPPU · 전환 필요 PU=목표 월PU − 현재 자체 PU(${b.curLabel}, ${N(b.curPU)}명) · `+
-    `목표 비중은 시트값(미래)·실제비중(지난월) · <b style="color:var(--peak)">우수고객 전환 커버리지(우수고객 ARPPU·가용대상·커버리지)는 데이터 연동 후 추가 예정</b>`;
+  const puNote = b.mpuBased
+    ? `월간 MPU(순결제자) 기준`
+    : `<b style="color:var(--down)">PU·ARPPU 잠정</b> — 현재 일·채널 PU를 합산(중복 미제거)한 값입니다. <b>mpu</b> 탭(월×게임코드, 월간 자체결제 순결제자)을 넣으면 정확히 대체됩니다`;
+  foot.innerHTML=`유지 ARPPU=최근 완결 ${b.baseLabel||"-"} · 전환 필요 PU=목표 월PU − 현재 자체 PU(${b.curLabel}, ${N(b.curPU)}명) · 목표 비중=시트값(미래)·실제(지난월)<br>`+
+    `⚠ ${puNote} · 우수고객 전환 커버리지(9~12)는 데이터 연동 후 추가 예정`;
 }
 // 선택 프로젝트의 해당 월 전체매출 실적(비중 계산용)
 function planActualTotal(m,bd){ let t=0,has=false; for(const d in bd){ if(d.slice(0,7)===m){t+=bd[d].total;has=true;} } return has?t:null; }
@@ -400,6 +427,7 @@ async function boot(url){
     if(!CODES.length)throw new Error("상세 데이터를 불러오지 못했습니다.");
     const ord=["POTC","IMGN","GBTW","WWM","DS","RESU"]; CODES.sort((a,b)=>{const ia=ord.indexOf(a),ib=ord.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);});
     await loadPlan(url);
+    await loadMPU(url);
     // 데이터 범위
     MIND="9999-99-99"; MAXD="0000-00-00";
     CODES.forEach(c=>Object.keys(PJ[c]).forEach(d=>{if(d<MIND)MIND=d;if(d>MAXD)MAXD=d;}));
