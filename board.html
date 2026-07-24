@@ -186,22 +186,13 @@ const COL={total:"#4f8cff",d2c:"#4f8cff",etc:"rgba(139,150,173,.45)",ratio:"#fbb
 let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MPU={}, MIND="", MAXD="", HORIZON="", chart=null;
 let curGran="month", curProj="ALL", curMetric="total", fromD="", toD="", convRate=0.30;
 let kpiView="month", kpiMonth="2026-12"; // 섹터4 뷰: 'month'(선택 프로젝트 월별) | 'game'(특정 월 전 게임)
-// 우수고객팀 제공 기본값(총결제 기준 ARPU·활성+클럽 가용대상). 시트 'vip' 탭 있으면 덮어씀
-const VIP_DEFAULT={POTC:{arpu:134389,pool:4971},GBTW:{arpu:97655,pool:19262},WWM:{arpu:231198,pool:8397},DS:{arpu:266748,pool:643}};
-let VIP={};
-let TMPU={}; // 전체 월간 MPU(순결제자) — 시트 'mpu_total' 탭
-const TMPU_DEFAULT={POTC:6995,GBTW:10007,WWM:7127,DS:4411,RESU:18653,IMGN:12701}; // 2026-06 전체 MPU (탭 없을 때 기본)
-// 우수고객(JL) 등급별 [90일 과금 PU, 미전환 풀] — 20260723 스냅샷 (PayUser 제외, CLUB=클럽 포함)
-const JLGRADE={
-  POTC:{CLUB:[4437,2519],실버:[209,85],골드:[165,57],플래티넘:[70,27],플래티넘MVP:[14,3]},
-  GBTW:{CLUB:[6283,3288],실버:[191,65],골드:[112,39],플래티넘:[80,11],플래티넘MVP:[27,5]},
-  WWM:{CLUB:[2703,1954],실버:[106,39],골드:[50,20],플래티넘:[38,12],플래티넘MVP:[5,1]},
-  RESU:{CLUB:[4055,3197],실버:[29,13],골드:[6,5],플래티넘:[3,0],플래티넘MVP:[0,0]}
-};
+let TMPU={}; // 전체 월간 MPU(순결제자) — 시트 'mpu_total' 탭에서만 로드 (실데이터 미내장)
+// 우수고객(JL) 등급별 {게임:{등급:[90일 과금 PU, 미전환 풀]}} — 시트 'jl' 탭(game,grade,pu,pool)에서만 로드 (실데이터 미내장)
+let JLG={};
 const JL_GRADES=["CLUB","실버","골드","플래티넘","플래티넘MVP"];
 let jlGrade="전체";
 function jlAgg(codes){ let pu=0,av=0,has=false;
-  codes.forEach(c=>{ const gg=JLGRADE[c]; if(!gg)return;
+  codes.forEach(c=>{ const gg=JLG[c]; if(!gg)return;
     if(jlGrade==="전체"){ JL_GRADES.forEach(k=>{ if(gg[k]){pu+=gg[k][0];av+=gg[k][1];has=true;} }); }
     else if(gg[jlGrade]){ pu+=gg[jlGrade][0]; av+=gg[jlGrade][1]; has=true; } });
   return {pu,av,has}; }
@@ -305,22 +296,25 @@ async function loadTotalMPU(url){
   }catch(e){}
 }
 const totalMpuOf=(m,codes=selCodes())=>{ let t=0,has=false; codes.forEach(c=>{ if(TMPU[c]&&TMPU[c][m]!=null){t+=TMPU[c][m];has=true;} }); return has?t:null; };
-// 인게임(스토어) 결제자 = 기준월 전체 MPU − 자체 MPU. 탭 없으면 2026-06 기본값
-function ingameBase(codes,b){ let tot=totalMpuOf(b.curKey,codes); if(tot==null){ tot=0; codes.forEach(c=>{ if(TMPU_DEFAULT[c]!=null)tot+=TMPU_DEFAULT[c]; }); } return Math.max(0,tot-b.curPU); }
-// 우수고객 데이터: 시트 'vip' 탭(game,arpu,pool) → 없으면 기본값. 선택 프로젝트 합산(ARPU는 인원 가중평균)
-async function loadVip(url){
-  VIP={...VIP_DEFAULT};
+// 인게임(스토어) 결제자 = 기준월 전체 MPU − 자체 MPU. mpu_total 탭 없으면 표시 안 함(–)
+function ingameBase(codes,b){ const tot=totalMpuOf(b.curKey,codes); if(tot==null)return null; return Math.max(0,tot-b.curPU); }
+// 우수고객(JL) 탭('jl') 로드: game,grade,pu,pool (등급별 90일 과금 PU·미전환 풀)
+async function loadJL(url){
+  JLG={};
   try{
-    const grid=await fetchGrid(url,"vip");
-    const h=headerOf(grid); const gi=h.findIndex(x=>x.includes("game")||x.includes("게임")||x.includes("project"));
-    const ai=h.findIndex(x=>x.includes("arpu")), pi=h.findIndex(x=>x.includes("pool")||x.includes("가용")||x.includes("대상"));
-    if(gi>=0&&ai>=0&&pi>=0){ for(let i=1;i<grid.length;i++){ const g=String(grid[i][gi]||"").trim().toUpperCase(); if(!g)continue;
-      const a=toNum(grid[i][ai]), p=toNum(grid[i][pi]); if(a!=null&&p!=null)VIP[g]={arpu:a,pool:p}; } }
-  }catch(e){ /* vip 탭 없으면 기본값 유지 */ }
+    const grid=await fetchGrid(url,"jl");
+    const h=headerOf(grid);
+    const gi=h.findIndex(x=>x.includes("game")||x.includes("게임"));
+    const ri=h.findIndex(x=>x.includes("grade")||x.includes("등급"));
+    const pi=h.findIndex(x=>x==="pu"||x.includes("과금"));
+    const ai=h.findIndex(x=>x.includes("pool")||x.includes("미전환")||x.includes("가용"));
+    if(gi<0||ri<0||pi<0||ai<0)return;
+    for(let i=1;i<grid.length;i++){ const g=grid[i]; if(!g)continue;
+      const gm=String(g[gi]||"").trim().toUpperCase(); const gr=String(g[ri]||"").trim();
+      const pu=toNum(g[pi]), pool=toNum(g[ai]);
+      if(gm&&gr&&pu!=null&&pool!=null)(JLG[gm]=JLG[gm]||{})[gr]=[pu,pool]; }
+  }catch(e){ /* jl 탭 없으면 우수고객 컬럼 – 표시 */ }
 }
-function vipAgg(codes=selCodes()){ let pool=0,wsum=0,missing=[];
-  codes.forEach(c=>{ if(VIP[c]&&VIP[c].pool!=null&&VIP[c].arpu!=null){pool+=VIP[c].pool;wsum+=VIP[c].pool*VIP[c].arpu;} else missing.push(c); });
-  return {pool, arpu:pool?wsum/pool:0, missing, has:pool>0}; }
 const daysInMonth=ym=>{const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate();};
 // 선택 프로젝트의 날짜별 합산 {date:{total,web,apk,pc}}
 function mergedByDate(codes=selCodes()){
@@ -557,7 +551,7 @@ function buildStageButtons(){ const seg=document.getElementById("kpiStageSeg"); 
 async function boot(url){
   // 미러(하드코딩 스냅샷) 모드: 시트 없이 내장 데이터 사용
   if(window.__MIRROR__){ const D=window.__MIRROR__;
-    CODES=D.CODES.slice(); PJ=D.PJ; PLAN=D.PLAN||{}; TGTR=D.TGTR||{}; MPU=D.MPU||{}; TMPU=D.TMPU||{};
+    CODES=D.CODES.slice(); PJ=D.PJ; PLAN=D.PLAN||{}; TGTR=D.TGTR||{}; MPU=D.MPU||{}; TMPU=D.TMPU||{}; JLG=D.JLG||{};
     afterLoad(); return; }
   SHEET_URL=url;
   try{
@@ -572,6 +566,7 @@ async function boot(url){
     await loadPlan(url);
     await loadMPU(url);
     await loadTotalMPU(url);
+    await loadJL(url);
     localStorage.setItem("kpiplanner-sheet",url);
     try{const s=JSON.parse(localStorage.getItem(DASH_LS))||{};if(s.masterSheetUrl!==url){s.masterSheetUrl=url;localStorage.setItem(DASH_LS,JSON.stringify(s));}}catch(e){}
     afterLoad();
