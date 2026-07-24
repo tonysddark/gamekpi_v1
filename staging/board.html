@@ -85,7 +85,7 @@
         <input type="date" id="fromDate"> <span style="color:var(--muted)">~</span> <input type="date" id="toDate">
         <span class="seg"><button id="rangeReset">전체</button></span>
       </div>
-      <div class="grp"><b>프로젝트</b> <select id="pjSel"></select></div>
+      <div class="grp"><b>프로젝트</b> <span id="pjChk" style="display:inline-flex;gap:11px;flex-wrap:wrap;font-size:13px"></span></div>
       <div class="grp"><b>지표</b>
         <span class="seg" id="metricSeg">
           <button data-m="total" class="active">전체 매출</button>
@@ -119,7 +119,9 @@ const CH_COL={web:"#c084fc",apk:"#4f8cff",pc:"#34d399"};
 const COL={total:"#4f8cff",d2c:"#4f8cff",etc:"rgba(139,150,173,.45)",ratio:"#fbbf24"};
 
 let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MIND="", MAXD="", HORIZON="", chart=null;
-let curGran="month", curPj="ALL", curMetric="total", fromD="", toD="";
+let curGran="month", selPj=new Set(), curMetric="total", fromD="", toD="";
+const selCodes=()=> selPj.size?CODES.filter(c=>selPj.has(c)):[]; // 선택 프로젝트(순서 유지)
+const allSelected=()=> selPj.size===CODES.length;
 
 function getMasterUrl(){ try{const s=JSON.parse(localStorage.getItem(DASH_LS));if(s&&s.masterSheetUrl)return s.masterSheetUrl;}catch(e){} return localStorage.getItem("kpiplanner-sheet")||""; }
 function showSetup(msg){ document.getElementById("setup").style.display=""; document.getElementById("main").style.display="none"; document.getElementById("setupMsg").innerHTML=msg; document.getElementById("range").textContent="데이터 미연결"; }
@@ -181,13 +183,13 @@ async function loadPlan(url){
 const daysInMonth=ym=>{const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate();};
 // 선택 프로젝트의 날짜별 합산 {date:{total,web,apk,pc}}
 function mergedByDate(){
-  const codes = curPj==="ALL" ? CODES : [curPj];
+  const codes = selCodes();
   const out={};
   codes.forEach(c=>{ const bd=PJ[c]||{}; for(const d in bd){ const s=bd[d]; const o=out[d]=out[d]||{total:0,web:0,apk:0,pc:0}; o.total+=s.total;o.web+=s.web;o.apk+=s.apk;o.pc+=s.pc; } });
   return out;
 }
 // 계획매출/목표 — 월 단위. 선택 프로젝트 합산
-function planOf(m){ const codes=curPj==="ALL"?CODES:[curPj]; let t=0,has=false; codes.forEach(c=>{ if(PLAN[c]&&PLAN[c][m]!=null){t+=PLAN[c][m];has=true;} }); return has?t:null; }
+function planOf(m){ const codes=selCodes(); let t=0,has=false; codes.forEach(c=>{ if(PLAN[c]&&PLAN[c][m]!=null){t+=PLAN[c][m];has=true;} }); return has?t:null; }
 
 // 버킷 생성: 집계단위 + 기간 필터 → labels[], rows[] (실적+목표)
 function buildSeries(){
@@ -288,7 +290,7 @@ function render(){
 
   renderCards(rows);
   document.getElementById("s1foot").textContent =
-    `${rows.length}개 구간 · ${curPj==="ALL"?"전 프로젝트 합산":curPj} · 비중(우축)=자체결제/전체매출 · 점선=목표 비중 · 목표 막대=사업계획×목표비중(2026)`;
+    `${rows.length}개 구간 · ${selPj.size===0?"프로젝트 미선택":allSelected()?"전 프로젝트 합산":selCodes().join("+")} · 비중(우축)=자체결제/전체매출 · 점선=목표 비중 · 목표 막대=사업계획×목표비중(2026)`;
 }
 
 function renderCards(rows){
@@ -327,7 +329,10 @@ async function boot(url){
     Object.keys(TGTR).forEach(m=>{ const end=m+"-"+String(daysInMonth(m)).padStart(2,"0"); if(end>HORIZON)HORIZON=end; });
     const fEl=document.getElementById("fromDate"),tEl=document.getElementById("toDate");
     fEl.min=tEl.min=MIND; fEl.max=tEl.max=HORIZON; fEl.value=MIND; tEl.value=HORIZON; fromD=MIND; toD=HORIZON;
-    document.getElementById("pjSel").innerHTML=`<option value="ALL">전체 (합산)</option>`+CODES.map(c=>`<option value="${c}">${c}</option>`).join("");
+    selPj=new Set(CODES);
+    document.getElementById("pjChk").innerHTML=
+      `<label style="cursor:pointer"><input type="checkbox" id="pjAll" checked> <b style="color:var(--text)">전체</b></label>`+
+      CODES.map(c=>`<label style="cursor:pointer"><input type="checkbox" class="pjc" value="${c}" checked style="accent-color:var(--accent)"> ${c}</label>`).join("");
     document.getElementById("range").textContent=`${CODES.length}개 프로젝트 · ${MIND} ~ ${MAXD} · 자체결제 = ${D2C_PGS.join("·")}`;
     document.getElementById("setup").style.display="none"; document.getElementById("main").style.display="";
     localStorage.setItem("kpiplanner-sheet",url);
@@ -339,7 +344,18 @@ async function boot(url){
 // ---- 컨트롤 ----
 document.getElementById("granSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;curGran=b.dataset.g;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));render();});
 document.getElementById("metricSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;curMetric=b.dataset.m;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));render();});
-document.getElementById("pjSel").addEventListener("change",e=>{curPj=e.target.value;render();});
+// 프로젝트 체크박스 (복수 선택). '전체'는 일괄 on/off
+document.getElementById("pjChk").addEventListener("change",e=>{
+  const t=e.target;
+  if(t.id==="pjAll"){
+    document.querySelectorAll(".pjc").forEach(x=>x.checked=t.checked);
+    selPj = t.checked ? new Set(CODES) : new Set();
+  }else if(t.classList.contains("pjc")){
+    if(t.checked)selPj.add(t.value); else selPj.delete(t.value);
+    document.getElementById("pjAll").checked = selPj.size===CODES.length;
+  }
+  render();
+});
 document.getElementById("fromDate").addEventListener("change",e=>{fromD=e.target.value;render();});
 document.getElementById("toDate").addEventListener("change",e=>{toD=e.target.value;render();});
 document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;toD=HORIZON;document.getElementById("fromDate").value=MIND;document.getElementById("toDate").value=HORIZON;render();});
