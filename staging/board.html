@@ -322,7 +322,10 @@ function render(){
   // ---- 막대 데이터셋 (지표별) ----
   const ds=[];
   if(curMetric==="total"){
-    ds.push({type:"bar",label:"자체결제",data:rows.map(r=>r.d2c),backgroundColor:COL.d2c,stack:"a",yAxisID:"y",borderRadius:2,order:2});
+    // 자체결제를 WEB/APK/PC 채널색으로 분해 + 기타(마켓)
+    ds.push({type:"bar",label:"WEB",data:rows.map(r=>r.web),backgroundColor:CH_COL.web,stack:"a",yAxisID:"y",borderRadius:2,order:2});
+    ds.push({type:"bar",label:"APK",data:rows.map(r=>r.apk),backgroundColor:CH_COL.apk,stack:"a",yAxisID:"y",borderRadius:2,order:2});
+    ds.push({type:"bar",label:"PC",data:rows.map(r=>r.pc),backgroundColor:CH_COL.pc,stack:"a",yAxisID:"y",borderRadius:2,order:2});
     ds.push({type:"bar",label:"기타(마켓)",data:rows.map(r=>r.etc),backgroundColor:COL.etc,stack:"a",yAxisID:"y",borderRadius:2,order:2});
     ds.push({type:"bar",label:"자체결제(목표)",data:rows.map(r=>r.tgt?r.tgt.d2c:null),backgroundColor:"rgba(79,140,255,.35)",stack:"t",yAxisID:"y",borderRadius:2,order:3});
     ds.push({type:"bar",label:"기타(목표)",data:rows.map(r=>r.tgt?r.tgt.etc:null),backgroundColor:"rgba(139,150,173,.18)",stack:"t",yAxisID:"y",borderRadius:2,order:3});
@@ -356,11 +359,17 @@ function render(){
         label:()=>null,
         afterBody:items=>{
           if(!items.length)return "";
-          const r=rows[items[0].dataIndex]; if(!r)return "";
+          const idx=items[0].dataIndex; const r=rows[idx]; if(!r)return "";
           const pct=v=>r.total?(v/r.total*100).toFixed(1)+"%":"–";
           const L=[];
           L.push("전체 매출  "+억(r.total));
           L.push("자체결제  "+억(r.d2c)+"  ("+P(r.ratio)+")");
+          // 직전 구간 대비 자체결제 증감
+          const prev=rows[idx-1];
+          if(prev){ const d=r.d2c-prev.d2c; const rate=prev.d2c?d/prev.d2c*100:null;
+            const unit=curGran==="year"?"전년":curGran==="month"?"전월":"전일";
+            const sign=d>=0?"▲ +":"▼ ";
+            L.push(`  ${unit}대비  ${sign}${억(Math.abs(d))}${rate!=null?" ("+(d>=0?"+":"-")+Math.abs(rate).toFixed(1)+"%)":""}`); }
           L.push("  · WEB  "+억(r.web)+"  ("+pct(r.web)+")");
           L.push("  · APK  "+억(r.apk)+"  ("+pct(r.apk)+")");
           L.push("  · PC   "+억(r.pc)+"  ("+pct(r.pc)+")");
