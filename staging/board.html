@@ -571,7 +571,8 @@ async function boot(url){
     HORIZON=MAXD;
     Object.keys(TGTR).forEach(m=>{ const end=m+"-"+String(daysInMonth(m)).padStart(2,"0"); if(end>HORIZON)HORIZON=end; });
     const fEl=document.getElementById("fromDate"),tEl=document.getElementById("toDate");
-    fEl.min=tEl.min=MIND; fEl.max=tEl.max=HORIZON; fEl.value=MIND; tEl.value=HORIZON; fromD=MIND; toD=HORIZON;
+    const DEF_FROM = MIND<"2026-01-01" ? "2026-01-01" : MIND;  // 기본 시작 = 26년 1월(데이터가 더 이르면)
+    fEl.min=tEl.min=MIND; fEl.max=tEl.max=HORIZON; fEl.value=DEF_FROM; tEl.value=HORIZON; fromD=DEF_FROM; toD=HORIZON;
     curProj="ALL"; fillProjSelectors();
     document.getElementById("range").textContent=`${CODES.length}개 프로젝트 · ${MIND} ~ ${MAXD} · 자체결제 = ${D2C_PGS.join("·")}`;
     document.getElementById("setup").style.display="none"; document.getElementById("main").style.display="";
