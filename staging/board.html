@@ -133,33 +133,25 @@
     </div>
     <div class="panel sortable" data-sec="kpi" draggable="false">
       <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 단계별 KPI <span>2026 하반기 목표(프로젝트 필터 적용) · ARPPU 유지 → 필요 MPU → 미전환 풀 전환율</span></h2>
-      <div style="display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);margin:2px 0 10px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:8px">
-          <b style="color:var(--text)">프로젝트</b> <select class="pjSel"></select>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <b style="color:var(--text)">뷰</b>
-          <span class="seg" id="kpiViewSeg">
-            <button data-v="month" class="active">월별 추이</button>
-            <button data-v="game">게임별(월 선택)</button>
-          </span>
-          <select id="kpiMonth" style="display:none">
-            <option value="2026-07">7월</option><option value="2026-08">8월</option>
-            <option value="2026-09">9월</option><option value="2026-10">10월</option>
-            <option value="2026-11">11월</option><option value="2026-12" selected>12월</option>
-          </select>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <b style="color:var(--text)">우수고객 등급</b>
+      <div style="display:flex;gap:14px;align-items:center;font-size:12px;margin:2px 0 8px;flex-wrap:wrap">
+        <span class="seg" id="kpiViewSeg">
+          <button data-v="month" class="active">월별 추이</button>
+          <button data-v="game">게임별</button>
+        </span>
+        <div style="display:flex;align-items:center;gap:8px"><b style="color:var(--text)">게임</b> <select class="pjSel"></select></div>
+        <div style="display:flex;align-items:center;gap:8px"><b style="color:var(--text)">등급</b>
           <select id="jlGrade">
-            <option value="전체" selected>전체</option>
+            <option value="전체" selected>전체 등급</option>
             <option value="CLUB">CLUB(클럽)</option>
             <option value="실버">실버</option><option value="골드">골드</option>
             <option value="플래티넘">플래티넘</option><option value="플래티넘MVP">플래티넘MVP</option>
           </select>
         </div>
-        <span>— 게임별 뷰=선택 월 전 게임 · 우수고객=PayUser 제외 · 커버리지=미전환 풀 전원 전환 시 전환 필요 충족 여부</span>
       </div>
+      <div id="stageRow" style="display:none;align-items:center;gap:8px;font-size:12px;margin:0 0 10px;flex-wrap:wrap">
+        <b style="color:var(--text)">목표 단계</b> <span class="seg" id="kpiStageSeg"></span>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">— 게임별: 목표 단계를 고르면 각 게임·등급이 그 단계 도달에 필요한 전환/커버리지를 보여줍니다 · 우수고객=PayUser 제외</div>
       <div style="overflow-x:auto"><table id="s4table" style="min-width:1760px"></table></div>
       <div class="foot" id="s4foot"></div>
     </div>
@@ -522,7 +514,7 @@ function kpiMetricCells(codes,m,b,bd){
 }
 function renderKPI(){
   const el=document.getElementById("s4table"), foot=document.getElementById("s4foot");
-  const mSel=document.getElementById("kpiMonth"); if(mSel) mSel.style.display = kpiView==="game"?"":"none";
+  const sr=document.getElementById("stageRow"); if(sr) sr.style.display = kpiView==="game"?"flex":"none";
   if(!selCodes().length){ el.innerHTML=""; foot.textContent="프로젝트를 선택하세요."; return; }
   const months=["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
   const g1=`<th>사업 전체매출</th><th>목표 비중</th><th>목표 금액</th><th>현황(run-rate)</th><th>부족 금액</th><th>월 ARPPU(유지)</th>`;
@@ -534,7 +526,8 @@ function renderKPI(){
   if(kpiView==="game"){
     const m=kpiMonth, stg=STAGE[m]||"";
     head=buildHead("게임","단계");
-    body=CODES.map(c=>{
+    const gorder=CODES.slice().sort((a,b)=>{const rk=x=>x==="DS"?1:x==="IMGN"?2:0;return rk(a)-rk(b);}); // DS·IMGN 맨 뒤
+    body=gorder.map(c=>{
       const bd=mergedByDate([c]); const b=baseStats(bd,[c]);
       return `<tr><td class="mon" style="font-weight:600">${c}</td><td class="mon" style="color:var(--peak)">${stg}</td>${kpiMetricCells([c],m,b,bd)}</tr>`;
     }).join("");
@@ -550,6 +543,11 @@ function renderKPI(){
 }
 // 선택 프로젝트의 해당 월 전체매출 실적(비중 계산용)
 function planActualTotal(m,bd){ let t=0,has=false; for(const d in bd){ if(d.slice(0,7)===m){t+=bd[d].total;has=true;} } return has?t:null; }
+// 목표 단계 버튼 (단계·월·비중)
+function buildStageButtons(){ const seg=document.getElementById("kpiStageSeg"); if(!seg)return;
+  const months=["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
+  seg.innerHTML=months.map(m=>{ const r=TGTR[m]; const lbl=`${STAGE[m]||""} · ${+m.slice(5)}월${r!=null?" · "+r+"%":""}`;
+    return `<button data-m="${m}" class="${m===kpiMonth?"active":""}">${lbl}</button>`; }).join(""); }
 
 async function boot(url){
   SHEET_URL=url;
@@ -565,6 +563,7 @@ async function boot(url){
     await loadPlan(url);
     await loadMPU(url);
     await loadTotalMPU(url);
+    buildStageButtons();  // TGTR 로드 후 목표 단계 버튼 생성
     // 데이터 범위
     MIND="9999-99-99"; MAXD="0000-00-00";
     CODES.forEach(c=>Object.keys(PJ[c]).forEach(d=>{if(d<MIND)MIND=d;if(d>MAXD)MAXD=d;}));
@@ -592,7 +591,7 @@ document.getElementById("toDate").addEventListener("change",e=>{toD=e.target.val
 document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;toD=HORIZON;document.getElementById("fromDate").value=MIND;document.getElementById("toDate").value=HORIZON;render();});
 document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
 document.getElementById("kpiViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
-document.getElementById("kpiMonth").addEventListener("change",e=>{kpiMonth=e.target.value;renderKPI();});
+document.getElementById("kpiStageSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiMonth=b.dataset.m;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("jlGrade").addEventListener("change",e=>{jlGrade=e.target.value;renderKPI();});
 // 밤/낮 모드
 (function(){ if(localStorage.getItem("board-theme")==="light")document.documentElement.classList.add("light");
