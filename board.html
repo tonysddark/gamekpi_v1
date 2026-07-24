@@ -39,6 +39,11 @@
   .card .s{font-size:11px;color:var(--muted);margin-top:3px;}
   .chart-box{position:relative;height:400px;margin-top:10px;}
   .foot{color:var(--muted);font-size:12px;line-height:1.7;margin-top:10px;}
+  .sortable{transition:box-shadow .15s;}
+  .drag{cursor:grab;color:var(--muted);font-size:16px;user-select:none;margin-right:2px;padding:0 4px;}
+  .drag:active{cursor:grabbing;}
+  .sortable.dragging{opacity:.55;outline:2px dashed var(--accent);}
+  .sortable.dragover{box-shadow:0 -3px 0 var(--accent) inset;}
   #setup{display:none;}
 </style>
 </head>
@@ -70,9 +75,9 @@
 </div>
 
 <div id="main" style="display:none;">
-  <!-- ===== 섹터 1 : 전체 현황판 ===== -->
+  <!-- ===== ① 필터 (고정) ===== -->
   <div class="panel">
-    <h2>① 전체 현황판 <span>기간·프로젝트·지표를 선택해서 보세요 (2021~2026)</span></h2>
+    <h2>① 필터 <span style="color:var(--peak)">고정</span> <span>선택한 기준이 아래 모든 섹션에 반영됩니다</span></h2>
     <div class="ctl">
       <div class="grp"><b>집계</b>
         <span class="seg" id="granSeg">
@@ -96,14 +101,22 @@
         </span>
       </div>
     </div>
-    <div class="cards" id="s1cards"></div>
-    <div class="chart-box"><canvas id="s1chart" role="img" aria-label="매출 추이"></canvas></div>
-    <div class="foot" id="s1foot"></div>
   </div>
 
-  <div class="panel" style="border-style:dashed;text-align:center;color:var(--muted);font-size:13px;">
-    ② 다음 섹터 — 여기에 이어서 함께 만들어갑니다.
+  <!-- ===== 드래그로 순서 변경 가능한 섹션들 ===== -->
+  <div id="sections">
+    <div class="panel sortable" data-sec="cards" draggable="false">
+      <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 요약 카드 <span>선택 기간·프로젝트 합계</span></h2>
+      <div class="cards" id="s1cards"></div>
+    </div>
+    <div class="panel sortable" data-sec="chart" draggable="false">
+      <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 매출 추이 <span>막대=매출 · 우축 선=자체결제 비중</span></h2>
+      <div class="chart-box"><canvas id="s1chart" role="img" aria-label="매출 추이"></canvas></div>
+      <div class="foot" id="s1foot"></div>
+    </div>
   </div>
+
+  <div style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:4px">다음 섹터는 여기에 이어서 함께 만들어갑니다 · 카드/추이 제목의 <b>⠿</b>를 잡고 끌면 순서가 바뀝니다</div>
 </div>
 
 <script>
@@ -360,6 +373,33 @@ document.getElementById("fromDate").addEventListener("change",e=>{fromD=e.target
 document.getElementById("toDate").addEventListener("change",e=>{toD=e.target.value;render();});
 document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;toD=HORIZON;document.getElementById("fromDate").value=MIND;document.getElementById("toDate").value=HORIZON;render();});
 document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
+
+/* ===== 섹션 드래그 정렬 (① 필터는 고정, 나머지 재배치) ===== */
+const SEC_LS="board-sec-order";
+const NUMS=["②","③","④","⑤","⑥","⑦","⑧","⑨","⑩"];
+const secBox=document.getElementById("sections");
+function renumberSecs(){ [...secBox.querySelectorAll(".sortable")].forEach((p,i)=>{ const n=p.querySelector(".secnum"); if(n)n.textContent=NUMS[i]||("#"+(i+2)); }); }
+function saveOrder(){ try{ localStorage.setItem(SEC_LS, JSON.stringify([...secBox.querySelectorAll(".sortable")].map(p=>p.dataset.sec))); }catch(e){} }
+function loadOrder(){
+  try{ const ord=JSON.parse(localStorage.getItem(SEC_LS)); if(Array.isArray(ord)) ord.forEach(sec=>{ const el=secBox.querySelector(`.sortable[data-sec="${sec}"]`); if(el)secBox.appendChild(el); }); }catch(e){}
+  renumberSecs();
+}
+// 핸들에서만 드래그 시작
+secBox.querySelectorAll(".drag").forEach(h=>{
+  const panel=h.closest(".sortable");
+  h.addEventListener("mousedown",()=>panel.setAttribute("draggable","true"));
+  h.addEventListener("mouseup",()=>panel.setAttribute("draggable","false"));
+});
+let dragEl=null;
+secBox.addEventListener("dragstart",e=>{ const p=e.target.closest(".sortable"); if(!p)return; dragEl=p; p.classList.add("dragging"); e.dataTransfer.effectAllowed="move"; });
+secBox.addEventListener("dragend",e=>{ if(dragEl){dragEl.classList.remove("dragging");dragEl.setAttribute("draggable","false");} secBox.querySelectorAll(".dragover").forEach(x=>x.classList.remove("dragover")); dragEl=null; renumberSecs(); saveOrder(); });
+secBox.addEventListener("dragover",e=>{
+  e.preventDefault(); if(!dragEl)return;
+  const after=[...secBox.querySelectorAll(".sortable:not(.dragging)")].find(el=>{ const r=el.getBoundingClientRect(); return e.clientY < r.top + r.height/2; });
+  if(after) secBox.insertBefore(dragEl, after); else secBox.appendChild(dragEl);
+});
+
+loadOrder(); // 섹션 번호 매기기 + 저장된 순서 복원
 
 (function(){
   let url="";
