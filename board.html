@@ -118,7 +118,7 @@ const P=v=>(v==null?"–":v.toFixed(1)+"%");
 const CH_COL={web:"#c084fc",apk:"#4f8cff",pc:"#34d399"};
 const COL={total:"#4f8cff",d2c:"#4f8cff",etc:"rgba(139,150,173,.45)",ratio:"#fbbf24"};
 
-let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MIND="", MAXD="", chart=null;
+let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MIND="", MAXD="", HORIZON="", chart=null;
 let curGran="month", curPj="ALL", curMetric="total", fromD="", toD="";
 
 function getMasterUrl(){ try{const s=JSON.parse(localStorage.getItem(DASH_LS));if(s&&s.masterSheetUrl)return s.masterSheetUrl;}catch(e){} return localStorage.getItem("kpiplanner-sheet")||""; }
@@ -198,6 +198,15 @@ function buildSeries(){
     if(fromD&&d<fromD)continue; if(toD&&d>toD)continue;
     const k=keyOf(d); const o=buk[k]=buk[k]||{total:0,web:0,apk:0,pc:0,_months:new Set()};
     const s=bd[d]; o.total+=s.total;o.web+=s.web;o.apk+=s.apk;o.pc+=s.pc; o._months.add(d.slice(0,7));
+  }
+  // 실적이 아직 없는 미래 목표월(계획+목표비중만 존재)도 버킷 추가 — 월별/연간에서 목표 막대 표시
+  if(curGran!=="day"){
+    const fromK=fromD?keyOf(fromD):"", toK=toD?keyOf(toD):"";
+    Object.keys(TGTR).forEach(m=>{ if(planOf(m)==null)return;
+      const k=keyOf(m+"-01");
+      if(fromK&&k<fromK)return; if(toK&&k>toK)return;
+      if(!buk[k]) buk[k]={total:0,web:0,apk:0,pc:0,_months:new Set([m])};
+    });
   }
   const keys=Object.keys(buk).sort();
   const rows=keys.map(k=>{
@@ -313,8 +322,11 @@ async function boot(url){
     // 데이터 범위
     MIND="9999-99-99"; MAXD="0000-00-00";
     CODES.forEach(c=>Object.keys(PJ[c]).forEach(d=>{if(d<MIND)MIND=d;if(d>MAXD)MAXD=d;}));
+    // 목표(2026) 월까지 기간 지평 확장 → 기본값에서 미래 목표가 보이도록
+    HORIZON=MAXD;
+    Object.keys(TGTR).forEach(m=>{ const end=m+"-"+String(daysInMonth(m)).padStart(2,"0"); if(end>HORIZON)HORIZON=end; });
     const fEl=document.getElementById("fromDate"),tEl=document.getElementById("toDate");
-    fEl.min=tEl.min=MIND; fEl.max=tEl.max=MAXD; fEl.value=MIND; tEl.value=MAXD; fromD=MIND; toD=MAXD;
+    fEl.min=tEl.min=MIND; fEl.max=tEl.max=HORIZON; fEl.value=MIND; tEl.value=HORIZON; fromD=MIND; toD=HORIZON;
     document.getElementById("pjSel").innerHTML=`<option value="ALL">전체 (합산)</option>`+CODES.map(c=>`<option value="${c}">${c}</option>`).join("");
     document.getElementById("range").textContent=`${CODES.length}개 프로젝트 · ${MIND} ~ ${MAXD} · 자체결제 = ${D2C_PGS.join("·")}`;
     document.getElementById("setup").style.display="none"; document.getElementById("main").style.display="";
@@ -330,7 +342,7 @@ document.getElementById("metricSeg").addEventListener("click",e=>{const b=e.targ
 document.getElementById("pjSel").addEventListener("change",e=>{curPj=e.target.value;render();});
 document.getElementById("fromDate").addEventListener("change",e=>{fromD=e.target.value;render();});
 document.getElementById("toDate").addEventListener("change",e=>{toD=e.target.value;render();});
-document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;toD=MAXD;document.getElementById("fromDate").value=MIND;document.getElementById("toDate").value=MAXD;render();});
+document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;toD=HORIZON;document.getElementById("fromDate").value=MIND;document.getElementById("toDate").value=HORIZON;render();});
 document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
 
 (function(){
