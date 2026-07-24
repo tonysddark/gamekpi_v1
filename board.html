@@ -40,6 +40,7 @@
   .chart-box{position:relative;height:400px;margin-top:10px;}
   .foot{color:var(--muted);font-size:12px;line-height:1.7;margin-top:10px;}
   #filterPanel{position:sticky;top:6px;z-index:30;box-shadow:0 8px 20px -10px rgba(0,0,0,.7);}
+  td.grp,th.grp{border-left:1px solid var(--border);}
   .sortable{transition:box-shadow .15s;}
   .drag{cursor:grab;color:var(--muted);font-size:16px;user-select:none;margin-right:2px;padding:0 4px;}
   .drag:active{cursor:grabbing;}
@@ -116,8 +117,14 @@
       <div class="foot" id="s1foot"></div>
     </div>
     <div class="panel sortable" data-sec="kpi" draggable="false">
-      <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 단계별 KPI <span>2026 하반기 목표(프로젝트 필터 적용 · 집계/기간/지표와 무관) · ARPPU 유지 → 필요 PU</span></h2>
-      <div style="overflow-x:auto"><table id="s4table" style="min-width:900px"></table></div>
+      <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 단계별 KPI <span>2026 하반기 목표(프로젝트 필터 적용) · ARPPU 유지 → 필요 MPU → 우수고객 커버리지</span></h2>
+      <div style="display:flex;gap:10px;align-items:center;font-size:12px;color:var(--muted);margin:2px 0 10px;flex-wrap:wrap">
+        <b style="color:var(--text)">가정 전환율</b>
+        <input type="range" id="convRate" min="10" max="100" step="5" value="30" style="width:170px;accent-color:var(--accent)">
+        <span id="convVal" style="color:var(--accent);font-weight:700;min-width:38px">30%</span>
+        <span>— 우수고객 가용 대상 중 실제 전환 비율 가정 (전원전환 커버리지의 '현실'값)</span>
+      </div>
+      <div style="overflow-x:auto"><table id="s4table" style="min-width:1320px"></table></div>
       <div class="foot" id="s4foot"></div>
     </div>
   </div>
@@ -140,7 +147,10 @@ const CH_COL={web:"#c084fc",apk:"#4f8cff",pc:"#34d399"};
 const COL={total:"#4f8cff",d2c:"#4f8cff",etc:"rgba(139,150,173,.45)",ratio:"#fbbf24"};
 
 let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MPU={}, MIND="", MAXD="", HORIZON="", chart=null;
-let curGran="month", selPj=new Set(), curMetric="total", fromD="", toD="";
+let curGran="month", selPj=new Set(), curMetric="total", fromD="", toD="", convRate=0.30;
+// 우수고객팀 제공 기본값(총결제 기준 ARPU·활성+클럽 가용대상). 시트 'vip' 탭 있으면 덮어씀
+const VIP_DEFAULT={POTC:{arpu:134389,pool:4971},GBTW:{arpu:97655,pool:19262},WWM:{arpu:231198,pool:8397},DS:{arpu:266748,pool:643}};
+let VIP={};
 const selCodes=()=> selPj.size?CODES.filter(c=>selPj.has(c)):[]; // 선택 프로젝트(순서 유지)
 const allSelected=()=> selPj.size===CODES.length;
 
@@ -227,6 +237,20 @@ async function loadMPU(url){
   }catch(e){ /* mpu 탭 없으면 잠정(일 합산) 사용 */ }
 }
 const mpuOf=m=>{ const codes=selCodes(); let t=0,has=false; codes.forEach(c=>{ if(MPU[c]&&MPU[c][m]!=null){t+=MPU[c][m];has=true;} }); return has?t:null; };
+// 우수고객 데이터: 시트 'vip' 탭(game,arpu,pool) → 없으면 기본값. 선택 프로젝트 합산(ARPU는 인원 가중평균)
+async function loadVip(url){
+  VIP={...VIP_DEFAULT};
+  try{
+    const grid=await fetchGrid(url,"vip");
+    const h=headerOf(grid); const gi=h.findIndex(x=>x.includes("game")||x.includes("게임")||x.includes("project"));
+    const ai=h.findIndex(x=>x.includes("arpu")), pi=h.findIndex(x=>x.includes("pool")||x.includes("가용")||x.includes("대상"));
+    if(gi>=0&&ai>=0&&pi>=0){ for(let i=1;i<grid.length;i++){ const g=String(grid[i][gi]||"").trim().toUpperCase(); if(!g)continue;
+      const a=toNum(grid[i][ai]), p=toNum(grid[i][pi]); if(a!=null&&p!=null)VIP[g]={arpu:a,pool:p}; } }
+  }catch(e){ /* vip 탭 없으면 기본값 유지 */ }
+}
+function vipAgg(){ const codes=selCodes(); let pool=0,wsum=0,missing=[];
+  codes.forEach(c=>{ if(VIP[c]&&VIP[c].pool!=null&&VIP[c].arpu!=null){pool+=VIP[c].pool;wsum+=VIP[c].pool*VIP[c].arpu;} else missing.push(c); });
+  return {pool, arpu:pool?wsum/pool:0, missing, has:pool>0}; }
 const daysInMonth=ym=>{const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate();};
 // 선택 프로젝트의 날짜별 합산 {date:{total,web,apk,pc}}
 function mergedByDate(){
@@ -374,6 +398,7 @@ function baseStats(bd){
   const useMpu=mpuHas&&mpuSum>0&&curMpu!=null;
   return {arppu: useMpu?rev/mpuSum:(dailyPU?rev/dailyPU:0),
     curPU: useMpu?curMpu:(lastM?byM[lastM].spu:0),
+    curRev: lastM?byM[lastM].srev:0,   // 최근 완결월 자체결제 매출(run-rate)
     mpuBased:useMpu,
     baseLabel:last3.map(m=>+m.slice(5)+"월").join("·"), curLabel:lastM?(+lastM.slice(5)+"월"):"-", actM:byM};
 }
@@ -384,42 +409,55 @@ function renderKPI(){
   const b=baseStats(bd);
   const A=b.arppu;
   const months=["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
+  const v=vipAgg();
+  const runRate=b.curRev; // 현재 자체결제 월 run-rate(최근 완결월)
   const head=`<thead><tr>
     <th>단계</th><th>월</th><th>사업 전체매출</th><th>목표 비중</th><th>목표 금액</th>
-    <th>현황 금액</th><th>부족 금액</th><th>월 ARPPU(유지)</th><th>목표 월PU</th><th>전환 필요 PU</th></tr></thead>`;
+    <th>현황(run-rate)</th><th>부족 금액</th><th>월 ARPPU(유지)</th><th>목표 MPU</th><th>전환 필요 MPU</th>
+    <th class="grp">우수 ARPU</th><th>우수 전환필요</th><th>가용 대상</th><th>전원전환 커버리지</th></tr></thead>`;
   const body=months.map(m=>{
     const plan=planOf(m);
     const past=m<nowYM();
-    const act=b.actM[m]?b.actM[m].srev:0;
-    // 목표 비중: 지난(완결)월=실제 비중 고정, 그 외(현재·미래)=시트 목표 비중
+    const fullComplete = b.actM[m] && b.actM[m].days.size>=daysInMonth(m);
+    // 목표 비중: 지난(완결)월=실제 비중 고정, 그 외=시트 목표
     let ratio;
-    if(past){ const tot=planActualTotal(m,bd); ratio = tot? act/tot*100 : null; }
+    if(fullComplete){ const tot=planActualTotal(m,bd); ratio = tot? b.actM[m].srev/tot*100 : null; }
     else { ratio = (TGTR[m]!=null? TGTR[m] : null); }
     const 목표 = (plan!=null&&ratio!=null)? plan*ratio/100 : null;
-    const hasAct = (b.actM[m]&&b.actM[m].days.size>0);
-    const 부족 = 목표!=null? Math.max(0,목표-(hasAct?act:0)) : null;
+    const 현황 = fullComplete ? b.actM[m].srev : runRate;   // 미래월=현재 페이스
+    const 부족 = 목표!=null? Math.max(0,목표-현황) : null;
     const 목표PU = (목표!=null&&A)? 목표/A : null;
     const 전환 = 목표PU!=null? Math.max(0,목표PU-b.curPU) : null;
+    // 우수고객
+    const 우수필요 = (부족!=null&&v.arpu)? 부족/v.arpu : null;
+    const 이론 = (부족>0&&v.has)? v.pool*v.arpu/부족*100 : null;
+    const 현실 = 이론!=null? 이론*convRate : null;
+    const covTxt = 이론==null?"–": (현실>=100?`<b style="color:var(--green)">달성(현실 ${현실.toFixed(0)}%)</b>`
+      : `<span style="color:var(--peak)">현실 ${현실.toFixed(0)}%</span> <span style="color:var(--muted);font-size:10px">/이론 ${이론.toFixed(0)}%</span>`);
     const stg=STAGE[m]||"";
     return `<tr>
       <td class="mon" style="color:var(--peak)">${stg}</td>
       <td class="mon">${+m.slice(5)}월</td>
       <td>${plan!=null?억(plan):"–"}</td>
-      <td>${ratio!=null?ratio.toFixed(0)+"%":"–"}${past?' <span style="color:var(--muted);font-size:10px">실적</span>':''}</td>
+      <td>${ratio!=null?ratio.toFixed(0)+"%":"–"}${fullComplete?' <span style="color:var(--muted);font-size:10px">실적</span>':''}</td>
       <td style="color:var(--purple)">${목표!=null?억(목표):"–"}</td>
-      <td>${hasAct?억(act):"–"}</td>
+      <td style="color:var(--muted)">${억(현황)}</td>
       <td style="color:${부족>0?'var(--peak)':'var(--green)'}">${부족!=null?억(부족):"–"}</td>
       <td>${A?만(A)+"원":"–"}</td>
-      <td>${목표PU!=null?N(목표PU)+"명":"–"}</td>
-      <td style="color:var(--accent);font-weight:600">${전환!=null?"+"+N(전환)+"명":"–"}</td>
+      <td>${목표PU!=null?N(목표PU):"–"}</td>
+      <td style="color:var(--accent);font-weight:600">${전환!=null?"+"+N(전환):"–"}</td>
+      <td class="grp">${v.arpu?만(v.arpu)+"원":"–"}</td>
+      <td>${우수필요!=null?N(우수필요)+"명":"–"}</td>
+      <td>${v.has?N(v.pool)+"명":"–"}</td>
+      <td>${covTxt}</td>
     </tr>`;
   }).join("");
   el.innerHTML=head+"<tbody>"+body+"</tbody>";
-  const puNote = b.mpuBased
-    ? `월간 MPU(순결제자) 기준`
-    : `<b style="color:var(--down)">PU·ARPPU 잠정</b> — 현재 일·채널 PU를 합산(중복 미제거)한 값입니다. <b>mpu</b> 탭(월×게임코드, 월간 자체결제 순결제자)을 넣으면 정확히 대체됩니다`;
-  foot.innerHTML=`유지 ARPPU=최근 완결 ${b.baseLabel||"-"} · 전환 필요 PU=목표 월PU − 현재 자체 PU(${b.curLabel}, ${N(b.curPU)}명) · 목표 비중=시트값(미래)·실제(지난월)<br>`+
-    `⚠ ${puNote} · 우수고객 전환 커버리지(9~12)는 데이터 연동 후 추가 예정`;
+  const puNote = b.mpuBased? `월간 MPU(순결제자) 기준`
+    : `<b style="color:var(--down)">PU·ARPPU 잠정</b>(mpu 탭 미연동, 일합산)`;
+  const vipSrc = Object.keys(VIP).length && v.has ? `우수 ARPU·가용대상=우수고객팀 값(총결제 기준${v.missing.length?`, ${v.missing.join("·")} 제외`:""})` : "우수고객 데이터 없음";
+  foot.innerHTML=`현황=최근 완결월(${b.curLabel}) 자체결제 run-rate ${억(runRate)} · 부족=목표−현황 · 유지 ARPPU ${만(A)}원(현재 자체결제자) · 전환 필요 MPU=목표MPU−현재MPU(${N(b.curPU)}) · 목표비중=시트(미래)·실제(완결월)<br>`+
+    `${puNote} · ${vipSrc} · <b>전원전환 커버리지=가용대상×우수ARPU×전환율 ÷ 부족</b> (이론=전환율100% 가정)`;
 }
 // 선택 프로젝트의 해당 월 전체매출 실적(비중 계산용)
 function planActualTotal(m,bd){ let t=0,has=false; for(const d in bd){ if(d.slice(0,7)===m){t+=bd[d].total;has=true;} } return has?t:null; }
@@ -437,6 +475,7 @@ async function boot(url){
     const ord=["POTC","IMGN","GBTW","WWM","DS","RESU"]; CODES.sort((a,b)=>{const ia=ord.indexOf(a),ib=ord.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);});
     await loadPlan(url);
     await loadMPU(url);
+    await loadVip(url);
     // 데이터 범위
     MIND="9999-99-99"; MAXD="0000-00-00";
     CODES.forEach(c=>Object.keys(PJ[c]).forEach(d=>{if(d<MIND)MIND=d;if(d>MAXD)MAXD=d;}));
@@ -476,6 +515,7 @@ document.getElementById("fromDate").addEventListener("change",e=>{fromD=e.target
 document.getElementById("toDate").addEventListener("change",e=>{toD=e.target.value;render();});
 document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;toD=HORIZON;document.getElementById("fromDate").value=MIND;document.getElementById("toDate").value=HORIZON;render();});
 document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
+document.getElementById("convRate").addEventListener("input",e=>{convRate=(+e.target.value)/100;document.getElementById("convVal").textContent=e.target.value+"%";renderKPI();});
 
 /* ===== 섹션 드래그 정렬 (① 필터는 고정, 나머지 재배치) ===== */
 const SEC_LS="board-sec-order";
