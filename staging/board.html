@@ -105,7 +105,7 @@
         <input type="date" id="fromDate"> <span style="color:var(--muted)">~</span> <input type="date" id="toDate">
         <span class="seg"><button id="rangeReset">전체</button></span>
       </div>
-      <div class="grp"><b>프로젝트</b> <span id="pjChk" style="display:inline-flex;gap:11px;flex-wrap:wrap;font-size:13px"></span></div>
+      <div class="grp"><b>프로젝트</b> <select class="pjSel"></select></div>
       <div class="grp"><b>지표</b>
         <span class="seg" id="metricSeg">
           <button data-m="total" class="active">전체 매출</button>
@@ -122,16 +122,21 @@
   <div id="sections">
     <div class="panel sortable" data-sec="cards" draggable="false">
       <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 요약 카드 <span>선택 기간·프로젝트 합계</span></h2>
+      <div style="margin:6px 0 2px;font-size:12px;color:var(--muted)">프로젝트 <select class="pjSel"></select></div>
       <div class="cards" id="s1cards"></div>
     </div>
     <div class="panel sortable" data-sec="chart" draggable="false">
       <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 매출 추이 <span>막대=매출 · 우축 선=자체결제 비중</span></h2>
+      <div style="margin:6px 0 2px;font-size:12px;color:var(--muted)">프로젝트 <select class="pjSel"></select></div>
       <div class="chart-box"><canvas id="s1chart" role="img" aria-label="매출 추이"></canvas></div>
       <div class="foot" id="s1foot"></div>
     </div>
     <div class="panel sortable" data-sec="kpi" draggable="false">
       <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 단계별 KPI <span>2026 하반기 목표(프로젝트 필터 적용) · ARPPU 유지 → 필요 MPU → 미전환 풀 전환율</span></h2>
       <div style="display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);margin:2px 0 10px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <b style="color:var(--text)">프로젝트</b> <select class="pjSel"></select>
+        </div>
         <div style="display:flex;align-items:center;gap:8px">
           <b style="color:var(--text)">뷰</b>
           <span class="seg" id="kpiViewSeg">
@@ -182,7 +187,7 @@ const CH_COL={web:"#c084fc",apk:"#4f8cff",pc:"#34d399"};
 const COL={total:"#4f8cff",d2c:"#4f8cff",etc:"rgba(139,150,173,.45)",ratio:"#fbbf24"};
 
 let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MPU={}, MIND="", MAXD="", HORIZON="", chart=null;
-let curGran="month", selPj=new Set(), curMetric="total", fromD="", toD="", convRate=0.30;
+let curGran="month", curProj="ALL", curMetric="total", fromD="", toD="", convRate=0.30;
 let kpiView="month", kpiMonth="2026-12"; // 섹터4 뷰: 'month'(선택 프로젝트 월별) | 'game'(특정 월 전 게임)
 // 우수고객팀 제공 기본값(총결제 기준 ARPU·활성+클럽 가용대상). 시트 'vip' 탭 있으면 덮어씀
 const VIP_DEFAULT={POTC:{arpu:134389,pool:4971},GBTW:{arpu:97655,pool:19262},WWM:{arpu:231198,pool:8397},DS:{arpu:266748,pool:643}};
@@ -203,8 +208,12 @@ function jlAgg(codes){ let pu=0,av=0,has=false;
     if(jlGrade==="전체"){ JL_GRADES.forEach(k=>{ if(gg[k]){pu+=gg[k][0];av+=gg[k][1];has=true;} }); }
     else if(gg[jlGrade]){ pu+=gg[jlGrade][0]; av+=gg[jlGrade][1]; has=true; } });
   return {pu,av,has}; }
-const selCodes=()=> selPj.size?CODES.filter(c=>selPj.has(c)):[]; // 선택 프로젝트(순서 유지)
-const allSelected=()=> selPj.size===CODES.length;
+const selCodes=()=> curProj==="ALL"?CODES.slice():(CODES.includes(curProj)?[curProj]:[]);
+const allSelected=()=> curProj==="ALL";
+// 프로젝트 드롭다운(필터+각 섹션) 동기화
+function setProj(v){ curProj=v; document.querySelectorAll(".pjSel").forEach(s=>{ if(s.value!==v)s.value=v; }); render(); }
+function fillProjSelectors(){ const opts=`<option value="ALL">전체</option>`+CODES.map(c=>`<option value="${c}">${c}</option>`).join("");
+  document.querySelectorAll(".pjSel").forEach(s=>{ s.innerHTML=opts; s.value=curProj; }); }
 
 function getMasterUrl(){ try{const s=JSON.parse(localStorage.getItem(DASH_LS));if(s&&s.masterSheetUrl)return s.masterSheetUrl;}catch(e){} return localStorage.getItem("kpiplanner-sheet")||""; }
 function showSetup(msg){ document.getElementById("setup").style.display=""; document.getElementById("main").style.display="none"; document.getElementById("setupMsg").innerHTML=msg; document.getElementById("range").textContent="데이터 미연결"; }
@@ -434,7 +443,7 @@ function render(){
   renderCards(rows);
   renderKPI();
   document.getElementById("s1foot").textContent =
-    `${rows.length}개 구간 · ${selPj.size===0?"프로젝트 미선택":allSelected()?"전 프로젝트 합산":selCodes().join("+")} · 비중(우축)=자체결제/전체매출 · 점선=목표 비중 · 목표 막대=사업계획×목표비중(2026)`;
+    `${rows.length}개 구간 · ${allSelected()?"전 프로젝트 합산":curProj} · 비중(우축)=자체결제/전체매출 · 점선=목표 비중 · 목표 막대=사업계획×목표비중(2026)`;
 }
 
 function renderCards(rows){
@@ -514,7 +523,7 @@ function kpiMetricCells(codes,m,b,bd){
 function renderKPI(){
   const el=document.getElementById("s4table"), foot=document.getElementById("s4foot");
   const mSel=document.getElementById("kpiMonth"); if(mSel) mSel.style.display = kpiView==="game"?"":"none";
-  if(!selPj.size){ el.innerHTML=""; foot.textContent="프로젝트를 선택하세요."; return; }
+  if(!selCodes().length){ el.innerHTML=""; foot.textContent="프로젝트를 선택하세요."; return; }
   const months=["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
   const g1=`<th>사업 전체매출</th><th>목표 비중</th><th>목표 금액</th><th>현황(run-rate)</th><th>부족 금액</th><th>월 ARPPU(유지)</th>`;
   const g2=`<th class="grp">6월 자체결제</th><th>목표</th><th>전환 필요</th><th>미전환 풀</th><th>목표 전환율</th>`;
@@ -564,10 +573,7 @@ async function boot(url){
     Object.keys(TGTR).forEach(m=>{ const end=m+"-"+String(daysInMonth(m)).padStart(2,"0"); if(end>HORIZON)HORIZON=end; });
     const fEl=document.getElementById("fromDate"),tEl=document.getElementById("toDate");
     fEl.min=tEl.min=MIND; fEl.max=tEl.max=HORIZON; fEl.value=MIND; tEl.value=HORIZON; fromD=MIND; toD=HORIZON;
-    selPj=new Set(CODES);
-    document.getElementById("pjChk").innerHTML=
-      `<label style="cursor:pointer"><input type="checkbox" id="pjAll" checked> <b style="color:var(--text)">전체</b></label>`+
-      CODES.map(c=>`<label style="cursor:pointer"><input type="checkbox" class="pjc" value="${c}" checked style="accent-color:var(--accent)"> ${c}</label>`).join("");
+    curProj="ALL"; fillProjSelectors();
     document.getElementById("range").textContent=`${CODES.length}개 프로젝트 · ${MIND} ~ ${MAXD} · 자체결제 = ${D2C_PGS.join("·")}`;
     document.getElementById("setup").style.display="none"; document.getElementById("main").style.display="";
     localStorage.setItem("kpiplanner-sheet",url);
@@ -579,18 +585,8 @@ async function boot(url){
 // ---- 컨트롤 ----
 document.getElementById("granSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;curGran=b.dataset.g;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));render();});
 document.getElementById("metricSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;curMetric=b.dataset.m;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));render();});
-// 프로젝트 체크박스 (복수 선택). '전체'는 일괄 on/off
-document.getElementById("pjChk").addEventListener("change",e=>{
-  const t=e.target;
-  if(t.id==="pjAll"){
-    document.querySelectorAll(".pjc").forEach(x=>x.checked=t.checked);
-    selPj = t.checked ? new Set(CODES) : new Set();
-  }else if(t.classList.contains("pjc")){
-    if(t.checked)selPj.add(t.value); else selPj.delete(t.value);
-    document.getElementById("pjAll").checked = selPj.size===CODES.length;
-  }
-  render();
-});
+// 프로젝트 드롭다운 (필터+각 섹션 공통, 변경 시 전부 연동)
+document.addEventListener("change",e=>{ if(e.target.classList&&e.target.classList.contains("pjSel"))setProj(e.target.value); });
 document.getElementById("fromDate").addEventListener("change",e=>{fromD=e.target.value;render();});
 document.getElementById("toDate").addEventListener("change",e=>{toD=e.target.value;render();});
 document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;toD=HORIZON;document.getElementById("fromDate").value=MIND;document.getElementById("toDate").value=HORIZON;render();});
