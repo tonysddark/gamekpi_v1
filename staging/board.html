@@ -194,14 +194,24 @@ async function loadPlan(url){
     const rc=hdrRaw.findIndex(x=>x.includes("목표")&&x.includes("비중"));
     for(let i=1;i<grid.length;i++){
       const g=grid[i]; if(!g)continue;
-      const mm=String(g[0]||"").trim().match(/(\d{4})[-.\/\s]+(\d{1,2})/); if(!mm)continue;
-      const m=mm[1]+"-"+mm[2].padStart(2,"0");
+      const m=parseYM(g[0]); if(!m)continue;
       CODES.forEach(c=>{ if(colOf[c]>=0){ const v=toNum(g[colOf[c]]); if(v!=null){(PLAN[c]=PLAN[c]||{})[m]=v;} } });
       if(rc>=0){ let r=toNum(g[rc]); if(r!=null){ if(r>0&&r<=1)r*=100; TGTR[m]=r; } }
     }
   }catch(e){}
 }
 
+// 다양한 월 표기 → "YYYY-MM" (2026-06 / 2026-06-01 / Jun-26 / June 2026 / 01-Jun-26)
+const _MON3=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+function parseYM(s){
+  s=String(s||"").trim(); if(!s)return null;
+  let m=s.match(/(\d{4})[-.\/\s]+(\d{1,2})(?:\D|$)/); if(m)return m[1]+"-"+m[2].padStart(2,"0");
+  m=s.match(/^([A-Za-z]{3,9})[-.\/\s]+(\d{2,4})$/);
+  if(m){const mo=_MON3.indexOf(m[1].slice(0,3).toLowerCase()); if(mo>=0){let y=m[2];if(y.length===2)y="20"+y;return y+"-"+String(mo+1).padStart(2,"0");}}
+  m=s.match(/^(\d{1,2})[-.\/\s]([A-Za-z]{3,9})[-.\/\s](\d{2,4})$/);
+  if(m){const mo=_MON3.indexOf(m[2].slice(0,3).toLowerCase()); if(mo>=0){let y=m[3];if(y.length===2)y="20"+y;return y+"-"+String(mo+1).padStart(2,"0");}}
+  return null;
+}
 // 월간 자체결제 MPU(순결제자) — 별도 'mpu' 탭 (col0=월, 헤더=게임코드). 있으면 ARPPU·PU를 정확히 계산
 async function loadMPU(url){
   MPU={};
@@ -211,8 +221,7 @@ async function loadMPU(url){
     const colOf={}; CODES.forEach(c=>colOf[c]=hdr.indexOf(c));
     for(let i=1;i<grid.length;i++){
       const g=grid[i]; if(!g)continue;
-      const mm=String(g[0]||"").trim().match(/(\d{4})[-.\/\s]+(\d{1,2})/); if(!mm)continue;
-      const m=mm[1]+"-"+mm[2].padStart(2,"0");
+      const m=parseYM(g[0]); if(!m)continue;
       CODES.forEach(c=>{ if(colOf[c]>=0){ const v=toNum(g[colOf[c]]); if(v!=null)(MPU[c]=MPU[c]||{})[m]=v; } });
     }
   }catch(e){ /* mpu 탭 없으면 잠정(일 합산) 사용 */ }
