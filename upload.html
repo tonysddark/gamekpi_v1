@@ -60,7 +60,9 @@
 
 <div class="banner">
   인식 · <b>결제사(pg)·플랫폼별</b> → <code>코드-kpi</code> · <b>daily_kpi 자체결제</b> → <code>코드</code> · <b>daily_kpi(순수)</b> → <code>코드-daily</code>(DAU·순결제자 PU·전체 ARPPU·광고).
-  겹치는 날은 값이 <b>바뀐 경우에만</b> 교체(정산 지연 수정치 반영), 동일하면 건너뜀. 파일에 없는 과거 날짜는 그대로 보존.
+  겹치는 날은 값이 <b>바뀐 경우에만</b> 교체(정산 지연 수정치 반영), 동일하면 건너뜀. 파일에 없는 과거 날짜는 그대로 보존.<br>
+  <b>월간·우수고객</b> · <b>monthly_kpi(자체결제)</b> → <code>mpu</code>(월간 자체 MPU) · <b>monthly_kpi(전체)</b> → <code>mpu_total</code>(월간 전체 MPU) · <b>JL 회원파일</b> → <code>jl</code>(등급별 90일 과금·미전환 풀).
+  이 3종은 기존 시트값과 <b>병합해 탭 전체를 출력</b>합니다 — 일부 게임만 올려도 나머지 게임 값은 보존.
 </div>
 
 <div class="panel">
@@ -87,6 +89,12 @@
     <button class="btn" id="clearBtn">비우기</button>
   </div>
   <div class="status" id="status"></div>
+</div>
+
+<div class="panel" id="specialPanel" style="display:none;">
+  <h2>3) 월간·우수고객 탭 출력 <span style="color:var(--muted);font-size:12px;font-weight:400">— mpu · mpu_total · jl (기존 시트값과 병합된 탭 전체)</span></h2>
+  <div id="specialList"></div>
+  <div class="status" id="spStatus"></div>
 </div>
 
 <div class="foot">
@@ -123,9 +131,13 @@ function toISO(v){
 const codeFromName=name=>{const p=name.split(/[_\s.]/)[0].toUpperCase().replace("PTOC","POTC");return KNOWN.includes(p)?p:"";};
 function detectKind(hl){
   if(hl.some(h=>h.includes("market_name")))return "detail";
+  if(hl.some(h=>h.includes("회원번호")))return "jl";                       // JL 회원파일 → jl 탭
+  if(hl.some(h=>h.replace(/\s/g,"")==="mru"))return "mpu_total";          // 전체 monthly_kpi → mpu_total 탭
+  if(hl.some(h=>h.includes("week_start")||h.replace(/\s/g,"").includes("arpmau")))return "mpu"; // 자체결제 monthly_kpi → mpu 탭
   if(hl.some(h=>{const x=h.replace(/\s/g,"");return x==="dru"||x.includes("iaa")||x.includes("install")||x.includes("nnpu")||x==="pur";}))return "daily";
   if(hl.some(h=>{const x=h.replace(/\s/g,"");return x.includes("자체결제pu")||x.includes("자체결제매출");}))return "summary";
   return ""; }
+const SPECIAL_KINDS=["mpu","mpu_total","jl"];
 
 async function parseFile(file){
   const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
@@ -133,6 +145,7 @@ async function parseFile(file){
   if(!aoa.length)throw new Error("빈 파일");
   const hdr=aoa[0].map(x=>String(x||"").trim()), hl=hdr.map(x=>x.toLowerCase());
   const kind=detectKind(hl); if(!kind)throw new Error("알 수 없는 형식");
+  if(SPECIAL_KINDS.includes(kind)){ const sp=parseSpecial(file.name,kind,aoa,hdr,hl); sp.special=true; return sp; }
   const code=codeFromName(file.name), targetH=HEADERS[kind];
   const di=hl.findIndex(h=>h.includes("datekey")||h.includes("date")||h.includes("날짜"));
   const rows=[];
@@ -214,11 +227,195 @@ function render(){
   document.getElementById("csvBtn").disabled=!anyApply;
 }
 
+/* ===== 월간·우수고객 특수 탭 (mpu / mpu_total / jl) ===== */
+const MATRIX_GAMES=["POTC","GBTW","WWM","DS","RESU","IMGN"];
+const JL_GRADE_ORDER=["CLUB","실버","골드","플래티넘","플래티넘MVP"];
+let SP={mpu:{},mpu_total:{},jl:{}};      // 파일에서 들어온 값 {kind:{game:...}}
+let SP_FILES=[];                          // 표시용 [{name,kind,game,info,err}]
+let SP_EXIST={};                          // 기존 시트 탭 캐시 {kind:{games:[],data:{}}}
+
+// 다양한 월 표기 → "YYYY-MM" (board와 동일 로직)
+const _MON3=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+function parseYM(s){
+  s=String(s||"").trim(); if(!s)return null;
+  let m=s.match(/(\d{4})[-.\/\s]+(\d{1,2})(?:\D|$)/); if(m)return m[1]+"-"+m[2].padStart(2,"0");
+  m=s.match(/^([A-Za-z]{3,9})[-.\/\s]+(\d{2,4})$/);
+  if(m){const mo=_MON3.indexOf(m[1].slice(0,3).toLowerCase()); if(mo>=0){let y=m[2];if(y.length===2)y="20"+y;return y+"-"+String(mo+1).padStart(2,"0");}}
+  m=s.match(/^(\d{1,2})[-.\/\s]([A-Za-z]{3,9})[-.\/\s](\d{2,4})$/);
+  if(m){const mo=_MON3.indexOf(m[2].slice(0,3).toLowerCase()); if(mo>=0){let y=m[3];if(y.length===2)y="20"+y;return y+"-"+String(mo+1).padStart(2,"0");}}
+  return null;
+}
+function guessGameLoose(name,cellVal){
+  const pool=(String(cellVal||"")+" "+String(name||"")).toUpperCase();
+  if(pool.includes("RESU"))return "RESU"; // JOY/ANX 합산
+  for(const k of MATRIX_GAMES){ if(pool.includes(k))return k; }
+  return "";
+}
+function normGrade(g){
+  const s=String(g||"").trim(); if(!s)return null;
+  const low=s.toLowerCase().replace(/\s+/g,"");
+  if(low==="payuser")return null;
+  if(low.includes("mvp"))return "플래티넘MVP";
+  if(low==="club"||s==="클럽")return "CLUB";
+  if(low==="silver"||s==="실버")return "실버";
+  if(low==="gold"||s==="골드")return "골드";
+  if(low==="platinum"||s==="플래티넘")return "플래티넘";
+  return s;
+}
+// 특수 파일 파싱 → SP에 병합
+function parseSpecial(name,kind,aoa,hdr,hl){
+  const game=guessGameLoose(name, aoa[1]&&hl.findIndex(h=>h.includes("게임명"))>=0 ? aoa[1][hl.findIndex(h=>h.includes("게임명"))] : "");
+  const entry={name,kind,game,info:"",err:""};
+  if(kind==="jl"){
+    const idx={mem:hl.findIndex(h=>h.includes("회원번호")), grade:hl.findIndex(h=>h.includes("등급")),
+      m0:hdr.findIndex(h=>h.trim()==="당월 과금액"), m1:hdr.findIndex(h=>h.trim()==="전월 과금액"), m2:hdr.findIndex(h=>h.trim()==="전전월 과금액"),
+      s0:hl.findIndex(h=>h.includes("자체결제 당월")), s1:hl.findIndex(h=>h.includes("자체결제 전월")), s2:hl.findIndex(h=>h.includes("자체결제 전전월"))};
+    const miss=Object.entries(idx).filter(([,v])=>v<0).map(([k])=>k);
+    if(miss.length){entry.err="열 누락: "+miss.join(",");return entry;}
+    entry.members={};
+    for(let i=1;i<aoa.length;i++){ const r=aoa[i]; if(r[idx.mem]==null||r[idx.mem]==="")continue;
+      const id=String(r[idx.mem]).trim(); if(entry.members[id])continue;
+      entry.members[id]={grade:normGrade(r[idx.grade]),
+        paid:(num(r[idx.m0])+num(r[idx.m1])+num(r[idx.m2]))>0,
+        self:(num(r[idx.s0])+num(r[idx.s1])+num(r[idx.s2]))>0}; }
+    entry.info=Object.keys(entry.members).length.toLocaleString()+"명";
+  } else {
+    const vcol = kind==="mpu"
+      ? hl.findIndex(h=>h.replace(/\s/g,"")==="자체결제pu")
+      : hl.findIndex(h=>h.replace(/\s/g,"")==="mpu");
+    if(vcol<0){entry.err=(kind==="mpu"?"'자체 결제 PU'":"'MPU'")+" 열 없음";return entry;}
+    entry.monthly={};
+    for(let i=1;i<aoa.length;i++){ const r=aoa[i]; const iso=toISO(r[0]); if(!iso)continue;
+      const v=num(r[vcol]); entry.monthly[iso.slice(0,7)]=Math.round(v); }
+    entry.info=Object.keys(entry.monthly).length+"개월";
+  }
+  return entry;
+}
+// SP_FILES → SP 재집계 (게임 병합·JL은 회원 dedupe)
+function rebuildSP(){
+  SP={mpu:{},mpu_total:{},jl:{}};
+  // jl: 게임별 회원 합치고 등급 집계
+  const jlMem={};
+  SP_FILES.forEach(f=>{ if(f.err||!f.game)return;
+    if(f.kind==="jl"){ const g=jlMem[f.game]=jlMem[f.game]||{}; for(const id in f.members){ if(!g[id])g[id]=f.members[id]; } }
+    else { const g=SP[f.kind][f.game]=SP[f.kind][f.game]||{}; Object.assign(g,f.monthly); } });
+  for(const game in jlMem){ const agg={};
+    for(const id in jlMem[game]){ const m=jlMem[game][id]; if(!m.grade||!m.paid)continue;
+      const o=agg[m.grade]=agg[m.grade]||{pu:0,pool:0}; o.pu++; if(!m.self)o.pool++; }
+    SP.jl[game]=agg; }
+}
+// 기존 시트 탭 읽기 (1회 캐시)
+async function loadExist(kind){
+  if(SP_EXIST[kind]!==undefined)return SP_EXIST[kind];
+  const url=getSheetUrl(); const tab=kind;
+  try{
+    const grid=await fetchGrid(url,tab);
+    if(kind==="jl"){
+      const h=(grid[0]||[]).map(x=>String(x||"").trim().toLowerCase());
+      const gi=h.findIndex(x=>x.includes("game")), ri=h.findIndex(x=>x.includes("grade")||x.includes("등급"));
+      const pi=h.findIndex(x=>x==="pu"), ai=h.findIndex(x=>x.includes("pool"));
+      const data={};
+      if(gi>=0&&ri>=0&&pi>=0&&ai>=0)for(let i=1;i<grid.length;i++){ const g=String(grid[i][gi]||"").trim().toUpperCase(); const gr=String(grid[i][ri]||"").trim();
+        const pu=toNum(grid[i][pi]),pool=toNum(grid[i][ai]); if(g&&gr&&pu!=null&&pool!=null)(data[g]=data[g]||{})[gr]={pu,pool}; }
+      SP_EXIST[kind]={data, games:Object.keys(data)};
+    } else {
+      const hdrU=(grid[0]||[]).map(x=>String(x||"").trim().toUpperCase());
+      const games=MATRIX_GAMES.filter(g=>hdrU.includes(g));
+      const data={};
+      for(let i=1;i<grid.length;i++){ const m=parseYM(grid[i][0]); if(!m)continue;
+        games.forEach(g=>{ const v=toNum(grid[i][hdrU.indexOf(g)]); if(v!=null)(data[g]=data[g]||{})[m]=Math.round(v); }); }
+      SP_EXIST[kind]={data, games};
+    }
+  }catch(e){ SP_EXIST[kind]={data:{},games:[]}; }
+  return SP_EXIST[kind];
+}
+// 병합·풀 매트릭스 생성 + diff 요약
+async function buildTab(kind){
+  const exist=await loadExist(kind);
+  if(kind==="jl"){
+    const merged={}; // game -> grade -> {pu,pool}
+    for(const g in exist.data)merged[g]=exist.data[g];
+    let newG=[],chgG=[];
+    for(const g in SP.jl){ const inc={}; for(const gr in SP.jl[g])inc[gr]={pu:SP.jl[g][gr].pu,pool:SP.jl[g][gr].pool};
+      if(!exist.data[g])newG.push(g); else if(JSON.stringify(exist.data[g])!==JSON.stringify(inc))chgG.push(g);
+      merged[g]=inc; }
+    const rows=[];
+    Object.keys(merged).sort((a,b)=>MATRIX_GAMES.indexOf(a)-MATRIX_GAMES.indexOf(b)).forEach(g=>{
+      const order=[...JL_GRADE_ORDER,...Object.keys(merged[g]).filter(x=>!JL_GRADE_ORDER.includes(x))];
+      order.forEach(gr=>{ if(merged[g][gr])rows.push([g,gr,merged[g][gr].pu,merged[g][gr].pool]); }); });
+    return {tab:"jl",header:["game","grade","pu","pool"],rows,summary:`신규 게임 ${newG.length?newG.join("·"):"없음"} · 갱신 ${chgG.length?chgG.join("·"):"없음"} · 유지 ${Object.keys(exist.data).filter(g=>!SP.jl[g]).join("·")||"-"}`};
+  }
+  const inc=SP[kind];
+  const games = exist.games.length? exist.games.slice() : MATRIX_GAMES.slice();
+  Object.keys(inc).forEach(g=>{ if(!games.includes(g))games.push(g); });
+  const merged={}; games.forEach(g=>{ merged[g]={...(exist.data[g]||{}),...(inc[g]||{})}; });
+  const months=[...new Set(games.flatMap(g=>Object.keys(merged[g])))].sort();
+  let nNew=0,nChg=0;
+  Object.keys(inc).forEach(g=>{ for(const m in inc[g]){ const old=exist.data[g]?exist.data[g][m]:null;
+    if(old==null)nNew++; else if(old!==inc[g][m])nChg++; } });
+  const rows=months.map(m=>[m,...games.map(g=>merged[g][m]!=null?merged[g][m]:"")]);
+  return {tab:kind,header:["month",...games],rows,summary:`신규 ${nNew}칸 · 변경 ${nChg}칸 · ${months.length}개월 × ${games.length}게임 (기존값 병합)`};
+}
+async function renderSpecial(){
+  rebuildSP();
+  const panel=document.getElementById("specialPanel"), list=document.getElementById("specialList");
+  const kinds=SPECIAL_KINDS.filter(k=>Object.keys(SP[k]).length);
+  if(!SP_FILES.length){panel.style.display="none";return;}
+  panel.style.display="";
+  // 파일 목록
+  let html=SP_FILES.map((f,i)=>{
+    const sel=`<select class="mini spGame" data-i="${i}">${["",...MATRIX_GAMES].map(k=>`<option ${k===f.game?"selected":""}>${k||"(게임)"}</option>`).join("")}</select>`;
+    const chip=f.err?`<span class="chip err">${f.err}</span>`:`<span class="chip new">✓ ${f.info}</span>`;
+    return `<div class="fcard"><div class="fhead"><span class="fname">${f.name}</span> ${sel}
+      <span class="fmeta"><code>${f.kind}</code></span><span class="chips">${chip}</span></div></div>`;
+  }).join("");
+  // 탭별 출력 카드
+  for(const k of kinds){
+    const t=await buildTab(k);
+    const tsv=[t.header.join("\t"),...t.rows.map(r=>r.join("\t"))].join("\n");
+    html+=`<div class="fcard"><div class="fhead"><span class="fname">→ <code>${t.tab}</code> 탭</span>
+      <span class="fmeta">${t.summary}</span>
+      <span class="chips">
+        <button class="btn primary spCopy" data-k="${k}">📋 TSV 복사</button>
+        <button class="btn spCsv" data-k="${k}">⬇ CSV</button>
+        <button class="btn spHook" data-k="${k}">🚀 웹훅 반영(전체 교체)</button>
+      </span></div>
+      <textarea class="spTsv" data-k="${k}" readonly style="display:none">${tsv.replace(/</g,"&lt;")}</textarea></div>`;
+  }
+  list.innerHTML=html;
+  list.querySelectorAll(".spGame").forEach(s=>s.addEventListener("change",e=>{SP_FILES[+e.target.dataset.i].game=e.target.value;renderSpecial();}));
+  list.querySelectorAll(".spCopy").forEach(b=>b.addEventListener("click",async e=>{
+    const t=list.querySelector(`.spTsv[data-k="${e.target.dataset.k}"]`).value;
+    try{await navigator.clipboard.writeText(t);}catch(err){}
+    spMsg(`✅ <b>${e.target.dataset.k}</b> TSV 복사됨 — 시트 <b>${e.target.dataset.k}</b> 탭 A1에 붙여넣기(기존 내용 전체 교체). 현황판 새로고침 시 즉시 반영.`);
+  }));
+  list.querySelectorAll(".spCsv").forEach(b=>b.addEventListener("click",e=>{
+    const k=e.target.dataset.k, t=list.querySelector(`.spTsv[data-k="${k}"]`).value.replace(/\t/g,",");
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+t],{type:"text/csv;charset=utf-8"}));
+    a.download=k+"_tab.csv"; a.click();
+  }));
+  list.querySelectorAll(".spHook").forEach(b=>b.addEventListener("click",async e=>{
+    const k=e.target.dataset.k, hook=document.getElementById("hookUrl").value.trim();
+    if(!hook){spMsg("웹훅 미설정 — TSV 복사로 붙여넣거나 웹훅을 설정하세요.");return;}
+    const t=await buildTab(k);
+    spMsg(`반영 중… ${k}`);
+    try{ const res=await fetch(hook,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+        body:JSON.stringify({sheet:t.tab,header:t.header,rows:t.rows,replaceAll:true})});
+      const j=await res.json();
+      if(j.ok&&j.mode==="replaceAll"){ SP_EXIST={}; spMsg(`✅ <b>${k}</b> 탭 전체 교체 완료 (${j.added}행). 현황판 새로고침 시 반영.`); }
+      else if(j.ok) spMsg(`⚠️ 구버전 웹훅 감지 — 중복 위험이 있어 전체 교체가 안 됐을 수 있습니다. 가이드의 <b>최신 Apps Script(replaceAll 지원)</b>로 재배포하거나 TSV 복사를 사용하세요.`);
+      else spMsg(`❌ ${j.error||"실패"}`);
+    }catch(err){ spMsg("❌ "+err.message); }
+  }));
+}
+function spMsg(h){ const s=document.getElementById("spStatus"); s.className="status show"; s.innerHTML=h; }
+
 async function addFiles(list){
-  document.getElementById("filesPanel").style.display="";
   for(const file of list){
     let f;
-    try{ f=await parseFile(file); }catch(e){ f={name:file.name,parseErr:e.message,rows:[]}; FILES.push(f); render(); continue; }
+    try{ f=await parseFile(file); }catch(e){ f={name:file.name,parseErr:e.message,rows:[]}; document.getElementById("filesPanel").style.display=""; FILES.push(f); render(); continue; }
+    if(f.special){ SP_FILES.push(f); await renderSpecial(); continue; }
+    document.getElementById("filesPanel").style.display="";
     FILES.push(f); render(); await diffFile(f); render();
   }
 }
@@ -263,7 +460,10 @@ drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("over"
 fileInput.addEventListener("change",e=>addFiles([...e.target.files]));
 document.getElementById("applyBtn").addEventListener("click",applyToSheet);
 document.getElementById("csvBtn").addEventListener("click",downloadCsv);
-document.getElementById("clearBtn").addEventListener("click",()=>{FILES=[];document.getElementById("fileList").innerHTML="";document.getElementById("filesPanel").style.display="none";document.getElementById("status").className="status";});
+document.getElementById("clearBtn").addEventListener("click",()=>{FILES=[];SP_FILES=[];SP={mpu:{},mpu_total:{},jl:{}};SP_EXIST={};document.getElementById("fileList").innerHTML="";document.getElementById("specialList").innerHTML="";document.getElementById("filesPanel").style.display="none";document.getElementById("specialPanel").style.display="none";document.getElementById("status").className="status";document.getElementById("spStatus").className="status";});
+// 검증용 노출
+window.__sp={parseSpecial,buildTab,rebuildSP,parseYM,normGrade,guessGameLoose,detectKind,
+  setFiles:f=>{SP_FILES=f;return renderSpecial();},get:()=>({SP,SP_FILES,SP_EXIST})};
 document.getElementById("saveCfg").addEventListener("click",()=>{
   const u=document.getElementById("sheetUrl").value.trim(),h=document.getElementById("hookUrl").value.trim();
   if(u)localStorage.setItem(SHEET_LS,u); if(h)localStorage.setItem(HOOK_LS,h);
@@ -282,6 +482,13 @@ document.getElementById("gsGuide").innerHTML=`
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sh = ss.getSheetByName(b.sheet);
     if(!sh){ sh = ss.insertSheet(b.sheet); sh.appendRow(b.header); }
+    if(b.replaceAll){ // 월간·우수고객 탭(mpu/mpu_total/jl): 탭 전체 교체 (원시값 그대로)
+      var lr = sh.getLastRow(), lc = Math.max(sh.getLastColumn(), b.header.length);
+      if(lr &gt; 0) sh.getRange(1,1,lr,lc).clearContent();
+      sh.getRange(1,1,1,b.header.length).setValues([b.header]);
+      if(b.rows &amp;&amp; b.rows.length) sh.getRange(2,1,b.rows.length,b.header.length).setValues(b.rows);
+      return json_({ok:true, added:(b.rows||[]).length, mode:"replaceAll"});
+    }
     var ncol = b.header.length, last = sh.getLastRow();
     var fmtRow = last >= 2 ? sh.getRange(2,1,1,ncol).getNumberFormats()[0] : null;
     var repl = {}; (b.replaceDates||[]).forEach(function(d){ repl[d] = true; });
@@ -328,6 +535,7 @@ function toDate_(v){
 function iso_(v){ var d = toDate_(v); return (d instanceof Date &amp;&amp; !isNaN(d)) ? Utilities.formatDate(d, Session.getScriptTimeZone(), "yyyy-MM-dd") : String(v); }
 function json_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }</pre>
 <b>동작</b>: 대상 날짜(신규+변경) 행만 교체 → <b>날짜 실제값 기준 정렬 + 기존 표시서식(콤마·%·날짜형) 복원</b>. 이미 어긋난 데이터는 편집기에서 <b>fixAll</b> 1회 실행으로 정리.
+· <b>replaceAll</b>(월간·우수고객 mpu/mpu_total/jl 탭 전체 교체) 지원 — 예전에 배포했다면 위 최신 코드로 <b>재배포</b> 필요.
 `;
 </script>
 </body>
