@@ -219,8 +219,8 @@
       <p class="s5title">게임별 상세<span class="n">· ④에서 못 채운 만큼 ⑤ Tier1 → Tier2 순으로 배정</span></p>
       <div style="overflow-x:auto"><table id="s5table" style="min-width:900px"></table></div>
       <div class="s5legend">
-        <span><span class="s5dot" style="background:#5b9df5"></span>④ 우수고객 MPU 미전환 · 이번 달 결제 O, 자체결제 X</span>
-        <span><span class="s5dot" style="background:#2dd4a7"></span>⑤-1 우수고객 중 비MPU·활동중 · 최근 결제는 없지만 접속 중</span>
+        <span><span class="s5dot" style="background:#5b9df5"></span>④ 우수 미전환 가용 대상(클럽 포함) · 섹션 ④의 가용 대상과 동일</span>
+        <span><span class="s5dot" style="background:#2dd4a7"></span>⑤-1 활동 유저(최근 접속) − 가용 대상 · 접속 중이지만 ④ 풀에 없는 우수고객</span>
         <span><span class="s5dot" style="background:#a48ef2"></span>⑤-2 일반유저 필요 전환 · 절대 인원수만 관리, 풀 자체는 비표기</span>
       </div>
       <div class="s5note" id="s5note"></div>
@@ -645,10 +645,13 @@ function renderStrategy(){
   const rows=gorder.map(c=>{
     const bd=mergedByDate([c]), b=baseStats(bd,[c]);
     const k=kpiCalc([c],m,b,bd);
-    // 필요 전환 PU = 커버리지%×사업계획 매출 ÷ 유지 ARPPU − 현재 자체 MPU (슬라이더 탐색 가능)
-    const req=(k.plan!=null&&k.A)? Math.max(0, Math.ceil(k.plan*cov/100/k.A - b.curPU)) : null;
-    const j=JLA[c];
-    const p4=j?j.mpu_untapped:null, p51=j?(j["active"+actWin]||0):null;
+    // 필요 전환 PU = 커버리지%×사업계획 ÷ 유지 ARPPU − 현재 자체 MPU. 슬라이더=단계 비중이면 ④의 '전환 필요 MPU'와 동일
+    const req=(k.plan!=null&&k.A)? Math.max(0, Math.round(k.plan*cov/100/k.A - b.curPU)) : null;
+    const jl=jlAgg([c]);                                    // ④ 가용 대상(클럽 포함) — jl 탭, 등급 필터 연동
+    const jla=JLA[c];
+    const p4 = jl.has ? jl.av : null;                       // STEP ④ 풀 = ④의 가용 대상
+    const p51 = jla ? Math.max(0,(jla["active"+actWin]||0)-(p4||0)) : null; // STEP ⑤-1 풀 = 활동중 − 가용 대상
+    const j = (p4!=null||p51!=null) ? {} : null;            // 풀 데이터 존재 여부(배지용)
     let s4=0,s51=0,s52=0;
     if(req!=null){
       s4=Math.min(req,p4||0); let rem=req-s4;
@@ -671,15 +674,15 @@ function renderStrategy(){
   const arrow=`<div class="s5arrow">→</div>`;
   flow.innerHTML=`
     <div class="s5step"><p class="fn">STEP 0</p><p class="fl">필요 추가 전환 PU</p><p class="fv">${N(T.req)}명</p></div>${arrow}
-    <div class="s5step c4"><p class="fn">STEP ④</p><p class="fl">우수고객 MPU 미전환</p><p class="fv">${N(T.s4)}명</p></div>${arrow}
-    <div class="s5step c51"><p class="fn">STEP ⑤-1</p><p class="fl">우수고객 비MPU·활동중</p><p class="fv">${N(T.s51)}명</p></div>${arrow}
+    <div class="s5step c4"><p class="fn">STEP ④</p><p class="fl">우수 미전환 가용 대상(클럽 포함)</p><p class="fv">${N(T.s4)}명</p></div>${arrow}
+    <div class="s5step c51"><p class="fn">STEP ⑤-1</p><p class="fl">활동 유저 − 가용 대상</p><p class="fv">${N(T.s51)}명</p></div>${arrow}
     <div class="s5step c52"><p class="fn">STEP ⑤-2</p><p class="fl">일반유저 필요 전환</p><p class="fv">${N(T.s52)}명</p></div>`;
-  tb.innerHTML=`<thead><tr><th>게임</th><th>필요 추가 전환 PU</th><th>④ 우수고객 MPU 미전환 투입</th><th>⑤-1 우수고객(비MPU·활동중) 투입</th><th>⑤-2 일반유저 필요 전환</th></tr></thead><tbody>${rows}</tbody>`;
+  tb.innerHTML=`<thead><tr><th>게임</th><th>필요 추가 전환 PU</th><th>④ 가용 대상(클럽 포함) 투입</th><th>⑤-1 활동 유저(가용 제외) 투입</th><th>⑤-2 일반유저 필요 전환</th></tr></thead><tbody>${rows}</tbody>`;
   const note=document.getElementById("s5note");
   if(note) note.innerHTML=`
-    <p><b>데이터 안내 —</b> 풀은 시트 <b>jl_active</b> 탭(당월 결제·최근 접속 기준, 회원 중복제거·PayUser 제외)에서 로드합니다. 탭이 없으면 –로 표시되고 잔여분은 ⑤-2로 이관됩니다.</p>
-    <p><b>가정 —</b> ⑤-2 ARPPU는 자체결제 ARPPU와 동일 가정(일반유저 ARPPU 확정 시 조정) · ④ 투입 풀은 '당월 MPU 미전환'으로, 섹션 ④의 90일 기준 가용 대상과 정의가 다릅니다.</p>`;
-  foot.innerHTML=`각 STEP은 이전 STEP의 잔여분만 넘겨받습니다 — 배정 = min(잔여, 풀) · 필요 추가 전환 PU = 부족금액 ÷ 유지 ARPPU (사업계획×목표비중 연동)`;
+    <p><b>지표 연동 —</b> 필요 추가 전환 PU = ④의 <b>전환 필요 MPU</b>(슬라이더가 단계 비중일 때 동일) · STEP ④ 풀 = ④의 <b>가용 대상(클럽 포함)</b>(jl 탭·등급 필터 연동) · STEP ⑤-1 풀 = <b>jl_active 탭의 최근 ${actWin}일 활동 유저 − 가용 대상</b>.</p>
+    <p><b>가정 —</b> ⑤-2 ARPPU는 자체결제 ARPPU와 동일 가정(일반유저 ARPPU 확정 시 조정) · 풀 데이터 없는 게임(DS·IMGN 등)은 – 표시 후 잔여분을 ⑤-2로 이관합니다.</p>`;
+  foot.innerHTML=`각 STEP은 이전 STEP의 잔여분만 넘겨받습니다 — 배정 = min(잔여, 풀) · 필요 추가 전환 PU = 커버리지%×사업계획 ÷ 유지 ARPPU − 현재 자체 MPU`;
 }
 // 선택 프로젝트의 해당 월 전체매출 실적(비중 계산용)
 function planActualTotal(m,bd){ let t=0,has=false; for(const d in bd){ if(d.slice(0,7)===m){t+=bd[d].total;has=true;} } return has?t:null; }
