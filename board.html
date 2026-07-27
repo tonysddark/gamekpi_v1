@@ -36,6 +36,39 @@
   .seg{display:inline-flex;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
   .seg button{background:transparent;border:none;color:var(--muted);padding:7px 13px;font-size:12.5px;cursor:pointer;font-family:inherit;}
   .seg button.active{background:var(--accent);color:#fff;font-weight:600;}
+  /* ⑤ 추가 전략 KPI — 프로토타입 디자인 */
+  .s5sub{color:var(--muted);font-size:13.5px;margin:6px 0 14px;max-width:900px;line-height:1.6;}
+  .s5sub b{color:var(--text);}
+  .s5ctrls{display:flex;align-items:center;gap:24px;flex-wrap:wrap;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin:0 0 18px;}
+  .s5ctrl{display:flex;flex-direction:column;gap:6px;}
+  .s5ctrl label{font-size:12px;color:var(--muted);}
+  .s5ctrl select{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13.5px;min-width:150px;}
+  .s5stageVal{font-size:16px;font-weight:600;color:#f5a623;}
+  .s5title{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:600;margin:18px 0 12px;color:var(--text);}
+  .s5title .n{color:var(--muted);opacity:.8;font-weight:500;font-size:12.5px;}
+  .s5flowRow{display:flex;align-items:stretch;gap:8px;margin:0 0 6px;flex-wrap:wrap;}
+  .s5step{flex:1;min-width:150px;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+  .s5step .fn{font-size:11px;color:var(--muted);opacity:.7;margin:0 0 4px;}
+  .s5step .fl{font-size:12.5px;color:var(--muted);margin:0 0 6px;}
+  .s5step .fv{font-size:19px;font-weight:600;margin:0;font-variant-numeric:tabular-nums;}
+  .s5step.c4 .fv{color:#5b9df5;} .s5step.c51 .fv{color:#2dd4a7;} .s5step.c52 .fv{color:#a48ef2;}
+  .s5arrow{align-self:center;color:var(--muted);font-size:18px;padding:0 2px;}
+  #s5table{border-collapse:collapse;width:100%;font-size:12.8px;}
+  #s5table th,#s5table td{padding:10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  #s5table th:first-child,#s5table td:first-child{text-align:left;}
+  #s5table th{color:var(--muted);font-weight:500;font-size:11.5px;}
+  #s5table tbody tr:hover{background:var(--panel-2);}
+  #s5table td.c4{color:#5b9df5;} #s5table td.c51{color:#2dd4a7;font-weight:600;} #s5table td.c52{color:#a48ef2;font-weight:600;} #s5table td.done{color:var(--muted);opacity:.6;}
+  .s5badge{font-size:10.5px;padding:1px 7px;border-radius:20px;margin-left:6px;font-weight:600;display:inline-block;vertical-align:1px;}
+  .s5badge.warn{background:#4a3413;color:#f5a623;}
+  .s5badge.ok{background:#0d3d31;color:#2dd4a7;}
+  .s5badge.na{background:var(--panel-2);color:var(--muted);border:1px solid var(--border);}
+  .s5legend{display:flex;gap:20px;font-size:12px;color:var(--muted);margin-top:10px;flex-wrap:wrap;}
+  .s5legend span{display:flex;align-items:center;gap:6px;}
+  .s5dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .s5note{background:#4a3413;border:1px solid #6b4a1a;border-radius:10px;padding:13px 17px;font-size:12.8px;color:#f0d9a8;margin-top:14px;line-height:1.7;}
+  .s5note b{color:#f5a623;}
+  .s5note p{margin:0 0 5px;} .s5note p:last-child{margin:0;}
   /* 목표 단계 버튼 (개별 라운드) */
   .stageWrap{display:inline-flex;gap:8px;flex-wrap:wrap;}
   .stageBtn{background:var(--panel-2);border:1px solid var(--border);color:var(--muted);padding:8px 15px;border-radius:9px;font-size:12.5px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .12s;}
@@ -162,15 +195,26 @@
       <div class="foot" id="s4foot"></div>
     </div>
     <div class="panel sortable" data-sec="strategy" draggable="false">
-      <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 추가 전략 KPI <span>목표 부족분 충당 waterfall — ④ 우수 MPU 미전환 → ⑤-1 우수 비MPU·활동중 → ⑤-2 일반유저 · ④의 목표 단계 선택을 따름</span></h2>
-      <div style="display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);margin:2px 0 6px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:8px"><b style="color:var(--text)">활동 기준 (최근 접속)</b>
+      <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 추가 전략 KPI <span style="color:#2dd4a7">현재 활동 유저 기반</span></h2>
+      <p class="s5sub"><b>④ 단계별 KPI</b>는 우수고객 중 이번 달 결제(MPU) 이력이 있는 미전환자를 투입해 목표 도달을 시도합니다.
+      그 풀만으로 목표에 못 미치면, <b>⑤에서 현재 활동 중인 대상자</b>로 부족분을 메웁니다 —
+      1순위 <b>우수고객 중 MPU가 아닌(최근 결제는 없지만 접속 중인) 대상</b>, 그래도 부족하면 2순위 <b>일반 유저 필요 전환 인원수</b>.</p>
+      <div class="s5ctrls">
+        <div class="s5ctrl"><label>활동 기준 (최근 접속)</label>
           <select id="actWin"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option></select>
         </div>
-        <span>적용 단계: <b class="s5stage" style="color:var(--peak)"></b> · 게임 필터 연동</span>
+        <div class="s5ctrl"><label>목표 커버리지 (④ 목표 단계 연동)</label><span class="s5stageVal s5stage"></span></div>
       </div>
-      <div class="cards" id="s5flow"></div>
+      <p class="s5title">전환 목표 충당 흐름<span class="n">· 필요 추가 전환 PU를 순서대로 채워나갑니다</span></p>
+      <div class="s5flowRow" id="s5flow"></div>
+      <p class="s5title">게임별 상세<span class="n">· ④에서 못 채운 만큼 ⑤ Tier1 → Tier2 순으로 배정</span></p>
       <div style="overflow-x:auto"><table id="s5table" style="min-width:900px"></table></div>
+      <div class="s5legend">
+        <span><span class="s5dot" style="background:#5b9df5"></span>④ 우수고객 MPU 미전환 · 이번 달 결제 O, 자체결제 X</span>
+        <span><span class="s5dot" style="background:#2dd4a7"></span>⑤-1 우수고객 중 비MPU·활동중 · 최근 결제는 없지만 접속 중</span>
+        <span><span class="s5dot" style="background:#a48ef2"></span>⑤-2 일반유저 필요 전환 · 절대 인원수만 관리, 풀 자체는 비표기</span>
+      </div>
+      <div class="s5note" id="s5note"></div>
       <div class="foot" id="s5foot"></div>
     </div>
   </div>
@@ -599,26 +643,30 @@ function renderStrategy(){
       s52=Math.max(0,rem);
       T.req+=req; T.s4+=s4; T.s51+=s51; T.s52+=s52;
     }
-    const badge = req===0? `<span style="color:var(--green);font-size:11px;margin-left:6px">달성</span>`
-      : !j? `<span style="color:var(--muted);font-size:11px;margin-left:6px">풀 데이터 없음</span>`
-      : s52>0? `<span style="color:var(--peak);font-size:11px;margin-left:6px">일반유저 필요</span>`:"";
-    const poolTxt=(v,p)=> p==null? (v?N(v):"–") : `${v?N(v)+"명":"–"} <span style="color:var(--muted);font-size:10px">/풀 ${N(p)}</span>`;
+    const badge = req===0? `<span class="s5badge ok">목표 달성</span>`
+      : !j? `<span class="s5badge na">풀 데이터 없음</span>`
+      : s52>0? `<span class="s5badge warn">일반유저 필요</span>`:"";
+    const poolTxt=(v,p)=> p==null? (v?N(v)+"명":"–") : `${v?N(v)+"명":"-"} <span style="color:var(--muted);font-size:10px;font-weight:400">/풀 ${N(p)}</span>`;
     return `<tr>
-      <td class="mon" style="font-weight:600">${c}${badge}</td>
-      <td>${req==null?"–":req===0?"-":N(req)+"명"}</td>
-      <td style="color:var(--accent)">${req?poolTxt(s4,p4):"-"}</td>
-      <td style="color:var(--green);font-weight:600">${req?poolTxt(s51,p51):"-"}</td>
-      <td style="color:var(--purple);font-weight:600">${req&&s52?N(s52)+"명":"-"}</td>
+      <td style="font-weight:600;color:var(--text)">${c}${badge}</td>
+      <td class="${req===0?"done":""}">${req==null?"–":req===0?"-":N(req)+"명"}</td>
+      <td class="c4">${req?poolTxt(s4,p4):"-"}</td>
+      <td class="c51">${req?poolTxt(s51,p51):"-"}</td>
+      <td class="c52">${req&&s52?N(s52)+"명":"-"}</td>
     </tr>`;
   }).join("");
+  const arrow=`<div class="s5arrow">→</div>`;
   flow.innerHTML=`
-    <div class="card"><div class="l">STEP 0 · 필요 추가 전환 PU</div><div class="v">${N(T.req)}<small>명</small></div><div class="s">부족금액 ÷ 유지 ARPPU (사업계획×목표비중 연동)</div></div>
-    <div class="card"><div class="l">STEP ④ · 우수 MPU 미전환 투입</div><div class="v" style="color:var(--accent)">${N(T.s4)}<small>명</small></div><div class="s">당월 결제 O · 자체결제 X</div></div>
-    <div class="card"><div class="l">STEP ⑤-1 · 우수 비MPU·활동중 투입</div><div class="v" style="color:var(--green)">${N(T.s51)}<small>명</small></div><div class="s">당월 결제 X · 최근 ${actWin}일 접속</div></div>
-    <div class="card"><div class="l">STEP ⑤-2 · 일반유저 필요 전환</div><div class="v" style="color:var(--purple)">${N(T.s52)}<small>명</small></div><div class="s">잔여분 (절대 인원수만 관리)</div></div>`;
-  tb.innerHTML=`<thead><tr><th class="lbl">게임</th><th>필요 추가 전환 PU</th><th>④ 우수 MPU 미전환 투입</th><th>⑤-1 우수 비MPU·활동중 투입</th><th>⑤-2 일반유저 필요</th></tr></thead><tbody>${rows}</tbody>`;
-  foot.innerHTML=`각 STEP은 이전 STEP의 잔여분만 넘겨받음(배정=min(잔여, 풀)) · 풀=시트 <b>jl_active</b> 탭(당월 결제·접속 기준, 회원 중복제거·PayUser 제외, 없으면 –) · `+
-    `⑤-2 ARPPU는 자체결제 ARPPU 동일 가정(일반유저 ARPPU 확정 시 조정) · ④ 투입 풀은 '당월 MPU 미전환'으로 섹션 ④의 90일 기준 가용 대상과 정의가 다름`;
+    <div class="s5step"><p class="fn">STEP 0</p><p class="fl">필요 추가 전환 PU</p><p class="fv">${N(T.req)}명</p></div>${arrow}
+    <div class="s5step c4"><p class="fn">STEP ④</p><p class="fl">우수고객 MPU 미전환</p><p class="fv">${N(T.s4)}명</p></div>${arrow}
+    <div class="s5step c51"><p class="fn">STEP ⑤-1</p><p class="fl">우수고객 비MPU·활동중</p><p class="fv">${N(T.s51)}명</p></div>${arrow}
+    <div class="s5step c52"><p class="fn">STEP ⑤-2</p><p class="fl">일반유저 필요 전환</p><p class="fv">${N(T.s52)}명</p></div>`;
+  tb.innerHTML=`<thead><tr><th>게임</th><th>필요 추가 전환 PU</th><th>④ 우수고객 MPU 미전환 투입</th><th>⑤-1 우수고객(비MPU·활동중) 투입</th><th>⑤-2 일반유저 필요 전환</th></tr></thead><tbody>${rows}</tbody>`;
+  const note=document.getElementById("s5note");
+  if(note) note.innerHTML=`
+    <p><b>데이터 안내 —</b> 풀은 시트 <b>jl_active</b> 탭(당월 결제·최근 접속 기준, 회원 중복제거·PayUser 제외)에서 로드합니다. 탭이 없으면 –로 표시되고 잔여분은 ⑤-2로 이관됩니다.</p>
+    <p><b>가정 —</b> ⑤-2 ARPPU는 자체결제 ARPPU와 동일 가정(일반유저 ARPPU 확정 시 조정) · ④ 투입 풀은 '당월 MPU 미전환'으로, 섹션 ④의 90일 기준 가용 대상과 정의가 다릅니다.</p>`;
+  foot.innerHTML=`각 STEP은 이전 STEP의 잔여분만 넘겨받습니다 — 배정 = min(잔여, 풀) · 필요 추가 전환 PU = 부족금액 ÷ 유지 ARPPU (사업계획×목표비중 연동)`;
 }
 // 선택 프로젝트의 해당 월 전체매출 실적(비중 계산용)
 function planActualTotal(m,bd){ let t=0,has=false; for(const d in bd){ if(d.slice(0,7)===m){t+=bd[d].total;has=true;} } return has?t:null; }
