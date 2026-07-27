@@ -294,6 +294,10 @@ let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MPU={}, MIND="", MAXD="", H
 let curGran="month", curProj="ALL", curMetric="total", fromD="", toD="", convRate=0.30;
 let CHART_ROWS=[];                                                    // 우측 정보 패널용 최근 렌더 행
 let showVals=localStorage.getItem("board-chart-vals")!=="0";          // 막대 수치 표시 (기본 ON)
+// 레전드 숨김 상태 — 라벨 기준으로 저장해 필터 변경·새로고침에도 유지
+let HIDDEN=new Set(); try{ HIDDEN=new Set(JSON.parse(localStorage.getItem("board-chart-hidden"))||[]); }catch(e){}
+function saveHidden(c){ HIDDEN=new Set(); c.data.datasets.forEach((d,i)=>{ if(!c.isDatasetVisible(i))HIDDEN.add(d.label); });
+  try{ localStorage.setItem("board-chart-hidden", JSON.stringify([...HIDDEN])); }catch(e){} }
 const EMBED_SEC=(()=>{try{return new URLSearchParams(location.search).get("sec");}catch(e){return null;}})();
 // 막대 안에 매출 수치 표기 플러그인 (토글 가능)
 const valPlugin={id:"barVals",afterDatasetsDraw(c){
@@ -549,11 +553,15 @@ function render(){
       y2:{position:"right",grid:{display:false},min:0,suggestedMax:70,ticks:{color:tk,callback:v=>v+"%"}}
     },
     plugins:{
-      legend:{labels:{color:tk,boxWidth:12,font:{size:11}}},
+      legend:{labels:{color:tk,boxWidth:12,font:{size:11}},
+        onClick:(e,item,lg)=>{ Chart.defaults.plugins.legend.onClick.call(lg,e,item,lg); saveHidden(lg.chart); }},
       // 캔버스 툴팁 비활성 — 마우스오버 시 우측 고정 패널(#s1info)에 표시 (차트를 가리지 않음)
       tooltip:{enabled:false,external:c=>{const t=c.tooltip;if(t&&t.opacity>0&&t.dataPoints&&t.dataPoints.length)fillInfo(t.dataPoints[0].dataIndex);}}
     }};
-  if(chart){ chart.data={labels,datasets:ds}; chart.options=opts; chart.update(); }
+  ds.forEach(d=>{ if(HIDDEN.has(d.label))d.hidden=true; }); // 숨김 상태 복원 (라벨 기준)
+  if(chart){ chart.data={labels,datasets:ds}; chart.options=opts;
+    ds.forEach((d,i)=>chart.setDatasetVisibility(i,!HIDDEN.has(d.label)));
+    chart.update(); }
   else chart=new Chart(document.getElementById("s1chart"),{data:{labels,datasets:ds},options:opts,plugins:[valPlugin]});
   fillInfo(rows.length-1);
 
