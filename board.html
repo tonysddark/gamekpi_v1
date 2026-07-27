@@ -122,7 +122,8 @@
   #s4table td.mon,#s4table th.lbl{text-align:left;}
   #s4table thead tr:first-child th{text-align:center;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--border);}
   #s4table thead tr:last-child th{color:var(--muted);font-weight:600;}
-  #themeBtn{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:7px 11px;border-radius:8px;font-size:14px;cursor:pointer;line-height:1;}
+  #themeBtn,.themeTgl{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:7px 11px;border-radius:8px;font-size:14px;cursor:pointer;line-height:1;}
+  .themeTgl{background:var(--panel-2);padding:6px 9px;font-size:13px;}
   .sortable{transition:box-shadow .15s;}
   .drag{cursor:grab;color:var(--muted);font-size:16px;user-select:none;margin-right:2px;padding:0 4px;}
   .drag:active{cursor:grabbing;}
@@ -199,7 +200,10 @@
     <div class="panel sortable" data-sec="chart" draggable="false">
       <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 매출 추이 <span>막대=매출 · 우축 선=자체결제 비중</span></h2>
       <div style="margin:6px 0 2px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap">프로젝트 <select class="pjSel"></select>
-        <span class="seg"><button id="valBtn" title="막대 안에 매출 수치 표시/숨기기">🔢 수치 표시</button></span></div>
+        <span class="seg"><button id="valBtn" title="막대 안에 매출 수치 표시/숨기기">🔢 수치 표시</button></span>
+        기간 <input type="date" id="s1from"> <span>~</span> <input type="date" id="s1to">
+        <span class="seg"><button id="s1reset">전체</button></span>
+        <button id="s1theme" class="themeTgl" title="밤/낮 모드">🌙</button></div>
       <div class="chart-row">
         <div class="chart-box"><canvas id="s1chart" role="img" aria-label="매출 추이"></canvas></div>
         <div class="chart-side" id="s1info"></div>
@@ -810,9 +814,9 @@ function afterLoad(){
   CODES.forEach(c=>Object.keys(PJ[c]).forEach(d=>{if(d<MIND)MIND=d;if(d>MAXD)MAXD=d;}));
   HORIZON=MAXD;
   Object.keys(TGTR).forEach(m=>{ const end=m+"-"+String(daysInMonth(m)).padStart(2,"0"); if(end>HORIZON)HORIZON=end; });
-  const fEl=document.getElementById("fromDate"),tEl=document.getElementById("toDate");
   const DEF_FROM = MIND<"2026-01-01" ? "2026-01-01" : MIND;
-  fEl.min=tEl.min=MIND; fEl.max=tEl.max=HORIZON; fEl.value=DEF_FROM; tEl.value=HORIZON; fromD=DEF_FROM; toD=HORIZON;
+  ["fromDate","toDate","s1from","s1to"].forEach(id=>{const el=document.getElementById(id);if(el){el.min=MIND;el.max=HORIZON;}});
+  fromD=DEF_FROM; toD=HORIZON; syncDates();
   curProj="ALL"; fillProjSelectors();
   document.getElementById("range").textContent=`${CODES.length}개 프로젝트 · ${MIND} ~ ${MAXD}${window.__MIRROR__?" · 미러(스냅샷)":""} · 자체결제 = ${D2C_PGS.join("·")}`;
   document.getElementById("setup").style.display="none"; document.getElementById("main").style.display="";
@@ -824,23 +828,31 @@ document.getElementById("granSeg").addEventListener("click",e=>{const b=e.target
 document.getElementById("metricSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;curMetric=b.dataset.m;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));render();});
 // 프로젝트 드롭다운 (필터+각 섹션 공통, 변경 시 전부 연동)
 document.addEventListener("change",e=>{ if(e.target.classList&&e.target.classList.contains("pjSel"))setProj(e.target.value); });
-document.getElementById("fromDate").addEventListener("change",e=>{fromD=e.target.value;render();});
-document.getElementById("toDate").addEventListener("change",e=>{toD=e.target.value;render();});
-document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;toD=HORIZON;document.getElementById("fromDate").value=MIND;document.getElementById("toDate").value=HORIZON;render();});
+// 기간 컨트롤 — ① 필터와 매출 추이 섹션 내 컨트롤 양방향 동기화
+function syncDates(){
+  ["fromDate","s1from"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=fromD;});
+  ["toDate","s1to"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=toD;});
+}
+[["fromDate","f"],["s1from","f"],["toDate","t"],["s1to","t"]].forEach(([id,k])=>{
+  document.getElementById(id).addEventListener("change",e=>{ if(k==="f")fromD=e.target.value; else toD=e.target.value; syncDates(); render(); });
+});
+["rangeReset","s1reset"].forEach(id=>document.getElementById(id).addEventListener("click",()=>{fromD=MIND;toD=HORIZON;syncDates();render();}));
 document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
 document.getElementById("kpiViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("kpiStageSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiMonth=b.dataset.m;s5cov=null;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("jlGrade").addEventListener("change",e=>{jlGrade=e.target.value;renderKPI();});
 document.getElementById("s5cov").addEventListener("input",e=>{s5cov=+e.target.value;renderStrategy();});
-// 밤/낮 모드
-(function(){ if(localStorage.getItem("board-theme")==="light")document.documentElement.classList.add("light");
-  document.getElementById("themeBtn").textContent=isLight()?"☀️":"🌙"; })();
-document.getElementById("themeBtn").addEventListener("click",()=>{
-  document.documentElement.classList.toggle("light"); const l=isLight();
-  localStorage.setItem("board-theme",l?"light":"dark");
-  document.getElementById("themeBtn").textContent=l?"☀️":"🌙";
+// 밤/낮 모드 — 헤더 버튼 + 매출 추이 섹션 내 버튼 공용
+function updateThemeBtns(){ const ic=isLight()?"☀️":"🌙"; ["themeBtn","s1theme"].forEach(id=>{const b=document.getElementById(id);if(b)b.textContent=ic;}); }
+function toggleTheme(){
+  document.documentElement.classList.toggle("light");
+  localStorage.setItem("board-theme",isLight()?"light":"dark");
+  updateThemeBtns();
   if(chart){ render(); }  // 차트 색 재적용(표·패널은 CSS var로 자동)
-});
+}
+(function(){ if(localStorage.getItem("board-theme")==="light")document.documentElement.classList.add("light");
+  updateThemeBtns(); })();
+["themeBtn","s1theme"].forEach(id=>document.getElementById(id).addEventListener("click",toggleTheme));
 // 막대 수치 표시/숨기기
 (function(){ const b=document.getElementById("valBtn"); if(!b)return;
   b.classList.toggle("active",showVals);
