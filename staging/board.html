@@ -77,11 +77,10 @@
   .msCard{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
   .msCard:hover{border-color:var(--accent);}
   .msCard.on{border-color:#2dd4a7;box-shadow:0 0 0 1px #2dd4a7 inset;}
-  .msCard .mhead{display:flex;align-items:center;gap:7px;}
+  .msCard .mhead{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
   .msCard .mdot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none;}
   .msCard.on .mdot{background:#2dd4a7;}
-  .msCard .mstage{font-size:10.5px;color:var(--muted);font-weight:600;}
-  .msCard .mtitle{font-size:14.5px;font-weight:700;margin:6px 0 8px;color:var(--text);}
+  .msCard .mtitle{font-size:14.5px;font-weight:700;color:var(--text);}
   .msCat{margin:7px 0 0;}
   .msCat .ct{font-size:10.5px;font-weight:700;letter-spacing:.03em;margin-bottom:3px;}
   .msCat ul{margin:0;padding-left:15px;}
@@ -266,7 +265,7 @@
     <div class="panel sortable" data-sec="milestone" draggable="false">
       <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 월별 마일스톤 <span>하반기 액션 로드맵 — 카드를 클릭하면 ④·⑤가 해당 목표 단계로 이동합니다</span></h2>
       <div class="msGrid" id="msGrid"></div>
-      <div class="foot">테마 흐름: 웹 DAU 확장 → PU 전환 → 재구매율 증가 → 타겟 프로모션 → 상시 구매처 · 데이터=시트 <b>actions</b> 탭(month·theme·category·item) · <span style="color:#5b9df5">기능</span>·<span style="color:#2dd4a7">프로모션</span>·<span style="color:#f5a623">테스트</span>·<span style="color:#a48ef2">분석</span></div>
+      <div class="foot">데이터=시트 <b>actions</b> 탭(month·theme·category·item) · <span style="color:#5b9df5">기능</span>·<span style="color:#2dd4a7">프로모션</span>·<span style="color:#f5a623">테스트</span>·<span style="color:#a48ef2">분석</span></div>
     </div>
   </div>
 
@@ -765,8 +764,7 @@ function renderMilestone(){
       ...Object.keys(a.cats).filter(c=>!MS_CATC[c]&&a.cats[c].length)];
     const cats=catKeys.map(c=>`<div class="msCat"><div class="ct" style="color:${MS_CATC[c]||"var(--muted)"}">${c}</div><ul>${a.cats[c].map(i=>`<li>${i}</li>`).join("")}</ul></div>`).join("");
     return `<div class="msCard ${m===kpiMonth?"on":""}" data-m="${m}">
-      <div class="mhead"><span class="mdot"></span><span class="mstage">${stg}${stg?" · ":""}${+m.slice(5)}월${r!=null?" · 목표 "+r+"%":""}</span></div>
-      <div class="mtitle">${a.theme||""}</div>${cats}</div>`;
+      <div class="mhead"><span class="mdot"></span><span class="mtitle">${stg}${stg?" · ":""}${+m.slice(5)}월${r!=null?" · 목표 "+r+"%":""}</span></div>${cats}</div>`;
   }).join("");
   grid.querySelectorAll(".msCard").forEach(card=>card.addEventListener("click",()=>{
     kpiMonth=card.dataset.m; s5cov=null;
