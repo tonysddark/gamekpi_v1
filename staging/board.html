@@ -43,7 +43,10 @@
   .s5ctrl{display:flex;flex-direction:column;gap:6px;}
   .s5ctrl label{font-size:12px;color:var(--muted);}
   .s5ctrl select{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13.5px;min-width:150px;}
-  .s5stageVal{font-size:16px;font-weight:600;color:#f5a623;}
+  .s5ctrl-slider{flex:1;min-width:260px;}
+  .s5sliderRow{display:flex;align-items:center;gap:12px;}
+  .s5sliderRow input[type=range]{flex:1;accent-color:#2dd4a7;}
+  .s5sliderVal{font-size:20px;font-weight:600;color:#2dd4a7;min-width:52px;text-align:right;}
   .s5title{display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:600;margin:18px 0 12px;color:var(--text);}
   .s5title .n{color:var(--muted);opacity:.8;font-weight:500;font-size:12.5px;}
   .s5flowRow{display:flex;align-items:stretch;gap:8px;margin:0 0 6px;flex-wrap:wrap;}
@@ -200,10 +203,16 @@
       그 풀만으로 목표에 못 미치면, <b>⑤에서 현재 활동 중인 대상자</b>로 부족분을 메웁니다 —
       1순위 <b>우수고객 중 MPU가 아닌(최근 결제는 없지만 접속 중인) 대상</b>, 그래도 부족하면 2순위 <b>일반 유저 필요 전환 인원수</b>.</p>
       <div class="s5ctrls">
+        <div class="s5ctrl"><label>게임</label><select class="pjSel"></select></div>
         <div class="s5ctrl"><label>활동 기준 (최근 접속)</label>
           <select id="actWin"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option></select>
         </div>
-        <div class="s5ctrl"><label>목표 커버리지 (④ 목표 단계 연동)</label><span class="s5stageVal s5stage"></span></div>
+        <div class="s5ctrl s5ctrl-slider"><label>목표 커버리지 (④ 목표 단계 선택 시 해당 비중으로 리셋)</label>
+          <div class="s5sliderRow">
+            <input type="range" id="s5cov" min="10" max="70" step="1" value="70">
+            <span class="s5sliderVal" id="s5covVal">70%</span>
+          </div>
+        </div>
       </div>
       <p class="s5title">전환 목표 충당 흐름<span class="n">· 필요 추가 전환 PU를 순서대로 채워나갑니다</span></p>
       <div class="s5flowRow" id="s5flow"></div>
@@ -621,11 +630,14 @@ function renderKPI(){
 }
 /* ===== ⑤ 추가 전략 KPI — waterfall 충당 ===== */
 let actWin="14";
+let s5cov=null; // 목표 커버리지 수동값 (null=④ 목표 단계의 비중을 따름)
 function renderStrategy(){
   const flow=document.getElementById("s5flow"), tb=document.getElementById("s5table"), foot=document.getElementById("s5foot");
   if(!flow)return;
   const m=kpiMonth, stg=STAGE[m]||"";
-  document.querySelectorAll(".s5stage").forEach(x=>x.textContent=`${stg} · ${+m.slice(5)}월${TGTR[m]!=null?" · "+TGTR[m]+"%":""}`);
+  const cov = s5cov!=null ? s5cov : (TGTR[m]!=null ? Math.round(TGTR[m]) : 70);
+  const se=document.getElementById("s5cov"), sv=document.getElementById("s5covVal");
+  if(se&&+se.value!==cov)se.value=cov; if(sv)sv.textContent=cov+"%";
   const codes=selCodes();
   if(!codes.length){ flow.innerHTML=""; tb.innerHTML=""; foot.textContent="프로젝트를 선택하세요."; return; }
   const gorder=codes.slice().sort((a,b)=>{const rk=x=>x==="DS"?1:x==="IMGN"?2:0;return rk(a)-rk(b);});
@@ -633,7 +645,8 @@ function renderStrategy(){
   const rows=gorder.map(c=>{
     const bd=mergedByDate([c]), b=baseStats(bd,[c]);
     const k=kpiCalc([c],m,b,bd);
-    const req=k.전환!=null?Math.round(k.전환):null;
+    // 필요 전환 PU = 커버리지%×사업계획 매출 ÷ 유지 ARPPU − 현재 자체 MPU (슬라이더 탐색 가능)
+    const req=(k.plan!=null&&k.A)? Math.max(0, Math.ceil(k.plan*cov/100/k.A - b.curPU)) : null;
     const j=JLA[c];
     const p4=j?j.mpu_untapped:null, p51=j?(j["active"+actWin]||0):null;
     let s4=0,s51=0,s52=0;
@@ -727,9 +740,10 @@ document.getElementById("toDate").addEventListener("change",e=>{toD=e.target.val
 document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;toD=HORIZON;document.getElementById("fromDate").value=MIND;document.getElementById("toDate").value=HORIZON;render();});
 document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
 document.getElementById("kpiViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
-document.getElementById("kpiStageSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiMonth=b.dataset.m;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
+document.getElementById("kpiStageSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiMonth=b.dataset.m;s5cov=null;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("jlGrade").addEventListener("change",e=>{jlGrade=e.target.value;renderKPI();});
 document.getElementById("actWin").addEventListener("change",e=>{actWin=e.target.value;renderStrategy();});
+document.getElementById("s5cov").addEventListener("input",e=>{s5cov=+e.target.value;renderStrategy();});
 // 밤/낮 모드
 (function(){ if(localStorage.getItem("board-theme")==="light")document.documentElement.classList.add("light");
   document.getElementById("themeBtn").textContent=isLight()?"☀️":"🌙"; })();
