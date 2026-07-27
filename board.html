@@ -77,11 +77,10 @@
   .msCard{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
   .msCard:hover{border-color:var(--accent);}
   .msCard.on{border-color:#2dd4a7;box-shadow:0 0 0 1px #2dd4a7 inset;}
-  .msCard .mhead{display:flex;align-items:center;gap:7px;}
+  .msCard .mhead{display:flex;align-items:center;gap:7px;margin-bottom:4px;}
   .msCard .mdot{width:10px;height:10px;border-radius:50%;background:var(--accent);flex:none;}
   .msCard.on .mdot{background:#2dd4a7;}
-  .msCard .mstage{font-size:10.5px;color:var(--muted);font-weight:600;}
-  .msCard .mtitle{font-size:14.5px;font-weight:700;margin:6px 0 8px;color:var(--text);}
+  .msCard .mtitle{font-size:14.5px;font-weight:700;color:var(--text);}
   .msCat{margin:7px 0 0;}
   .msCat .ct{font-size:10.5px;font-weight:700;letter-spacing:.03em;margin-bottom:3px;}
   .msCat ul{margin:0;padding-left:15px;}
@@ -98,6 +97,21 @@
   .card .v small{font-size:11px;color:var(--muted);font-weight:500;}
   .card .s{font-size:11px;color:var(--muted);margin-top:3px;}
   .chart-box{position:relative;height:400px;margin-top:10px;}
+  /* 차트 우측 고정 정보 패널 (툴팁 대체 — 차트를 가리지 않음) */
+  .chart-row{display:flex;gap:12px;margin-top:10px;align-items:stretch;}
+  .chart-row .chart-box{flex:1;min-width:0;margin-top:0;}
+  .chart-side{width:252px;flex:none;background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.9;overflow-y:auto;max-height:400px;}
+  .chart-side .t{font-weight:700;font-size:14px;margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:6px;}
+  .chart-side .row{display:flex;justify-content:space-between;gap:10px;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .chart-side .row .k{color:var(--muted);}
+  @media(max-width:900px){.chart-row{flex-direction:column;}.chart-side{width:auto;max-height:none;}}
+  /* 섹션 단독 URL 복사 버튼 */
+  .linkBtn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;font-size:11px;padding:2px 8px;cursor:pointer;margin-left:8px;vertical-align:1px;font-family:inherit;}
+  .linkBtn:hover{color:var(--accent);border-color:var(--accent);}
+  /* 임베드 모드 (?sec=…) — 해당 섹션만 표시 */
+  :root.embed body{padding:8px 10px 16px;}
+  :root.embed header,:root.embed .sub,:root.embed .banner,:root.embed #filterPanel,:root.embed .drag,:root.embed .linkBtn,:root.embed .hint{display:none!important;}
+  :root.embed .panel{margin-bottom:8px;}
   .foot{color:var(--muted);font-size:12px;line-height:1.7;margin-top:10px;}
   #filterPanel{position:sticky;top:6px;z-index:30;box-shadow:0 8px 20px -10px rgba(0,0,0,.7);}
   td.grp,th.grp{border-left:1px solid var(--border);}
@@ -107,7 +121,8 @@
   #s4table td.mon,#s4table th.lbl{text-align:left;}
   #s4table thead tr:first-child th{text-align:center;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--border);}
   #s4table thead tr:last-child th{color:var(--muted);font-weight:600;}
-  #themeBtn{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:7px 11px;border-radius:8px;font-size:14px;cursor:pointer;line-height:1;}
+  #themeBtn,.themeTgl{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:7px 11px;border-radius:8px;font-size:14px;cursor:pointer;line-height:1;}
+  .themeTgl{background:var(--panel-2);padding:6px 9px;font-size:13px;}
   .sortable{transition:box-shadow .15s;}
   .drag{cursor:grab;color:var(--muted);font-size:16px;user-select:none;margin-right:2px;padding:0 4px;}
   .drag:active{cursor:grabbing;}
@@ -183,8 +198,15 @@
     </div>
     <div class="panel sortable" data-sec="chart" draggable="false">
       <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 매출 추이 <span>막대=매출 · 우축 선=자체결제 비중</span></h2>
-      <div style="margin:6px 0 2px;font-size:12px;color:var(--muted)">프로젝트 <select class="pjSel"></select></div>
-      <div class="chart-box"><canvas id="s1chart" role="img" aria-label="매출 추이"></canvas></div>
+      <div style="margin:6px 0 2px;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap">프로젝트 <select class="pjSel"></select>
+        <span class="seg"><button id="valBtn" title="막대 안에 매출 수치 표시/숨기기">🔢 수치 표시</button></span>
+        기간 <input type="date" id="s1from"> <span>~</span> <input type="date" id="s1to">
+        <span class="seg"><button id="s1reset">전체</button></span>
+        <button id="s1theme" class="themeTgl" title="밤/낮 모드">🌙</button></div>
+      <div class="chart-row">
+        <div class="chart-box"><canvas id="s1chart" role="img" aria-label="매출 추이"></canvas></div>
+        <div class="chart-side" id="s1info"></div>
+      </div>
       <div class="foot" id="s1foot"></div>
     </div>
     <div class="panel sortable" data-sec="kpi" draggable="false">
@@ -243,11 +265,11 @@
     <div class="panel sortable" data-sec="milestone" draggable="false">
       <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 월별 마일스톤 <span>하반기 액션 로드맵 — 카드를 클릭하면 ④·⑤가 해당 목표 단계로 이동합니다</span></h2>
       <div class="msGrid" id="msGrid"></div>
-      <div class="foot">테마 흐름: 웹 DAU 확장 → PU 전환 → 재구매율 증가 → 타겟 프로모션 → 상시 구매처 · 데이터=시트 <b>actions</b> 탭(month·theme·category·item) · <span style="color:#5b9df5">기능</span>·<span style="color:#2dd4a7">프로모션</span>·<span style="color:#f5a623">테스트</span>·<span style="color:#a48ef2">분석</span></div>
+      <div class="foot">데이터=시트 <b>actions</b> 탭(month·theme·category·item) · <span style="color:#5b9df5">기능</span>·<span style="color:#2dd4a7">프로모션</span>·<span style="color:#f5a623">테스트</span>·<span style="color:#a48ef2">분석</span></div>
     </div>
   </div>
 
-  <div style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:4px">다음 섹터는 여기에 이어서 함께 만들어갑니다 · 카드/추이 제목의 <b>⠿</b>를 잡고 끌면 순서가 바뀝니다</div>
+  <div class="hint" style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:4px">다음 섹터는 여기에 이어서 함께 만들어갑니다 · 카드/추이 제목의 <b>⠿</b>를 잡고 끌면 순서가 바뀝니다 · 섹션 제목의 <b>🔗 URL</b>을 누르면 그 섹션만 보이는 노션 임베드용 주소가 복사됩니다</div>
 </div>
 
 <script>
@@ -270,6 +292,25 @@ const COL={total:"#4f8cff",d2c:"#4f8cff",etc:"rgba(139,150,173,.45)",ratio:"#fbb
 
 let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MPU={}, MIND="", MAXD="", HORIZON="", chart=null;
 let curGran="month", curProj="ALL", curMetric="total", fromD="", toD="", convRate=0.30;
+let CHART_ROWS=[];                                                    // 우측 정보 패널용 최근 렌더 행
+let showVals=localStorage.getItem("board-chart-vals")!=="0";          // 막대 수치 표시 (기본 ON)
+// 레전드 숨김 상태 — 라벨 기준으로 저장해 필터 변경·새로고침에도 유지
+let HIDDEN=new Set(); try{ HIDDEN=new Set(JSON.parse(localStorage.getItem("board-chart-hidden"))||[]); }catch(e){}
+function saveHidden(c){ HIDDEN=new Set(); c.data.datasets.forEach((d,i)=>{ if(!c.isDatasetVisible(i))HIDDEN.add(d.label); });
+  try{ localStorage.setItem("board-chart-hidden", JSON.stringify([...HIDDEN])); }catch(e){} }
+const EMBED_SEC=(()=>{try{return new URLSearchParams(location.search).get("sec");}catch(e){return null;}})();
+// 막대 안에 매출 수치 표기 플러그인 (토글 가능)
+const valPlugin={id:"barVals",afterDatasetsDraw(c){
+  if(!showVals)return; const ctx=c.ctx;
+  c.data.datasets.forEach((ds,di)=>{
+    if(ds.type!=="bar")return; const meta=c.getDatasetMeta(di); if(meta.hidden)return;
+    meta.data.forEach((el,i)=>{ const v=ds.data[i]; if(v==null||v<=0||!el)return;
+      const h=Math.abs(el.base-el.y); if(h<14||(el.width||0)<34)return;   // 좁은 구간은 생략
+      ctx.save(); ctx.font="600 10px Pretendard,'Malgun Gothic',sans-serif";
+      ctx.fillStyle=ds.valColor||"#fff"; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(억(v), el.x, (el.y+el.base)/2); ctx.restore(); });
+  });
+}};
 let kpiView="month", kpiMonth="2026-12"; // 섹터4 뷰: 'month'(선택 프로젝트 월별) | 'game'(특정 월 전 게임)
 let TMPU={}; // 전체 월간 MPU(순결제자) — 시트 'mpu_total' 탭에서만 로드 (실데이터 미내장)
 // 우수고객(JL) 등급별 {게임:{등급:[90일 과금 PU, 미전환 풀]}} — 시트 'jl' 탭(game,grade,pu,pool)에서만 로드 (실데이터 미내장)
@@ -475,24 +516,26 @@ const labelOf=k=> k.length===4?k+"년" : k.length===7?k.slice(2).replace("-","-"
 
 function render(){
   const rows=buildSeries();
+  CHART_ROWS=rows;
   const labels=rows.map(r=>labelOf(r.key));
+  const vMut=isLight()?"#3d4660":"#cdd5e4"; // 반투명 막대(기타·목표) 위 수치 색
   // ---- 막대 데이터셋 (지표별) ----
   const ds=[];
   if(curMetric==="total"){
     // 자체결제를 WEB/APK/PC 채널색으로 분해 + 기타(마켓)
-    ds.push({type:"bar",label:"WEB",data:rows.map(r=>r.web),backgroundColor:CH_COL.web,stack:"a",yAxisID:"y",borderRadius:2,order:2});
-    ds.push({type:"bar",label:"APK",data:rows.map(r=>r.apk),backgroundColor:CH_COL.apk,stack:"a",yAxisID:"y",borderRadius:2,order:2});
-    ds.push({type:"bar",label:"PC",data:rows.map(r=>r.pc),backgroundColor:CH_COL.pc,stack:"a",yAxisID:"y",borderRadius:2,order:2});
-    ds.push({type:"bar",label:"기타(마켓)",data:rows.map(r=>r.etc),backgroundColor:COL.etc,stack:"a",yAxisID:"y",borderRadius:2,order:2});
-    ds.push({type:"bar",label:"자체결제(목표)",data:rows.map(r=>r.tgt?r.tgt.d2c:null),backgroundColor:"rgba(79,140,255,.35)",stack:"t",yAxisID:"y",borderRadius:2,order:3});
-    ds.push({type:"bar",label:"기타(목표)",data:rows.map(r=>r.tgt?r.tgt.etc:null),backgroundColor:"rgba(139,150,173,.18)",stack:"t",yAxisID:"y",borderRadius:2,order:3});
+    ds.push({type:"bar",label:"WEB",data:rows.map(r=>r.web),backgroundColor:CH_COL.web,stack:"a",yAxisID:"y",borderRadius:2,order:2,valColor:"#fff"});
+    ds.push({type:"bar",label:"APK",data:rows.map(r=>r.apk),backgroundColor:CH_COL.apk,stack:"a",yAxisID:"y",borderRadius:2,order:2,valColor:"#fff"});
+    ds.push({type:"bar",label:"PC",data:rows.map(r=>r.pc),backgroundColor:CH_COL.pc,stack:"a",yAxisID:"y",borderRadius:2,order:2,valColor:"#fff"});
+    ds.push({type:"bar",label:"기타(마켓)",data:rows.map(r=>r.etc),backgroundColor:COL.etc,stack:"a",yAxisID:"y",borderRadius:2,order:2,valColor:vMut});
+    ds.push({type:"bar",label:"자체결제(목표)",data:rows.map(r=>r.tgt?r.tgt.d2c:null),backgroundColor:"rgba(79,140,255,.35)",stack:"t",yAxisID:"y",borderRadius:2,order:3,valColor:vMut});
+    ds.push({type:"bar",label:"기타(목표)",data:rows.map(r=>r.tgt?r.tgt.etc:null),backgroundColor:"rgba(139,150,173,.18)",stack:"t",yAxisID:"y",borderRadius:2,order:3,valColor:vMut});
   }else if(curMetric==="d2c"){
-    ds.push({type:"bar",label:"WEB",data:rows.map(r=>r.web),backgroundColor:CH_COL.web,stack:"a",yAxisID:"y",borderRadius:2,order:2});
-    ds.push({type:"bar",label:"APK",data:rows.map(r=>r.apk),backgroundColor:CH_COL.apk,stack:"a",yAxisID:"y",borderRadius:2,order:2});
-    ds.push({type:"bar",label:"PC",data:rows.map(r=>r.pc),backgroundColor:CH_COL.pc,stack:"a",yAxisID:"y",borderRadius:2,order:2});
-    ds.push({type:"bar",label:"자체결제(목표)",data:rows.map(r=>r.tgt?r.tgt.d2c:null),backgroundColor:"rgba(192,132,252,.30)",stack:"t",yAxisID:"y",borderRadius:2,order:3});
+    ds.push({type:"bar",label:"WEB",data:rows.map(r=>r.web),backgroundColor:CH_COL.web,stack:"a",yAxisID:"y",borderRadius:2,order:2,valColor:"#fff"});
+    ds.push({type:"bar",label:"APK",data:rows.map(r=>r.apk),backgroundColor:CH_COL.apk,stack:"a",yAxisID:"y",borderRadius:2,order:2,valColor:"#fff"});
+    ds.push({type:"bar",label:"PC",data:rows.map(r=>r.pc),backgroundColor:CH_COL.pc,stack:"a",yAxisID:"y",borderRadius:2,order:2,valColor:"#fff"});
+    ds.push({type:"bar",label:"자체결제(목표)",data:rows.map(r=>r.tgt?r.tgt.d2c:null),backgroundColor:"rgba(192,132,252,.30)",stack:"t",yAxisID:"y",borderRadius:2,order:3,valColor:vMut});
   }else{ // 단일 채널
-    ds.push({type:"bar",label:curMetric.toUpperCase(),data:rows.map(r=>r[curMetric]),backgroundColor:CH_COL[curMetric],stack:"a",yAxisID:"y",borderRadius:2,order:2});
+    ds.push({type:"bar",label:curMetric.toUpperCase(),data:rows.map(r=>r[curMetric]),backgroundColor:CH_COL[curMetric],stack:"a",yAxisID:"y",borderRadius:2,order:2,valColor:"#fff"});
   }
   // ---- 비중 라인 (우축) ----
   const lineAct=rows.map(r=>r.ratio);
@@ -510,39 +553,77 @@ function render(){
       y2:{position:"right",grid:{display:false},min:0,suggestedMax:70,ticks:{color:tk,callback:v=>v+"%"}}
     },
     plugins:{
-      legend:{labels:{color:tk,boxWidth:12,font:{size:11}}},
-      tooltip:{callbacks:{
-        title:items=>items.length?labels[items[0].dataIndex]:"",
-        label:()=>null,
-        afterBody:items=>{
-          if(!items.length)return "";
-          const idx=items[0].dataIndex; const r=rows[idx]; if(!r)return "";
-          const pct=v=>r.total?(v/r.total*100).toFixed(1)+"%":"–";
-          const L=[];
-          L.push("전체 매출  "+억(r.total));
-          L.push("자체결제  "+억(r.d2c)+"  ("+P(r.ratio)+")");
-          // 직전 구간 대비 자체결제 증감
-          const prev=rows[idx-1];
-          if(prev){ const d=r.d2c-prev.d2c; const rate=prev.d2c?d/prev.d2c*100:null;
-            const unit=curGran==="year"?"전년":curGran==="month"?"전월":"전일";
-            const sign=d>=0?"▲ +":"▼ ";
-            L.push(`  ${unit}대비  ${sign}${억(Math.abs(d))}${rate!=null?" ("+(d>=0?"+":"-")+Math.abs(rate).toFixed(1)+"%)":""}`); }
-          L.push("  · WEB  "+억(r.web)+"  ("+pct(r.web)+")");
-          L.push("  · APK  "+억(r.apk)+"  ("+pct(r.apk)+")");
-          L.push("  · PC   "+억(r.pc)+"  ("+pct(r.pc)+")");
-          L.push("기타(마켓)  "+억(r.etc)+"  ("+pct(r.etc)+")");
-          if(r.tgt) L.push("목표 자체결제  "+억(r.tgt.d2c)+"  ("+P(r.tgt.ratio)+")");
-          return L;
-        }
-      }}
+      legend:{labels:{color:tk,boxWidth:12,font:{size:11}},
+        onClick:(e,item,lg)=>{ Chart.defaults.plugins.legend.onClick.call(lg,e,item,lg); saveHidden(lg.chart); }},
+      // 캔버스 툴팁 비활성 — 마우스오버 시 우측 고정 패널(#s1info)에 표시 (차트를 가리지 않음)
+      tooltip:{enabled:false,external:c=>{const t=c.tooltip;if(t&&t.opacity>0&&t.dataPoints&&t.dataPoints.length)fillInfo(t.dataPoints[0].dataIndex);}}
     }};
-  if(chart){ chart.data={labels,datasets:ds}; chart.options=opts; chart.update(); }
-  else chart=new Chart(document.getElementById("s1chart"),{data:{labels,datasets:ds},options:opts});
+  ds.forEach(d=>{ if(HIDDEN.has(d.label))d.hidden=true; }); // 숨김 상태 복원 (라벨 기준)
+  if(chart){ chart.data={labels,datasets:ds}; chart.options=opts;
+    ds.forEach((d,i)=>chart.setDatasetVisibility(i,!HIDDEN.has(d.label)));
+    chart.update(); }
+  else chart=new Chart(document.getElementById("s1chart"),{data:{labels,datasets:ds},options:opts,plugins:[valPlugin]});
+  fillInfo(rows.length-1);
 
   renderCards(rows);
   renderKPI();
   document.getElementById("s1foot").textContent =
     `${rows.length}개 구간 · ${allSelected()?"전 프로젝트 합산":curProj} · 비중(우축)=자체결제/전체매출 · 점선=목표 비중 · 목표 막대=사업계획×목표비중(2026)`;
+}
+
+// 전월(전년) 동기간 합계 — 현재 버킷의 실제 데이터 일자 범위(시작일~마지막일)를 직전 구간에 그대로 적용
+// 예) 7월 데이터가 1~27일이면 6월 1~27일과 비교 (완결월 vs 진행월 왜곡 방지)
+function prevSpanSums(key){
+  const bd=mergedByDate();
+  const keyOf=d=>curGran==="year"?d.slice(0,4):curGran==="month"?d.slice(0,7):d;
+  let lo=null,hi=null;
+  for(const d in bd){ if(fromD&&d<fromD)continue; if(toD&&d>toD)continue; if(keyOf(d)!==key)continue;
+    if(!lo||d<lo)lo=d; if(!hi||d>hi)hi=d; }
+  if(!lo)return null;
+  let pLo,pHi,label;
+  if(curGran==="day"){
+    const p=new Date(lo+"T12:00:00"); p.setDate(p.getDate()-1);
+    pLo=pHi=p.getFullYear()+"-"+String(p.getMonth()+1).padStart(2,"0")+"-"+String(p.getDate()).padStart(2,"0");
+    label="전일";
+  }else if(curGran==="month"){
+    const[y,m]=key.split("-").map(Number); const pk=(m===1?y-1:y)+"-"+String(m===1?12:m-1).padStart(2,"0");
+    const dim=daysInMonth(pk);
+    pLo=pk+"-"+String(Math.min(+lo.slice(8),dim)).padStart(2,"0");
+    pHi=pk+"-"+String(Math.min(+hi.slice(8),dim)).padStart(2,"0");
+    label="전월 동기간";
+  }else{
+    const py=String(+key-1); pLo=py+lo.slice(4); pHi=py+hi.slice(4);
+    label="전년 동기간";
+  }
+  const s={total:0,web:0,apk:0,pc:0,has:false};
+  for(const d in bd){ if(d<pLo||d>pHi)continue; const o=bd[d]; s.total+=o.total;s.web+=o.web;s.apk+=o.apk;s.pc+=o.pc;s.has=true; }
+  if(!s.has)return null;
+  s.d2c=s.web+s.apk+s.pc; s.label=label; s.range=pLo.slice(5).replace("-","/")+"~"+pHi.slice(5).replace("-","/");
+  return s;
+}
+// 우측 고정 정보 패널 — 기본은 최근 구간, 막대 호버 시 해당 구간
+function fillInfo(idx){
+  const el=document.getElementById("s1info"); if(!el)return;
+  const r=CHART_ROWS[idx]; if(!r){el.innerHTML="";return;}
+  const pct=v=>r.total?(v/r.total*100).toFixed(1)+"%":"–";
+  const ps=prevSpanSums(r.key);
+  const dTxt=(cur,prv)=>{ const d=cur-prv; const rate=prv?d/prv*100:null;
+    return `<span style="color:${d>=0?'var(--green)':'var(--down)'}">${d>=0?"▲ +":"▼ −"}${억(Math.abs(d))}${rate!=null?" ("+(d>=0?"+":"-")+Math.abs(rate).toFixed(1)+"%)":""}</span>`; };
+  const delta = ps? `<div class="row"><span class="k" title="비교 구간: ${ps.range}">${ps.label} 자체결제</span>${dTxt(r.d2c,ps.d2c)}</div>` : "";
+  const sub=(cur,prv)=> ps? `<div class="row" style="font-size:10.5px;line-height:1.5;margin:-3px 0 3px"><span class="k" style="opacity:.7">└ ${ps.label}</span>${dTxt(cur,prv)}</div>` : "";
+  el.innerHTML=`<div class="t">${labelOf(r.key)}${ps?`<span style="font-size:10.5px;font-weight:400;color:var(--muted);margin-left:6px">vs ${ps.range}</span>`:""}</div>
+    <div class="row"><span class="k">전체 매출</span><b>${억(r.total)}</b></div>
+    <div class="row"><span class="k">자체결제</span><b style="color:var(--accent)">${억(r.d2c)} (${P(r.ratio)})</b></div>
+    ${delta}
+    <div class="row"><span class="k" style="color:var(--purple)">· WEB</span><span>${억(r.web)} (${pct(r.web)})</span></div>
+    ${sub(r.web,ps&&ps.web)}
+    <div class="row"><span class="k" style="color:var(--accent)">· APK</span><span>${억(r.apk)} (${pct(r.apk)})</span></div>
+    ${sub(r.apk,ps&&ps.apk)}
+    <div class="row"><span class="k" style="color:var(--green)">· PC</span><span>${억(r.pc)} (${pct(r.pc)})</span></div>
+    ${sub(r.pc,ps&&ps.pc)}
+    <div class="row"><span class="k">기타(마켓)</span><span>${억(r.etc)} (${pct(r.etc)})</span></div>
+    ${r.tgt?`<div class="row"><span class="k">목표 자체결제</span><span style="color:var(--purple)">${억(r.tgt.d2c)} (${P(r.tgt.ratio)})</span></div>`:""}
+    <div style="margin-top:8px;font-size:10.5px;color:var(--muted);opacity:.75;line-height:1.5">막대에 마우스를 올리면 해당 구간 정보로 바뀝니다</div>`;
 }
 
 function renderCards(rows){
@@ -724,8 +805,7 @@ function renderMilestone(){
       ...Object.keys(a.cats).filter(c=>!MS_CATC[c]&&a.cats[c].length)];
     const cats=catKeys.map(c=>`<div class="msCat"><div class="ct" style="color:${MS_CATC[c]||"var(--muted)"}">${c}</div><ul>${a.cats[c].map(i=>`<li>${i}</li>`).join("")}</ul></div>`).join("");
     return `<div class="msCard ${m===kpiMonth?"on":""}" data-m="${m}">
-      <div class="mhead"><span class="mdot"></span><span class="mstage">${stg}${stg?" · ":""}${+m.slice(5)}월${r!=null?" · 목표 "+r+"%":""}</span></div>
-      <div class="mtitle">${a.theme||""}</div>${cats}</div>`;
+      <div class="mhead"><span class="mdot"></span><span class="mtitle">${stg}${stg?" · ":""}${+m.slice(5)}월${r!=null?" · 목표 "+r+"%":""}</span></div>${cats}</div>`;
   }).join("");
   grid.querySelectorAll(".msCard").forEach(card=>card.addEventListener("click",()=>{
     kpiMonth=card.dataset.m; s5cov=null;
@@ -773,9 +853,9 @@ function afterLoad(){
   CODES.forEach(c=>Object.keys(PJ[c]).forEach(d=>{if(d<MIND)MIND=d;if(d>MAXD)MAXD=d;}));
   HORIZON=MAXD;
   Object.keys(TGTR).forEach(m=>{ const end=m+"-"+String(daysInMonth(m)).padStart(2,"0"); if(end>HORIZON)HORIZON=end; });
-  const fEl=document.getElementById("fromDate"),tEl=document.getElementById("toDate");
   const DEF_FROM = MIND<"2026-01-01" ? "2026-01-01" : MIND;
-  fEl.min=tEl.min=MIND; fEl.max=tEl.max=HORIZON; fEl.value=DEF_FROM; tEl.value=HORIZON; fromD=DEF_FROM; toD=HORIZON;
+  ["fromDate","toDate","s1from","s1to"].forEach(id=>{const el=document.getElementById(id);if(el){el.min=MIND;el.max=HORIZON;}});
+  fromD=DEF_FROM; toD=HORIZON; syncDates();
   curProj="ALL"; fillProjSelectors();
   document.getElementById("range").textContent=`${CODES.length}개 프로젝트 · ${MIND} ~ ${MAXD}${window.__MIRROR__?" · 미러(스냅샷)":""} · 자체결제 = ${D2C_PGS.join("·")}`;
   document.getElementById("setup").style.display="none"; document.getElementById("main").style.display="";
@@ -787,23 +867,47 @@ document.getElementById("granSeg").addEventListener("click",e=>{const b=e.target
 document.getElementById("metricSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;curMetric=b.dataset.m;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));render();});
 // 프로젝트 드롭다운 (필터+각 섹션 공통, 변경 시 전부 연동)
 document.addEventListener("change",e=>{ if(e.target.classList&&e.target.classList.contains("pjSel"))setProj(e.target.value); });
-document.getElementById("fromDate").addEventListener("change",e=>{fromD=e.target.value;render();});
-document.getElementById("toDate").addEventListener("change",e=>{toD=e.target.value;render();});
-document.getElementById("rangeReset").addEventListener("click",()=>{fromD=MIND;toD=HORIZON;document.getElementById("fromDate").value=MIND;document.getElementById("toDate").value=HORIZON;render();});
+// 기간 컨트롤 — ① 필터와 매출 추이 섹션 내 컨트롤 양방향 동기화
+function syncDates(){
+  ["fromDate","s1from"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=fromD;});
+  ["toDate","s1to"].forEach(id=>{const el=document.getElementById(id);if(el)el.value=toD;});
+}
+[["fromDate","f"],["s1from","f"],["toDate","t"],["s1to","t"]].forEach(([id,k])=>{
+  document.getElementById(id).addEventListener("change",e=>{ if(k==="f")fromD=e.target.value; else toD=e.target.value; syncDates(); render(); });
+});
+["rangeReset","s1reset"].forEach(id=>document.getElementById(id).addEventListener("click",()=>{fromD=MIND;toD=HORIZON;syncDates();render();}));
 document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
 document.getElementById("kpiViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("kpiStageSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiMonth=b.dataset.m;s5cov=null;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("jlGrade").addEventListener("change",e=>{jlGrade=e.target.value;renderKPI();});
 document.getElementById("s5cov").addEventListener("input",e=>{s5cov=+e.target.value;renderStrategy();});
-// 밤/낮 모드
-(function(){ if(localStorage.getItem("board-theme")==="light")document.documentElement.classList.add("light");
-  document.getElementById("themeBtn").textContent=isLight()?"☀️":"🌙"; })();
-document.getElementById("themeBtn").addEventListener("click",()=>{
-  document.documentElement.classList.toggle("light"); const l=isLight();
-  localStorage.setItem("board-theme",l?"light":"dark");
-  document.getElementById("themeBtn").textContent=l?"☀️":"🌙";
+// 밤/낮 모드 — 헤더 버튼 + 매출 추이 섹션 내 버튼 공용
+function updateThemeBtns(){ const ic=isLight()?"☀️":"🌙"; ["themeBtn","s1theme"].forEach(id=>{const b=document.getElementById(id);if(b)b.textContent=ic;}); }
+function toggleTheme(){
+  document.documentElement.classList.toggle("light");
+  localStorage.setItem("board-theme",isLight()?"light":"dark");
+  updateThemeBtns();
   if(chart){ render(); }  // 차트 색 재적용(표·패널은 CSS var로 자동)
-});
+}
+(function(){ if(localStorage.getItem("board-theme")==="light")document.documentElement.classList.add("light");
+  updateThemeBtns(); })();
+["themeBtn","s1theme"].forEach(id=>document.getElementById(id).addEventListener("click",toggleTheme));
+// 막대 수치 표시/숨기기
+(function(){ const b=document.getElementById("valBtn"); if(!b)return;
+  b.classList.toggle("active",showVals);
+  b.addEventListener("click",()=>{ showVals=!showVals;
+    localStorage.setItem("board-chart-vals",showVals?"1":"0");
+    b.classList.toggle("active",showVals);
+    if(chart)chart.update("none"); }); })();
+// 섹션 단독 URL 복사 (노션 임베드용 — 시트 URL 포함이라 새 브라우저에서도 바로 연결)
+function copySecLink(sec,btn){
+  let link=location.origin+location.pathname+"?sec="+encodeURIComponent(sec);
+  if(SHEET_URL)link+="&sheet="+encodeURIComponent(SHEET_URL);
+  const done=ok=>{ const t=btn.textContent; btn.textContent=ok?"✅ 복사됨":"❌ 복사 실패"; setTimeout(()=>btn.textContent=t,1600); };
+  const fb=()=>{ try{ const ta=document.createElement("textarea"); ta.value=link; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select(); const ok=document.execCommand("copy"); ta.remove(); done(ok); }catch(e){ done(false); } };
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(link).then(()=>done(true),fb); else fb();
+}
 
 /* ===== 섹션 드래그 정렬 (① 필터는 고정, 나머지 재배치) ===== */
 const SEC_LS="board-sec-order";
@@ -837,10 +941,23 @@ secBox.addEventListener("dragover",e=>{
 
 loadOrder(); // 섹션 번호 매기기 + 저장된 순서 복원
 
+// 섹션 제목마다 🔗 URL 복사 버튼 부착
+secBox.querySelectorAll(".sortable").forEach(p=>{
+  const b=document.createElement("button"); b.className="linkBtn"; b.type="button"; b.textContent="🔗 URL";
+  b.title="이 섹션만 보이는 단독 URL 복사 (노션 임베드용)";
+  b.addEventListener("click",()=>copySecLink(p.dataset.sec,b));
+  const h=p.querySelector("h2"); if(h)h.appendChild(b);
+});
+// 임베드 모드: ?sec=… 이면 해당 섹션만 표시 (헤더·배너·필터 숨김)
+if(EMBED_SEC&&secBox.querySelector(`.sortable[data-sec="${EMBED_SEC}"]`)){
+  document.documentElement.classList.add("embed");
+  secBox.querySelectorAll(".sortable").forEach(p=>{ if(p.dataset.sec!==EMBED_SEC)p.style.display="none"; });
+}
+
 (function(){
   if(window.__MIRROR__){ boot(); return; }  // 미러(스냅샷) 모드
   let url="";
-  try{const p=new URLSearchParams(location.search).get("sheet");if(p){url=p.trim();history.replaceState(null,"",location.pathname);}}catch(e){}
+  try{const p=new URLSearchParams(location.search).get("sheet");if(p){url=p.trim();if(!EMBED_SEC)history.replaceState(null,"",location.pathname);}}catch(e){}
   if(!url)url=getMasterUrl();
   if(url){const el=document.getElementById("setupUrl");if(el)el.value=url;boot(url);}
   else showSetup("연결된 시트가 없습니다. 대시보드/플래너에서 시트를 연결했다면 자동으로 이어지며, 아니면 아래에 시트 URL을 직접 입력하세요.");

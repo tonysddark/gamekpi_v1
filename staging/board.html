@@ -571,23 +571,56 @@ function render(){
     `${rows.length}개 구간 · ${allSelected()?"전 프로젝트 합산":curProj} · 비중(우축)=자체결제/전체매출 · 점선=목표 비중 · 목표 막대=사업계획×목표비중(2026)`;
 }
 
+// 전월(전년) 동기간 합계 — 현재 버킷의 실제 데이터 일자 범위(시작일~마지막일)를 직전 구간에 그대로 적용
+// 예) 7월 데이터가 1~27일이면 6월 1~27일과 비교 (완결월 vs 진행월 왜곡 방지)
+function prevSpanSums(key){
+  const bd=mergedByDate();
+  const keyOf=d=>curGran==="year"?d.slice(0,4):curGran==="month"?d.slice(0,7):d;
+  let lo=null,hi=null;
+  for(const d in bd){ if(fromD&&d<fromD)continue; if(toD&&d>toD)continue; if(keyOf(d)!==key)continue;
+    if(!lo||d<lo)lo=d; if(!hi||d>hi)hi=d; }
+  if(!lo)return null;
+  let pLo,pHi,label;
+  if(curGran==="day"){
+    const p=new Date(lo+"T12:00:00"); p.setDate(p.getDate()-1);
+    pLo=pHi=p.getFullYear()+"-"+String(p.getMonth()+1).padStart(2,"0")+"-"+String(p.getDate()).padStart(2,"0");
+    label="전일";
+  }else if(curGran==="month"){
+    const[y,m]=key.split("-").map(Number); const pk=(m===1?y-1:y)+"-"+String(m===1?12:m-1).padStart(2,"0");
+    const dim=daysInMonth(pk);
+    pLo=pk+"-"+String(Math.min(+lo.slice(8),dim)).padStart(2,"0");
+    pHi=pk+"-"+String(Math.min(+hi.slice(8),dim)).padStart(2,"0");
+    label="전월 동기간";
+  }else{
+    const py=String(+key-1); pLo=py+lo.slice(4); pHi=py+hi.slice(4);
+    label="전년 동기간";
+  }
+  const s={total:0,web:0,apk:0,pc:0,has:false};
+  for(const d in bd){ if(d<pLo||d>pHi)continue; const o=bd[d]; s.total+=o.total;s.web+=o.web;s.apk+=o.apk;s.pc+=o.pc;s.has=true; }
+  if(!s.has)return null;
+  s.d2c=s.web+s.apk+s.pc; s.label=label; s.range=pLo.slice(5).replace("-","/")+"~"+pHi.slice(5).replace("-","/");
+  return s;
+}
 // 우측 고정 정보 패널 — 기본은 최근 구간, 막대 호버 시 해당 구간
 function fillInfo(idx){
   const el=document.getElementById("s1info"); if(!el)return;
   const r=CHART_ROWS[idx]; if(!r){el.innerHTML="";return;}
   const pct=v=>r.total?(v/r.total*100).toFixed(1)+"%":"–";
-  const prev=CHART_ROWS[idx-1];
-  let delta="";
-  if(prev){ const d=r.d2c-prev.d2c; const rate=prev.d2c?d/prev.d2c*100:null;
-    const unit=curGran==="year"?"전년":curGran==="month"?"전월":"전일";
-    delta=`<div class="row"><span class="k">${unit}대비 자체결제</span><span style="color:${d>=0?'var(--green)':'var(--down)'}">${d>=0?"▲ +":"▼ −"}${억(Math.abs(d))}${rate!=null?" ("+(d>=0?"+":"-")+Math.abs(rate).toFixed(1)+"%)":""}</span></div>`; }
-  el.innerHTML=`<div class="t">${labelOf(r.key)}</div>
+  const ps=prevSpanSums(r.key);
+  const dTxt=(cur,prv)=>{ const d=cur-prv; const rate=prv?d/prv*100:null;
+    return `<span style="color:${d>=0?'var(--green)':'var(--down)'}">${d>=0?"▲ +":"▼ −"}${억(Math.abs(d))}${rate!=null?" ("+(d>=0?"+":"-")+Math.abs(rate).toFixed(1)+"%)":""}</span>`; };
+  const delta = ps? `<div class="row"><span class="k" title="비교 구간: ${ps.range}">${ps.label} 자체결제</span>${dTxt(r.d2c,ps.d2c)}</div>` : "";
+  const sub=(cur,prv)=> ps? `<div class="row" style="font-size:10.5px;line-height:1.5;margin:-3px 0 3px"><span class="k" style="opacity:.7">└ ${ps.label}</span>${dTxt(cur,prv)}</div>` : "";
+  el.innerHTML=`<div class="t">${labelOf(r.key)}${ps?`<span style="font-size:10.5px;font-weight:400;color:var(--muted);margin-left:6px">vs ${ps.range}</span>`:""}</div>
     <div class="row"><span class="k">전체 매출</span><b>${억(r.total)}</b></div>
     <div class="row"><span class="k">자체결제</span><b style="color:var(--accent)">${억(r.d2c)} (${P(r.ratio)})</b></div>
     ${delta}
     <div class="row"><span class="k" style="color:var(--purple)">· WEB</span><span>${억(r.web)} (${pct(r.web)})</span></div>
+    ${sub(r.web,ps&&ps.web)}
     <div class="row"><span class="k" style="color:var(--accent)">· APK</span><span>${억(r.apk)} (${pct(r.apk)})</span></div>
+    ${sub(r.apk,ps&&ps.apk)}
     <div class="row"><span class="k" style="color:var(--green)">· PC</span><span>${억(r.pc)} (${pct(r.pc)})</span></div>
+    ${sub(r.pc,ps&&ps.pc)}
     <div class="row"><span class="k">기타(마켓)</span><span>${억(r.etc)} (${pct(r.etc)})</span></div>
     ${r.tgt?`<div class="row"><span class="k">목표 자체결제</span><span style="color:var(--purple)">${억(r.tgt.d2c)} (${P(r.tgt.ratio)})</span></div>`:""}
     <div style="margin-top:8px;font-size:10.5px;color:var(--muted);opacity:.75;line-height:1.5">막대에 마우스를 올리면 해당 구간 정보로 바뀝니다</div>`;
