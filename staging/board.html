@@ -273,7 +273,7 @@
     </div>
   </div>
 
-  <div class="hint" style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:4px">다음 섹터는 여기에 이어서 함께 만들어갑니다 · 카드/추이 제목의 <b>⠿</b>를 잡고 끌면 순서가 바뀝니다 · 섹션 제목의 <b>🔗 URL</b>을 누르면 그 섹션만 보이는 노션 임베드용 주소가 복사됩니다</div>
+  <div class="hint" style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:4px">다음 섹터는 여기에 이어서 함께 만들어갑니다 · 카드/추이 제목의 <b>⠿</b>를 잡고 끌면 순서가 바뀝니다 · 섹션 제목의 <b>🔗 URL</b>을 누르면 <b>지금 보고 있는 상태 그대로</b>(필터·기간·테마·시트 연결 포함) 그 섹션만 열리는 노션 임베드용 주소가 복사됩니다 — 다른 PC에서 열어도 동일합니다</div>
 </div>
 
 <script>
@@ -297,12 +297,18 @@ const COL={total:"#4f8cff",d2c:"#4f8cff",etc:"rgba(139,150,173,.45)",ratio:"#fbb
 let SHEET_URL="", CODES=[], PJ={}, PLAN={}, TGTR={}, MPU={}, MIND="", MAXD="", HORIZON="", chart=null;
 let curGran="month", curProj="ALL", curMetric="total", fromD="", toD="", convRate=0.30;
 let CHART_ROWS=[];                                                    // 우측 정보 패널용 최근 렌더 행
-let showVals=localStorage.getItem("board-chart-vals")!=="0";          // 막대 수치 표시 (기본 ON)
+// URL 파라미터 = 공유용 상태 박제. 우선순위: URL > 이 기기 저장값(localStorage) > 기본값
+// → 다른 PC·다른 사람이 열어도 링크에 담긴 상태(시트 포함)로 시작합니다.
+const QS=(()=>{try{return new URLSearchParams(location.search);}catch(e){return new URLSearchParams("");}})();
+const qp=k=>{ const v=QS.get(k); return (v==null||v==="")?null:v; };
+let showVals = qp("vals")!=null ? qp("vals")==="1" : localStorage.getItem("board-chart-vals")!=="0";  // 막대 수치 표시 (기본 ON)
 // 레전드 숨김 상태 — 라벨 기준으로 저장해 필터 변경·새로고침에도 유지
-let HIDDEN=new Set(); try{ HIDDEN=new Set(JSON.parse(localStorage.getItem("board-chart-hidden"))||[]); }catch(e){}
+let HIDDEN=new Set();
+if(qp("hide")!=null){ HIDDEN=new Set(qp("hide").split("|").filter(Boolean)); }
+else { try{ HIDDEN=new Set(JSON.parse(localStorage.getItem("board-chart-hidden"))||[]); }catch(e){} }
 function saveHidden(c){ HIDDEN=new Set(); c.data.datasets.forEach((d,i)=>{ if(!c.isDatasetVisible(i))HIDDEN.add(d.label); });
   try{ localStorage.setItem("board-chart-hidden", JSON.stringify([...HIDDEN])); }catch(e){} }
-const EMBED_SEC=(()=>{try{return new URLSearchParams(location.search).get("sec");}catch(e){return null;}})();
+const EMBED_SEC=qp("sec");
 // 막대 안에 매출 수치 표기 플러그인 (토글 가능)
 const valPlugin={id:"barVals",afterDatasetsDraw(c){
   if(!showVals)return; const ctx=c.ctx;
@@ -330,11 +336,18 @@ function jlAgg(codes){ let pu=0,av=0,act=0,has=false;
 // 필터 상태 영속화 (localStorage) — 새로고침·노션 임베드 재로드에도 유지
 const FILT_LS="board-filters";
 function saveFilters(){ try{ localStorage.setItem(FILT_LS, JSON.stringify({curGran,curMetric,curProj,fromD,toD,kpiView,kpiMonth,jlGrade,s5cov})); }catch(e){} }
-function loadFilters(){ try{ const s=JSON.parse(localStorage.getItem(FILT_LS)); if(!s)return;
-  if(s.curGran)curGran=s.curGran; if(s.curMetric)curMetric=s.curMetric; if(s.curProj)curProj=s.curProj;
-  if(s.fromD)fromD=s.fromD; if(s.toD)toD=s.toD;
-  if(s.kpiView)kpiView=s.kpiView; if(s.kpiMonth)kpiMonth=s.kpiMonth;
-  if(s.jlGrade)jlGrade=s.jlGrade; if(s.s5cov!==undefined)s5cov=s.s5cov; }catch(e){} }
+function loadFilters(){
+  try{ const s=JSON.parse(localStorage.getItem(FILT_LS)); if(s){
+    if(s.curGran)curGran=s.curGran; if(s.curMetric)curMetric=s.curMetric; if(s.curProj)curProj=s.curProj;
+    if(s.fromD)fromD=s.fromD; if(s.toD)toD=s.toD;
+    if(s.kpiView)kpiView=s.kpiView; if(s.kpiMonth)kpiMonth=s.kpiMonth;
+    if(s.jlGrade)jlGrade=s.jlGrade; if(s.s5cov!==undefined)s5cov=s.s5cov; } }catch(e){}
+  // URL 파라미터가 있으면 최우선 적용 (공유 링크 상태)
+  if(qp("gran"))curGran=qp("gran");   if(qp("metric"))curMetric=qp("metric");
+  if(qp("proj"))curProj=qp("proj");   if(qp("from"))fromD=qp("from"); if(qp("to"))toD=qp("to");
+  if(qp("view"))kpiView=qp("view");   if(qp("month"))kpiMonth=qp("month");
+  if(qp("grade"))jlGrade=qp("grade"); if(qp("cov"))s5cov=+qp("cov");
+}
 function syncFilterUI(){
   document.querySelectorAll("#granSeg button").forEach(b=>b.classList.toggle("active",b.dataset.g===curGran));
   document.querySelectorAll("#metricSeg button").forEach(b=>b.classList.toggle("active",b.dataset.m===curMetric));
@@ -930,7 +943,8 @@ function toggleTheme(){
   updateThemeBtns();
   if(chart){ render(); }  // 차트 색 재적용(표·패널은 CSS var로 자동)
 }
-(function(){ if(localStorage.getItem("board-theme")==="light")document.documentElement.classList.add("light");
+(function(){ const t=qp("theme")||localStorage.getItem("board-theme"); // URL > 기기 저장값
+  if(t==="light")document.documentElement.classList.add("light");
   updateThemeBtns(); })();
 ["themeBtn","s1theme"].forEach(id=>document.getElementById(id).addEventListener("click",toggleTheme));
 // 막대 수치 표시/숨기기
@@ -940,10 +954,19 @@ function toggleTheme(){
     localStorage.setItem("board-chart-vals",showVals?"1":"0");
     b.classList.toggle("active",showVals);
     if(chart)chart.update("none"); }); })();
-// 섹션 단독 URL 복사 (노션 임베드용 — 시트 URL 포함이라 새 브라우저에서도 바로 연결)
+// 섹션 단독 URL 복사 (노션 임베드용)
+// 시트 URL + 현재 필터·표시 상태를 전부 파라미터로 박제 → 다른 PC·다른 사람이 열어도 같은 화면
 function copySecLink(sec,btn){
-  let link=location.origin+location.pathname+"?sec="+encodeURIComponent(sec);
-  if(SHEET_URL)link+="&sheet="+encodeURIComponent(SHEET_URL);
+  const p=new URLSearchParams();
+  p.set("sec",sec);
+  if(SHEET_URL)p.set("sheet",SHEET_URL);          // 시트를 링크에 담아 별도 연동 불필요
+  p.set("proj",curProj); p.set("gran",curGran); p.set("metric",curMetric);
+  if(fromD)p.set("from",fromD); if(toD)p.set("to",toD);
+  p.set("view",kpiView); p.set("month",kpiMonth); p.set("grade",jlGrade);
+  if(s5cov!=null)p.set("cov",s5cov);
+  p.set("theme",isLight()?"light":"dark"); p.set("vals",showVals?"1":"0");
+  if(HIDDEN.size)p.set("hide",[...HIDDEN].join("|"));   // 레전드에서 끈 항목
+  const link=location.origin+location.pathname+"?"+p.toString();
   const done=ok=>{ const t=btn.textContent; btn.textContent=ok?"✅ 복사됨":"❌ 복사 실패"; setTimeout(()=>btn.textContent=t,1600); };
   const fb=()=>{ try{ const ta=document.createElement("textarea"); ta.value=link; ta.style.position="fixed"; ta.style.opacity="0";
     document.body.appendChild(ta); ta.select(); const ok=document.execCommand("copy"); ta.remove(); done(ok); }catch(e){ done(false); } };
@@ -985,7 +1008,7 @@ loadOrder(); // 섹션 번호 매기기 + 저장된 순서 복원
 // 섹션 제목마다 🔗 URL 복사 버튼 부착
 secBox.querySelectorAll(".sortable").forEach(p=>{
   const b=document.createElement("button"); b.className="linkBtn"; b.type="button"; b.textContent="🔗 URL";
-  b.title="이 섹션만 보이는 단독 URL 복사 (노션 임베드용)";
+  b.title="이 섹션만 보이는 단독 URL 복사 — 지금 보고 있는 필터·기간·테마와 시트 연결까지 링크에 담깁니다 (노션 임베드용, 다른 PC에서도 동일 화면)";
   b.addEventListener("click",()=>copySecLink(p.dataset.sec,b));
   const h=p.querySelector("h2"); if(h)h.appendChild(b);
 });
@@ -998,7 +1021,8 @@ if(EMBED_SEC&&secBox.querySelector(`.sortable[data-sec="${EMBED_SEC}"]`)){
 (function(){
   if(window.__MIRROR__){ boot(); return; }  // 미러(스냅샷) 모드
   let url="";
-  try{const p=new URLSearchParams(location.search).get("sheet");if(p){url=p.trim();if(!EMBED_SEC)history.replaceState(null,"",location.pathname);}}catch(e){}
+  // 링크에 시트가 박혀 있으면 그것으로 연결 (이 기기에 저장된 시트가 없어도 바로 열림)
+  try{const p=qp("sheet");if(p){url=p.trim();if(!EMBED_SEC)history.replaceState(null,"",location.pathname);}}catch(e){}
   if(!url)url=getMasterUrl();
   if(url){const el=document.getElementById("setupUrl");if(el)el.value=url;boot(url);}
   else showSetup("연결된 시트가 없습니다. 대시보드/플래너에서 시트를 연결했다면 자동으로 이어지며, 아니면 아래에 시트 URL을 직접 입력하세요.");
