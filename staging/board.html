@@ -161,6 +161,18 @@
       <div style="overflow-x:auto"><table id="s4table" style="min-width:1760px"></table></div>
       <div class="foot" id="s4foot"></div>
     </div>
+    <div class="panel sortable" data-sec="strategy" draggable="false">
+      <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 추가 전략 KPI <span>목표 부족분 충당 waterfall — ④ 우수 MPU 미전환 → ⑤-1 우수 비MPU·활동중 → ⑤-2 일반유저 · ④의 목표 단계 선택을 따름</span></h2>
+      <div style="display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);margin:2px 0 6px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:8px"><b style="color:var(--text)">활동 기준 (최근 접속)</b>
+          <select id="actWin"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option></select>
+        </div>
+        <span>적용 단계: <b class="s5stage" style="color:var(--peak)"></b> · 게임 필터 연동</span>
+      </div>
+      <div class="cards" id="s5flow"></div>
+      <div style="overflow-x:auto"><table id="s5table" style="min-width:900px"></table></div>
+      <div class="foot" id="s5foot"></div>
+    </div>
   </div>
 
   <div style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:4px">다음 섹터는 여기에 이어서 함께 만들어갑니다 · 카드/추이 제목의 <b>⠿</b>를 잡고 끌면 순서가 바뀝니다</div>
@@ -299,6 +311,22 @@ async function loadTotalMPU(url){
 const totalMpuOf=(m,codes=selCodes())=>{ let t=0,has=false; codes.forEach(c=>{ if(TMPU[c]&&TMPU[c][m]!=null){t+=TMPU[c][m];has=true;} }); return has?t:null; };
 // 인게임(스토어) 결제자 = 기준월 전체 MPU − 자체 MPU. mpu_total 탭 없으면 표시 안 함(–)
 function ingameBase(codes,b){ const tot=totalMpuOf(b.curKey,codes); if(tot==null)return null; return Math.max(0,tot-b.curPU); }
+// ⑤ 추가 전략 풀 탭('jl_active') 로드: game,mpu_untapped,active7,active14,active30 (실데이터 미내장)
+let JLA={};
+async function loadJLA(url){
+  JLA={};
+  try{
+    const grid=await fetchGrid(url,"jl_active");
+    const h=headerOf(grid);
+    const gi=h.findIndex(x=>x.includes("game")||x.includes("게임"));
+    const mi=h.findIndex(x=>x.includes("mpu_untapped")||x.includes("미전환"));
+    const c7=h.findIndex(x=>x.includes("active7")), c14=h.findIndex(x=>x.includes("active14")), c30=h.findIndex(x=>x.includes("active30"));
+    if(gi<0||mi<0)return;
+    for(let i=1;i<grid.length;i++){ const g=String(grid[i][gi]||"").trim().toUpperCase(); if(!g)continue;
+      JLA[g]={mpu_untapped:toNum(grid[i][mi])||0, active7:c7>=0?(toNum(grid[i][c7])||0):0,
+        active14:c14>=0?(toNum(grid[i][c14])||0):0, active30:c30>=0?(toNum(grid[i][c30])||0):0}; }
+  }catch(e){ /* 탭 없으면 ⑤ 풀 – 표시 */ }
+}
 // 우수고객(JL) 탭('jl') 로드: game,grade,pu,pool (등급별 90일 과금 PU·미전환 풀)
 async function loadJL(url){
   JLG={};
@@ -475,8 +503,8 @@ function baseStats(bd,codes=selCodes()){
     mpuBased:useMpu,
     baseLabel:last3.map(m=>+m.slice(5)+"월").join("·"), curLabel:lastM?(+lastM.slice(5)+"월"):"-", curKey:lastM, actM:byM};
 }
-// 지표 셀(3번째 컬럼부터) — 프로젝트 조합/월 공용
-function kpiMetricCells(codes,m,b,bd){
+// 핵심 KPI 계산 (④ 단계별 KPI · ⑤ 추가 전략 공용)
+function kpiCalc(codes,m,b,bd){
   const A=b.arppu;
   const plan=planOf(m,codes);
   const fullComplete = b.actM[m] && b.actM[m].days.size>=daysInMonth(m);
@@ -488,6 +516,11 @@ function kpiMetricCells(codes,m,b,bd){
   const 부족 = 목표!=null? Math.max(0,목표-현황) : null;
   const 목표PU = (목표!=null&&A)? 목표/A : null;
   const 전환 = 목표PU!=null? Math.max(0,목표PU-b.curPU) : null;
+  return {A,plan,fullComplete,ratio,목표,현황,부족,목표PU,전환};
+}
+// 지표 셀(3번째 컬럼부터) — 프로젝트 조합/월 공용
+function kpiMetricCells(codes,m,b,bd){
+  const {A,plan,fullComplete,ratio,목표,현황,부족,목표PU,전환}=kpiCalc(codes,m,b,bd);
   const ig = ingameBase(codes,b);                                       // 인게임(스토어) 결제자 = 전체−자체
   const cr = (전환!=null&&ig>0)? 전환/ig*100 : null;                     // 전환율 = 전환필요 ÷ 인게임MPU
   const crTxt = cr==null?"–": `<b style="color:${cr>100?'var(--down)':'var(--green)'}">${cr.toFixed(0)}%</b>${cr>100?' <span style="color:var(--muted);font-size:10px">풀 초과</span>':''}`;
@@ -540,6 +573,52 @@ function renderKPI(){
   }
   el.innerHTML=head+"<tbody>"+body+"</tbody>";
   foot.innerHTML=`${note}<br>${mpuNote} · 부족=목표−현황 · 전환필요 MPU=목표MPU−현재MPU · <b>인게임 MPU=최근 완결월 전체 결제자 − 자체결제자 = 스토어 결제자</b> · <b>목표 전환율=전환필요 MPU ÷ 미전환 풀</b> — 100% 이하면 초록(풀 내 커버 가능)·초과면 빨강(신규 유입 필요)`;
+  renderStrategy();
+}
+/* ===== ⑤ 추가 전략 KPI — waterfall 충당 ===== */
+let actWin="14";
+function renderStrategy(){
+  const flow=document.getElementById("s5flow"), tb=document.getElementById("s5table"), foot=document.getElementById("s5foot");
+  if(!flow)return;
+  const m=kpiMonth, stg=STAGE[m]||"";
+  document.querySelectorAll(".s5stage").forEach(x=>x.textContent=`${stg} · ${+m.slice(5)}월${TGTR[m]!=null?" · "+TGTR[m]+"%":""}`);
+  const codes=selCodes();
+  if(!codes.length){ flow.innerHTML=""; tb.innerHTML=""; foot.textContent="프로젝트를 선택하세요."; return; }
+  const gorder=codes.slice().sort((a,b)=>{const rk=x=>x==="DS"?1:x==="IMGN"?2:0;return rk(a)-rk(b);});
+  const T={req:0,s4:0,s51:0,s52:0};
+  const rows=gorder.map(c=>{
+    const bd=mergedByDate([c]), b=baseStats(bd,[c]);
+    const k=kpiCalc([c],m,b,bd);
+    const req=k.전환!=null?Math.round(k.전환):null;
+    const j=JLA[c];
+    const p4=j?j.mpu_untapped:null, p51=j?(j["active"+actWin]||0):null;
+    let s4=0,s51=0,s52=0;
+    if(req!=null){
+      s4=Math.min(req,p4||0); let rem=req-s4;
+      s51=Math.min(rem,p51||0); rem-=s51;
+      s52=Math.max(0,rem);
+      T.req+=req; T.s4+=s4; T.s51+=s51; T.s52+=s52;
+    }
+    const badge = req===0? `<span style="color:var(--green);font-size:11px;margin-left:6px">달성</span>`
+      : !j? `<span style="color:var(--muted);font-size:11px;margin-left:6px">풀 데이터 없음</span>`
+      : s52>0? `<span style="color:var(--peak);font-size:11px;margin-left:6px">일반유저 필요</span>`:"";
+    const poolTxt=(v,p)=> p==null? (v?N(v):"–") : `${v?N(v)+"명":"–"} <span style="color:var(--muted);font-size:10px">/풀 ${N(p)}</span>`;
+    return `<tr>
+      <td class="mon" style="font-weight:600">${c}${badge}</td>
+      <td>${req==null?"–":req===0?"-":N(req)+"명"}</td>
+      <td style="color:var(--accent)">${req?poolTxt(s4,p4):"-"}</td>
+      <td style="color:var(--green);font-weight:600">${req?poolTxt(s51,p51):"-"}</td>
+      <td style="color:var(--purple);font-weight:600">${req&&s52?N(s52)+"명":"-"}</td>
+    </tr>`;
+  }).join("");
+  flow.innerHTML=`
+    <div class="card"><div class="l">STEP 0 · 필요 추가 전환 PU</div><div class="v">${N(T.req)}<small>명</small></div><div class="s">부족금액 ÷ 유지 ARPPU (사업계획×목표비중 연동)</div></div>
+    <div class="card"><div class="l">STEP ④ · 우수 MPU 미전환 투입</div><div class="v" style="color:var(--accent)">${N(T.s4)}<small>명</small></div><div class="s">당월 결제 O · 자체결제 X</div></div>
+    <div class="card"><div class="l">STEP ⑤-1 · 우수 비MPU·활동중 투입</div><div class="v" style="color:var(--green)">${N(T.s51)}<small>명</small></div><div class="s">당월 결제 X · 최근 ${actWin}일 접속</div></div>
+    <div class="card"><div class="l">STEP ⑤-2 · 일반유저 필요 전환</div><div class="v" style="color:var(--purple)">${N(T.s52)}<small>명</small></div><div class="s">잔여분 (절대 인원수만 관리)</div></div>`;
+  tb.innerHTML=`<thead><tr><th class="lbl">게임</th><th>필요 추가 전환 PU</th><th>④ 우수 MPU 미전환 투입</th><th>⑤-1 우수 비MPU·활동중 투입</th><th>⑤-2 일반유저 필요</th></tr></thead><tbody>${rows}</tbody>`;
+  foot.innerHTML=`각 STEP은 이전 STEP의 잔여분만 넘겨받음(배정=min(잔여, 풀)) · 풀=시트 <b>jl_active</b> 탭(당월 결제·접속 기준, 회원 중복제거·PayUser 제외, 없으면 –) · `+
+    `⑤-2 ARPPU는 자체결제 ARPPU 동일 가정(일반유저 ARPPU 확정 시 조정) · ④ 투입 풀은 '당월 MPU 미전환'으로 섹션 ④의 90일 기준 가용 대상과 정의가 다름`;
 }
 // 선택 프로젝트의 해당 월 전체매출 실적(비중 계산용)
 function planActualTotal(m,bd){ let t=0,has=false; for(const d in bd){ if(d.slice(0,7)===m){t+=bd[d].total;has=true;} } return has?t:null; }
@@ -552,7 +631,7 @@ function buildStageButtons(){ const seg=document.getElementById("kpiStageSeg"); 
 async function boot(url){
   // 미러(하드코딩 스냅샷) 모드: 시트 없이 내장 데이터 사용
   if(window.__MIRROR__){ const D=window.__MIRROR__;
-    CODES=D.CODES.slice(); PJ=D.PJ; PLAN=D.PLAN||{}; TGTR=D.TGTR||{}; MPU=D.MPU||{}; TMPU=D.TMPU||{}; JLG=D.JLG||{};
+    CODES=D.CODES.slice(); PJ=D.PJ; PLAN=D.PLAN||{}; TGTR=D.TGTR||{}; MPU=D.MPU||{}; TMPU=D.TMPU||{}; JLG=D.JLG||{}; JLA=D.JLA||{};
     afterLoad(); return; }
   SHEET_URL=url;
   try{
@@ -568,6 +647,7 @@ async function boot(url){
     await loadMPU(url);
     await loadTotalMPU(url);
     await loadJL(url);
+    await loadJLA(url);
     localStorage.setItem("kpiplanner-sheet",url);
     try{const s=JSON.parse(localStorage.getItem(DASH_LS))||{};if(s.masterSheetUrl!==url){s.masterSheetUrl=url;localStorage.setItem(DASH_LS,JSON.stringify(s));}}catch(e){}
     afterLoad();
@@ -601,6 +681,7 @@ document.getElementById("setupGo").addEventListener("click",()=>{const u=documen
 document.getElementById("kpiViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("kpiStageSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiMonth=b.dataset.m;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("jlGrade").addEventListener("change",e=>{jlGrade=e.target.value;renderKPI();});
+document.getElementById("actWin").addEventListener("change",e=>{actWin=e.target.value;renderStrategy();});
 // 밤/낮 모드
 (function(){ if(localStorage.getItem("board-theme")==="light")document.documentElement.classList.add("light");
   document.getElementById("themeBtn").textContent=isLight()?"☀️":"🌙"; })();
@@ -618,7 +699,12 @@ const secBox=document.getElementById("sections");
 function renumberSecs(){ [...secBox.querySelectorAll(".sortable")].forEach((p,i)=>{ const n=p.querySelector(".secnum"); if(n)n.textContent=NUMS[i]||("#"+(i+2)); }); }
 function saveOrder(){ try{ localStorage.setItem(SEC_LS, JSON.stringify([...secBox.querySelectorAll(".sortable")].map(p=>p.dataset.sec))); }catch(e){} }
 function loadOrder(){
-  try{ const ord=JSON.parse(localStorage.getItem(SEC_LS)); if(Array.isArray(ord)) ord.forEach(sec=>{ const el=secBox.querySelector(`.sortable[data-sec="${sec}"]`); if(el)secBox.appendChild(el); }); }catch(e){}
+  try{ const ord=JSON.parse(localStorage.getItem(SEC_LS));
+    if(Array.isArray(ord)){
+      ord.forEach(sec=>{ const el=secBox.querySelector(`.sortable[data-sec="${sec}"]`); if(el)secBox.appendChild(el); });
+      // 저장된 순서에 없는 신규 섹션은 맨 뒤로
+      [...secBox.querySelectorAll(".sortable")].filter(p=>!ord.includes(p.dataset.sec)).forEach(p=>secBox.appendChild(p));
+    } }catch(e){}
   renumberSecs();
 }
 // 핸들에서만 드래그 시작
