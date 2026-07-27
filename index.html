@@ -535,6 +535,10 @@ const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 �
 /* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
 const APP_VERSION = "1.14.0";
 const VERSION_HISTORY = [
+  { ver: "1.16.0", date: "2026-07-24", type: "기능", changes: [
+    "KPI 현황판에 ⑤ 추가 전략 KPI 섹션 — 목표 부족분 충당 waterfall (필요 전환 PU → ④ 우수 MPU 미전환 → ⑤-1 우수 비MPU·활동중(7/14/30일) → ⑤-2 일반유저)",
+    "필요 전환 PU는 사업계획×목표비중 실연동(④와 동일 계산), 풀 데이터는 시트 jl_active 탭(회원 중복제거·PayUser 제외)에서만 로드",
+  ]},
   { ver: "1.15.2", date: "2026-07-24", type: "패치", changes: [
     "메인 대시보드·플래너·전사 비교·시트 업데이트 헤더에 🗂️ KPI 현황판(board.html) 링크 추가",
   ]},
