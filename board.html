@@ -218,8 +218,8 @@
       1순위 <b>우수고객 중 MPU가 아닌(최근 결제는 없지만 접속 중인) 대상</b>, 그래도 부족하면 2순위 <b>일반 유저 필요 전환 인원수</b>.</p>
       <div class="s5ctrls">
         <div class="s5ctrl"><label>게임</label><select class="pjSel"></select></div>
-        <div class="s5ctrl"><label>활동 기준 (최근 접속)</label>
-          <select id="actWin"><option value="7">최근 7일</option><option value="14" selected>최근 14일</option><option value="30">최근 30일</option></select>
+        <div class="s5ctrl"><label>활동 유저 기준</label>
+          <span style="font-size:13.5px;font-weight:600;padding:7px 0">최근 30일 접속</span>
         </div>
         <div class="s5ctrl s5ctrl-slider"><label>목표 커버리지 (④ 목표 단계 선택 시 해당 비중으로 리셋)</label>
           <div class="s5sliderRow">
@@ -274,13 +274,14 @@ let kpiView="month", kpiMonth="2026-12"; // 섹터4 뷰: 'month'(선택 프로�
 let TMPU={}; // 전체 월간 MPU(순결제자) — 시트 'mpu_total' 탭에서만 로드 (실데이터 미내장)
 // 우수고객(JL) 등급별 {게임:{등급:[90일 과금 PU, 미전환 풀]}} — 시트 'jl' 탭(game,grade,pu,pool)에서만 로드 (실데이터 미내장)
 let JLG={};
+let JL_HAS_ACT=false; // jl 탭에 active(최근 30일 접속) 열 존재 여부
 const JL_GRADES=["CLUB","실버","골드","플래티넘","플래티넘MVP"];
 let jlGrade="전체";
-function jlAgg(codes){ let pu=0,av=0,has=false;
+function jlAgg(codes){ let pu=0,av=0,act=0,has=false;
   codes.forEach(c=>{ const gg=JLG[c]; if(!gg)return;
-    if(jlGrade==="전체"){ JL_GRADES.forEach(k=>{ if(gg[k]){pu+=gg[k][0];av+=gg[k][1];has=true;} }); }
-    else if(gg[jlGrade]){ pu+=gg[jlGrade][0]; av+=gg[jlGrade][1]; has=true; } });
-  return {pu,av,has}; }
+    if(jlGrade==="전체"){ JL_GRADES.forEach(k=>{ if(gg[k]){pu+=gg[k][0];av+=gg[k][1];act+=(gg[k][2]||0);has=true;} }); }
+    else if(gg[jlGrade]){ pu+=gg[jlGrade][0]; av+=gg[jlGrade][1]; act+=(gg[jlGrade][2]||0); has=true; } });
+  return {pu,av,act:JL_HAS_ACT?act:null,has}; }
 const selCodes=()=> curProj==="ALL"?CODES.slice():(CODES.includes(curProj)?[curProj]:[]);
 const allSelected=()=> curProj==="ALL";
 // 프로젝트 드롭다운(필터+각 섹션) 동기화
@@ -383,22 +384,6 @@ async function loadTotalMPU(url){
 const totalMpuOf=(m,codes=selCodes())=>{ let t=0,has=false; codes.forEach(c=>{ if(TMPU[c]&&TMPU[c][m]!=null){t+=TMPU[c][m];has=true;} }); return has?t:null; };
 // 인게임(스토어) 결제자 = 기준월 전체 MPU − 자체 MPU. mpu_total 탭 없으면 표시 안 함(–)
 function ingameBase(codes,b){ const tot=totalMpuOf(b.curKey,codes); if(tot==null)return null; return Math.max(0,tot-b.curPU); }
-// ⑤ 추가 전략 풀 탭('jl_active') 로드: game,mpu_untapped,active7,active14,active30 (실데이터 미내장)
-let JLA={};
-async function loadJLA(url){
-  JLA={};
-  try{
-    const grid=await fetchGrid(url,"jl_active");
-    const h=headerOf(grid);
-    const gi=h.findIndex(x=>x.includes("game")||x.includes("게임"));
-    const mi=h.findIndex(x=>x.includes("mpu_untapped")||x.includes("미전환"));
-    const c7=h.findIndex(x=>x.includes("active7")), c14=h.findIndex(x=>x.includes("active14")), c30=h.findIndex(x=>x.includes("active30"));
-    if(gi<0||mi<0)return;
-    for(let i=1;i<grid.length;i++){ const g=String(grid[i][gi]||"").trim().toUpperCase(); if(!g)continue;
-      JLA[g]={mpu_untapped:toNum(grid[i][mi])||0, active7:c7>=0?(toNum(grid[i][c7])||0):0,
-        active14:c14>=0?(toNum(grid[i][c14])||0):0, active30:c30>=0?(toNum(grid[i][c30])||0):0}; }
-  }catch(e){ /* 탭 없으면 ⑤ 풀 – 표시 */ }
-}
 // ⑥ 월별 마일스톤 탭('actions') 로드: month,theme,category,item (내부 전략 텍스트 — 시트에서만, 미내장)
 let ACT={};
 async function loadActions(url){
@@ -429,11 +414,13 @@ async function loadJL(url){
     const ri=h.findIndex(x=>x.includes("grade")||x.includes("등급"));
     const pi=h.findIndex(x=>x==="pu"||x.includes("과금"));
     const ai=h.findIndex(x=>x.includes("pool")||x.includes("미전환")||x.includes("가용"));
+    const ci=h.findIndex(x=>x.includes("active")||x.includes("활동")); // 최근 30일 접속 활동 유저 (선택)
     if(gi<0||ri<0||pi<0||ai<0)return;
+    JL_HAS_ACT = ci>=0;
     for(let i=1;i<grid.length;i++){ const g=grid[i]; if(!g)continue;
       const gm=String(g[gi]||"").trim().toUpperCase(); const gr=String(g[ri]||"").trim();
-      const pu=toNum(g[pi]), pool=toNum(g[ai]);
-      if(gm&&gr&&pu!=null&&pool!=null)(JLG[gm]=JLG[gm]||{})[gr]=[pu,pool]; }
+      const pu=toNum(g[pi]), pool=toNum(g[ai]), act=ci>=0?(toNum(g[ci])||0):0;
+      if(gm&&gr&&pu!=null&&pool!=null)(JLG[gm]=JLG[gm]||{})[gr]=[pu,pool,act]; }
   }catch(e){ /* jl 탭 없으면 우수고객 컬럼 – 표시 */ }
 }
 const daysInMonth=ym=>{const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate();};
@@ -668,7 +655,6 @@ function renderKPI(){
   renderStrategy();
 }
 /* ===== ⑤ 추가 전략 KPI — waterfall 충당 ===== */
-let actWin="14";
 let s5cov=null; // 목표 커버리지 수동값 (null=④ 목표 단계의 비중을 따름)
 function renderStrategy(){
   const flow=document.getElementById("s5flow"), tb=document.getElementById("s5table"), foot=document.getElementById("s5foot");
@@ -686,10 +672,9 @@ function renderStrategy(){
     const k=kpiCalc([c],m,b,bd);
     // 필요 전환 PU = 커버리지%×사업계획 ÷ 유지 ARPPU − 현재 자체 MPU. 슬라이더=단계 비중이면 ④의 '전환 필요 MPU'와 동일
     const req=(k.plan!=null&&k.A)? Math.max(0, Math.round(k.plan*cov/100/k.A - b.curPU)) : null;
-    const jl=jlAgg([c]);                                    // ④ 가용 대상(클럽 포함) — jl 탭, 등급 필터 연동
-    const jla=JLA[c];
-    const p4 = jl.has ? jl.av : null;                       // STEP ④ 풀 = ④의 가용 대상
-    const p51 = jla ? Math.max(0,(jla["active"+actWin]||0)-(p4||0)) : null; // STEP ⑤-1 풀 = 활동중 − 가용 대상
+    const jl=jlAgg([c]);                                    // jl 탭 — 등급 필터 연동
+    const p4 = jl.has ? jl.av : null;                       // STEP ④ 풀 = ④의 가용 대상(클럽 포함)
+    const p51 = (jl.has&&jl.act!=null) ? Math.max(0,jl.act-(p4||0)) : null; // STEP ⑤-1 풀 = 활동 유저(30일 접속) − 가용 대상
     const j = (p4!=null||p51!=null) ? {} : null;            // 풀 데이터 존재 여부(배지용)
     let s4=0,s51=0,s52=0;
     if(req!=null){
@@ -719,7 +704,7 @@ function renderStrategy(){
   tb.innerHTML=`<thead><tr><th>게임</th><th>필요 추가 전환 PU</th><th>④ 가용 대상(클럽 포함) 투입</th><th>⑤-1 활동 유저(가용 제외) 투입</th><th>⑤-2 일반유저 필요 전환</th></tr></thead><tbody>${rows}</tbody>`;
   const note=document.getElementById("s5note");
   if(note) note.innerHTML=`
-    <p><b>지표 연동 —</b> 필요 추가 전환 PU = ④의 <b>전환 필요 MPU</b>(슬라이더가 단계 비중일 때 동일) · STEP ④ 풀 = ④의 <b>가용 대상(클럽 포함)</b>(jl 탭·등급 필터 연동) · STEP ⑤-1 풀 = <b>jl_active 탭의 최근 ${actWin}일 활동 유저 − 가용 대상</b>.</p>
+    <p><b>지표 연동 —</b> 필요 추가 전환 PU = ④의 <b>전환 필요 MPU</b>(슬라이더가 단계 비중일 때 동일) · STEP ④ 풀 = ④의 <b>가용 대상(클럽 포함)</b>(jl 탭·등급 필터 연동) · STEP ⑤-1 풀 = <b>활동 유저(최근 30일 접속, jl 탭 active 열) − 가용 대상</b>.</p>
     <p><b>가정 —</b> ⑤-2 ARPPU는 자체결제 ARPPU와 동일 가정(일반유저 ARPPU 확정 시 조정) · 풀 데이터 없는 게임(DS·IMGN 등)은 – 표시 후 잔여분을 ⑤-2로 이관합니다.</p>`;
   foot.innerHTML=`각 STEP은 이전 STEP의 잔여분만 넘겨받습니다 — 배정 = min(잔여, 풀) · 필요 추가 전환 PU = 커버리지%×사업계획 ÷ 유지 ARPPU − 현재 자체 MPU`;
   renderMilestone();
@@ -759,7 +744,7 @@ function buildStageButtons(){ const seg=document.getElementById("kpiStageSeg"); 
 async function boot(url){
   // 미러(하드코딩 스냅샷) 모드: 시트 없이 내장 데이터 사용
   if(window.__MIRROR__){ const D=window.__MIRROR__;
-    CODES=D.CODES.slice(); PJ=D.PJ; PLAN=D.PLAN||{}; TGTR=D.TGTR||{}; MPU=D.MPU||{}; TMPU=D.TMPU||{}; JLG=D.JLG||{}; JLA=D.JLA||{}; ACT=D.ACT||{};
+    CODES=D.CODES.slice(); PJ=D.PJ; PLAN=D.PLAN||{}; TGTR=D.TGTR||{}; MPU=D.MPU||{}; TMPU=D.TMPU||{}; JLG=D.JLG||{}; JL_HAS_ACT=!!D.JL_HAS_ACT; ACT=D.ACT||{};
     afterLoad(); return; }
   SHEET_URL=url;
   try{
@@ -775,7 +760,6 @@ async function boot(url){
     await loadMPU(url);
     await loadTotalMPU(url);
     await loadJL(url);
-    await loadJLA(url);
     await loadActions(url);
     localStorage.setItem("kpiplanner-sheet",url);
     try{const s=JSON.parse(localStorage.getItem(DASH_LS))||{};if(s.masterSheetUrl!==url){s.masterSheetUrl=url;localStorage.setItem(DASH_LS,JSON.stringify(s));}}catch(e){}
@@ -810,7 +794,6 @@ document.getElementById("setupGo").addEventListener("click",()=>{const u=documen
 document.getElementById("kpiViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("kpiStageSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiMonth=b.dataset.m;s5cov=null;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("jlGrade").addEventListener("change",e=>{jlGrade=e.target.value;renderKPI();});
-document.getElementById("actWin").addEventListener("change",e=>{actWin=e.target.value;renderStrategy();});
 document.getElementById("s5cov").addEventListener("input",e=>{s5cov=+e.target.value;renderStrategy();});
 // 밤/낮 모드
 (function(){ if(localStorage.getItem("board-theme")==="light")document.documentElement.classList.add("light");
