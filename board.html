@@ -116,7 +116,11 @@
   #filterPanel{position:sticky;top:6px;z-index:30;box-shadow:0 8px 20px -10px rgba(0,0,0,.7);}
   td.grp,th.grp{border-left:1px solid var(--border);}
   /* 섹터4 표 정렬 */
-  #s4table{border-collapse:collapse;width:100%;font-size:13px;}
+  #s4table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px;}
+  /* 좌우 스크롤 시 부족 금액까지 열 고정 */
+  #s4table .stickCol{position:sticky;background:var(--panel);z-index:2;}
+  #s4table thead .stickCol{z-index:3;}
+  #s4table .stickEnd{box-shadow:inset -1px 0 0 var(--border),6px 0 10px -6px rgba(0,0,0,.4);}
   #s4table th,#s4table td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums;}
   #s4table td.mon,#s4table th.lbl{text-align:left;}
   #s4table thead tr:first-child th{text-align:center;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--border);}
@@ -213,8 +217,8 @@
       <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 단계별 KPI <span>2026 하반기 목표(프로젝트 필터 적용) · ARPPU 유지 → 필요 MPU → 미전환 풀 전환율</span></h2>
       <div style="display:flex;gap:14px;align-items:center;font-size:12px;margin:2px 0 8px;flex-wrap:wrap">
         <span class="seg" id="kpiViewSeg">
-          <button data-v="month" class="active">월별 추이</button>
-          <button data-v="game">게임별</button>
+          <button data-v="month">월별 추이</button>
+          <button data-v="game" class="active">게임별</button>
         </span>
         <div style="display:flex;align-items:center;gap:8px"><b style="color:var(--text)">게임</b> <select class="pjSel"></select></div>
         <div style="display:flex;align-items:center;gap:8px"><b style="color:var(--text)">등급</b>
@@ -311,7 +315,7 @@ const valPlugin={id:"barVals",afterDatasetsDraw(c){
       ctx.fillText(억(v), el.x, (el.y+el.base)/2); ctx.restore(); });
   });
 }};
-let kpiView="month", kpiMonth="2026-12"; // 섹터4 뷰: 'month'(선택 프로젝트 월별) | 'game'(특정 월 전 게임)
+let kpiView="game", kpiMonth="2026-12"; // 섹터4 뷰: 'month'(선택 프로젝트 월별) | 'game'(특정 월 전 게임) — 기본 게임별
 let TMPU={}; // 전체 월간 MPU(순결제자) — 시트 'mpu_total' 탭에서만 로드 (실데이터 미내장)
 // 우수고객(JL) 등급별 {게임:{등급:[90일 과금 PU, 미전환 풀]}} — 시트 'jl' 탭(game,grade,pu,pool)에서만 로드 (실데이터 미내장)
 let JLG={};
@@ -323,6 +327,20 @@ function jlAgg(codes){ let pu=0,av=0,act=0,has=false;
     if(jlGrade==="전체"){ JL_GRADES.forEach(k=>{ if(gg[k]){pu+=gg[k][0];av+=gg[k][1];act+=(gg[k][2]||0);has=true;} }); }
     else if(gg[jlGrade]){ pu+=gg[jlGrade][0]; av+=gg[jlGrade][1]; act+=(gg[jlGrade][2]||0); has=true; } });
   return {pu,av,act:JL_HAS_ACT?act:null,has}; }
+// 필터 상태 영속화 (localStorage) — 새로고침·노션 임베드 재로드에도 유지
+const FILT_LS="board-filters";
+function saveFilters(){ try{ localStorage.setItem(FILT_LS, JSON.stringify({curGran,curMetric,curProj,fromD,toD,kpiView,kpiMonth,jlGrade,s5cov})); }catch(e){} }
+function loadFilters(){ try{ const s=JSON.parse(localStorage.getItem(FILT_LS)); if(!s)return;
+  if(s.curGran)curGran=s.curGran; if(s.curMetric)curMetric=s.curMetric; if(s.curProj)curProj=s.curProj;
+  if(s.fromD)fromD=s.fromD; if(s.toD)toD=s.toD;
+  if(s.kpiView)kpiView=s.kpiView; if(s.kpiMonth)kpiMonth=s.kpiMonth;
+  if(s.jlGrade)jlGrade=s.jlGrade; if(s.s5cov!==undefined)s5cov=s.s5cov; }catch(e){} }
+function syncFilterUI(){
+  document.querySelectorAll("#granSeg button").forEach(b=>b.classList.toggle("active",b.dataset.g===curGran));
+  document.querySelectorAll("#metricSeg button").forEach(b=>b.classList.toggle("active",b.dataset.m===curMetric));
+  document.querySelectorAll("#kpiViewSeg button").forEach(b=>b.classList.toggle("active",b.dataset.v===kpiView));
+  const jg=document.getElementById("jlGrade"); if(jg)jg.value=jlGrade;
+}
 const selCodes=()=> curProj==="ALL"?CODES.slice():(CODES.includes(curProj)?[curProj]:[]);
 const allSelected=()=> curProj==="ALL";
 // 프로젝트 드롭다운(필터+각 섹션) 동기화
@@ -710,10 +728,11 @@ function renderKPI(){
   const sr=document.getElementById("stageRow"); if(sr) sr.style.display = kpiView==="game"?"flex":"none";
   if(!selCodes().length){ el.innerHTML=""; foot.textContent="프로젝트를 선택하세요."; return; }
   const months=["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
-  const g1=`<th>사업계획</th><th>목표 비중</th><th>목표 금액</th><th>현황(run-rate)</th><th>부족 금액</th><th>월 ARPPU(유지)</th>`;
+  const g1=`<th>사업계획</th><th>목표 비중</th><th>목표 금액</th><th>현황(run-rate)</th><th>부족 금액</th>`;
   const g2=`<th class="grp">6월 자체결제</th><th>목표</th><th>전환 필요</th><th>미전환 풀</th><th>목표 전환율</th>`;
   const g3=`<th class="grp">우수고객 PU</th><th>가용 대상(클럽 포함)</th><th>전원 전환시 커버리지</th>`;
-  const buildHead=(c1,c2)=>`<thead><tr><th class="lbl" rowspan="2">${c1}</th><th class="lbl" rowspan="2">${c2}</th><th colspan="6">목표 · 실적</th><th colspan="5" class="grp">MPU (순결제자)</th><th colspan="3" class="grp">우수고객(JL)</th></tr><tr>${g1}${g2}${g3}</tr></thead>`;
+  // 월 ARPPU는 rowspan 독립 열 — 부족 금액까지(고정 영역)와 colspan이 겹치지 않게 분리
+  const buildHead=(c1,c2)=>`<thead><tr><th class="lbl" rowspan="2">${c1}</th><th class="lbl" rowspan="2">${c2}</th><th colspan="5">목표 · 실적</th><th rowspan="2">월 ARPPU(유지)</th><th colspan="5" class="grp">MPU (순결제자)</th><th colspan="3" class="grp">우수고객(JL)</th></tr><tr>${g1}${g2}${g3}</tr></thead>`;
   const mpuNote = Object.keys(MPU).length? "월간 MPU(순결제자) 기준" : `<b style="color:var(--down)">PU 잠정</b>(mpu 미연동)`;
   let head, body, note;
   if(kpiView==="game"){
@@ -732,12 +751,29 @@ function renderKPI(){
     note=`${allSelected()?"전 프로젝트 합산":selCodes().join("+")} · 현황=최근 완결월(${b.curLabel}) run-rate ${억(b.curRev)} · 유지 ARPPU ${만(b.arppu)}원`;
   }
   el.innerHTML=head+"<tbody>"+body+"</tbody>";
+  stickyKPI();
   foot.innerHTML=`${note}<br>${mpuNote} · 부족=목표−현황 · 전환필요 MPU=목표MPU−현재MPU · <b>인게임 MPU=최근 완결월 전체 결제자 − 자체결제자 = 스토어 결제자</b> · <b>목표 전환율=전환필요 MPU ÷ 미전환 풀</b> — 100% 이하면 초록(풀 내 커버 가능)·초과면 빨강(신규 유입 필요)`;
   renderStrategy();
 }
+// ④ 표 열 고정 — 라벨 2열 + 목표·실적 5열(부족 금액까지)을 좌우 스크롤 시 왼쪽에 고정
+function stickyKPI(){
+  const tbl=document.getElementById("s4table");
+  if(!tbl||!tbl.tHead||!tbl.tBodies.length)return;
+  const br=tbl.tBodies[0].rows[0]; if(!br)return;
+  const N=7; // 고정 열 수
+  const w=[]; for(let i=0;i<N;i++)w[i]=br.cells[i]?br.cells[i].getBoundingClientRect().width:0;
+  const left=[0]; for(let i=1;i<N;i++)left[i]=left[i-1]+w[i-1];
+  const set=(cell,li,end)=>{ if(!cell)return; cell.classList.add("stickCol"); cell.style.left=left[li]+"px"; if(end)cell.classList.add("stickEnd"); };
+  const h0=tbl.tHead.rows[0], h1=tbl.tHead.rows[1];
+  if(h0){ set(h0.cells[0],0); set(h0.cells[1],1); set(h0.cells[2],2,true); } // 라벨2(rowspan) + 목표·실적(colspan5)
+  if(h1){ for(let i=0;i<5;i++)set(h1.cells[i],i+2,i===4); }                  // 2행 헤더 = 사업계획~부족 금액
+  [...tbl.tBodies[0].rows].forEach(r=>{ for(let i=0;i<N;i++)set(r.cells[i],i,i===N-1); });
+}
+window.addEventListener("resize",()=>stickyKPI()); // 창 크기 변경 시 열 너비 재측정
 /* ===== ⑤ 추가 전략 KPI — waterfall 충당 ===== */
 let s5cov=null; // 목표 커버리지 수동값 (null=④ 목표 단계의 비중을 따름)
 function renderStrategy(){
+  saveFilters(); // 모든 필터 변경은 render→renderKPI→여기로 수렴 — 현재 상태 저장
   const flow=document.getElementById("s5flow"), tb=document.getElementById("s5table"), foot=document.getElementById("s5foot");
   if(!flow)return;
   const m=kpiMonth, stg=STAGE[m]||"";
@@ -848,15 +884,20 @@ async function boot(url){
 }
 // 데이터 로드 후 공통 셋업 (라이브·미러 공용)
 function afterLoad(){
-  buildStageButtons();
   MIND="9999-99-99"; MAXD="0000-00-00";
   CODES.forEach(c=>Object.keys(PJ[c]).forEach(d=>{if(d<MIND)MIND=d;if(d>MAXD)MAXD=d;}));
   HORIZON=MAXD;
   Object.keys(TGTR).forEach(m=>{ const end=m+"-"+String(daysInMonth(m)).padStart(2,"0"); if(end>HORIZON)HORIZON=end; });
   const DEF_FROM = MIND<"2026-01-01" ? "2026-01-01" : MIND;
   ["fromDate","toDate","s1from","s1to"].forEach(id=>{const el=document.getElementById(id);if(el){el.min=MIND;el.max=HORIZON;}});
-  fromD=DEF_FROM; toD=HORIZON; syncDates();
-  curProj="ALL"; fillProjSelectors();
+  fromD=DEF_FROM; toD=HORIZON; curProj="ALL";
+  loadFilters(); // 저장된 필터 복원 후 유효성 보정
+  if(fromD<MIND||fromD>HORIZON)fromD=DEF_FROM;
+  if(toD<MIND||toD>HORIZON)toD=HORIZON;
+  if(curProj!=="ALL"&&!CODES.includes(curProj))curProj="ALL";
+  if(!/^2026-(0[7-9]|1[0-2])$/.test(kpiMonth))kpiMonth="2026-12";
+  buildStageButtons();
+  syncDates(); syncFilterUI(); fillProjSelectors();
   document.getElementById("range").textContent=`${CODES.length}개 프로젝트 · ${MIND} ~ ${MAXD}${window.__MIRROR__?" · 미러(스냅샷)":""} · 자체결제 = ${D2C_PGS.join("·")}`;
   document.getElementById("setup").style.display="none"; document.getElementById("main").style.display="";
   render();
