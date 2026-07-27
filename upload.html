@@ -62,7 +62,7 @@
 <div class="banner">
   인식 · <b>결제사(pg)·플랫폼별</b> → <code>코드-kpi</code> · <b>daily_kpi 자체결제</b> → <code>코드</code> · <b>daily_kpi(순수)</b> → <code>코드-daily</code>(DAU·순결제자 PU·전체 ARPPU·광고).
   겹치는 날은 값이 <b>바뀐 경우에만</b> 교체(정산 지연 수정치 반영), 동일하면 건너뜀. 파일에 없는 과거 날짜는 그대로 보존.<br>
-  <b>월간·우수고객</b> · <b>monthly_kpi(자체결제)</b> → <code>mpu</code>(월간 자체 MPU) · <b>monthly_kpi(전체)</b> → <code>mpu_total</code>(월간 전체 MPU) · <b>JL 회원파일</b> → <code>jl</code>(등급별 90일 과금·미전환 풀).
+  <b>월간·우수고객</b> · <b>monthly_kpi(자체결제)</b> → <code>mpu</code>(월간 자체 MPU) · <b>monthly_kpi(전체)</b> → <code>mpu_total</code>(월간 전체 MPU) · <b>JL 회원파일</b> → <code>jl</code>(등급별 90일 과금·미전환 풀·활동 유저=최근 30일 접속).
   이 3종은 기존 시트값과 <b>병합해 탭 전체를 출력</b>합니다 — 일부 게임만 올려도 나머지 게임 값은 보존.
 </div>
 
@@ -273,13 +273,18 @@ function parseSpecial(name,kind,aoa,hdr,hl){
       s0:hl.findIndex(h=>h.includes("자체결제 당월")), s1:hl.findIndex(h=>h.includes("자체결제 전월")), s2:hl.findIndex(h=>h.includes("자체결제 전전월"))};
     const miss=Object.entries(idx).filter(([,v])=>v<0).map(([k])=>k);
     if(miss.length){entry.err="열 누락: "+miss.join(",");return entry;}
+    const oi=hl.findIndex(h=>h.includes("최근 접속")); // 활동 유저(최근 30일 접속) — 선택 열
+    const d=new Date(); d.setDate(d.getDate()-30);
+    const cut30=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
     entry.members={};
     for(let i=1;i<aoa.length;i++){ const r=aoa[i]; if(r[idx.mem]==null||r[idx.mem]==="")continue;
       const id=String(r[idx.mem]).trim(); if(entry.members[id])continue;
+      const lastLogin = oi>=0 ? toISO(r[oi]) : null;
       entry.members[id]={grade:normGrade(r[idx.grade]),
         paid:(num(r[idx.m0])+num(r[idx.m1])+num(r[idx.m2]))>0,
-        self:(num(r[idx.s0])+num(r[idx.s1])+num(r[idx.s2]))>0}; }
-    entry.info=Object.keys(entry.members).length.toLocaleString()+"명";
+        self:(num(r[idx.s0])+num(r[idx.s1])+num(r[idx.s2]))>0,
+        active:!!(lastLogin&&lastLogin>=cut30)}; }
+    entry.info=Object.keys(entry.members).length.toLocaleString()+"명"+(oi<0?" (접속일 열 없음→active 0)":"");
   } else {
     const vcol = kind==="mpu"
       ? hl.findIndex(h=>h.replace(/\s/g,"")==="자체결제pu")
@@ -301,8 +306,12 @@ function rebuildSP(){
     if(f.kind==="jl"){ const g=jlMem[f.game]=jlMem[f.game]||{}; for(const id in f.members){ if(!g[id])g[id]=f.members[id]; } }
     else { const g=SP[f.kind][f.game]=SP[f.kind][f.game]||{}; Object.assign(g,f.monthly); } });
   for(const game in jlMem){ const agg={};
-    for(const id in jlMem[game]){ const m=jlMem[game][id]; if(!m.grade||!m.paid)continue;
-      const o=agg[m.grade]=agg[m.grade]||{pu:0,pool:0}; o.pu++; if(!m.self)o.pool++; }
+    for(const id in jlMem[game]){ const m=jlMem[game][id]; if(!m.grade)continue;
+      const o=agg[m.grade]=agg[m.grade]||{pu:0,pool:0,active:0};
+      if(m.paid){ o.pu++; if(!m.self)o.pool++; }
+      if(m.active)o.active++; }
+    // 과금·활동 모두 0인 등급 행 제거
+    for(const gr in agg){ if(!agg[gr].pu&&!agg[gr].active)delete agg[gr]; }
     SP.jl[game]=agg; }
 }
 // 기존 시트 탭 읽기 (1회 캐시)
@@ -314,10 +323,11 @@ async function loadExist(kind){
     if(kind==="jl"){
       const h=(grid[0]||[]).map(x=>String(x||"").trim().toLowerCase());
       const gi=h.findIndex(x=>x.includes("game")), ri=h.findIndex(x=>x.includes("grade")||x.includes("등급"));
-      const pi=h.findIndex(x=>x==="pu"), ai=h.findIndex(x=>x.includes("pool"));
+      const pi=h.findIndex(x=>x==="pu"), ai=h.findIndex(x=>x.includes("pool")), ci=h.findIndex(x=>x.includes("active")||x.includes("활동"));
       const data={};
       if(gi>=0&&ri>=0&&pi>=0&&ai>=0)for(let i=1;i<grid.length;i++){ const g=String(grid[i][gi]||"").trim().toUpperCase(); const gr=String(grid[i][ri]||"").trim();
-        const pu=toNum(grid[i][pi]),pool=toNum(grid[i][ai]); if(g&&gr&&pu!=null&&pool!=null)(data[g]=data[g]||{})[gr]={pu,pool}; }
+        const pu=toNum(grid[i][pi]),pool=toNum(grid[i][ai]),active=ci>=0?(toNum(grid[i][ci])||0):0;
+        if(g&&gr&&pu!=null&&pool!=null)(data[g]=data[g]||{})[gr]={pu,pool,active}; }
       SP_EXIST[kind]={data, games:Object.keys(data)};
     } else {
       const hdrU=(grid[0]||[]).map(x=>String(x||"").trim().toUpperCase());
@@ -337,14 +347,14 @@ async function buildTab(kind){
     const merged={}; // game -> grade -> {pu,pool}
     for(const g in exist.data)merged[g]=exist.data[g];
     let newG=[],chgG=[];
-    for(const g in SP.jl){ const inc={}; for(const gr in SP.jl[g])inc[gr]={pu:SP.jl[g][gr].pu,pool:SP.jl[g][gr].pool};
+    for(const g in SP.jl){ const inc={}; for(const gr in SP.jl[g])inc[gr]={pu:SP.jl[g][gr].pu,pool:SP.jl[g][gr].pool,active:SP.jl[g][gr].active||0};
       if(!exist.data[g])newG.push(g); else if(JSON.stringify(exist.data[g])!==JSON.stringify(inc))chgG.push(g);
       merged[g]=inc; }
     const rows=[];
     Object.keys(merged).sort((a,b)=>MATRIX_GAMES.indexOf(a)-MATRIX_GAMES.indexOf(b)).forEach(g=>{
       const order=[...JL_GRADE_ORDER,...Object.keys(merged[g]).filter(x=>!JL_GRADE_ORDER.includes(x))];
-      order.forEach(gr=>{ if(merged[g][gr])rows.push([g,gr,merged[g][gr].pu,merged[g][gr].pool]); }); });
-    return {tab:"jl",header:["game","grade","pu","pool"],rows,summary:`신규 게임 ${newG.length?newG.join("·"):"없음"} · 갱신 ${chgG.length?chgG.join("·"):"없음"} · 유지 ${Object.keys(exist.data).filter(g=>!SP.jl[g]).join("·")||"-"}`};
+      order.forEach(gr=>{ if(merged[g][gr])rows.push([g,gr,merged[g][gr].pu,merged[g][gr].pool,merged[g][gr].active||0]); }); });
+    return {tab:"jl",header:["game","grade","pu","pool","active"],rows,summary:`신규 게임 ${newG.length?newG.join("·"):"없음"} · 갱신 ${chgG.length?chgG.join("·"):"없음"} · 유지 ${Object.keys(exist.data).filter(g=>!SP.jl[g]).join("·")||"-"} · active=최근 30일 접속`};
   }
   const inc=SP[kind];
   const games = exist.games.length? exist.games.slice() : MATRIX_GAMES.slice();

@@ -118,6 +118,9 @@ function parseWorkbook(file,buf){
   };
   const missing=Object.entries(idx).filter(([k,v])=>v<0&&k!=="game").map(([k])=>k);
   if(missing.length)throw new Error("필수 열 누락: "+missing.join(", ")+" (헤더: 회원번호·등급·당월/전월/전전월 과금액·자체결제 당월/전월/전전월 과금액)");
+  const oi=h.findIndex(x=>x.includes("최근 접속")); // 활동 유저(최근 30일 접속)
+  const cutD=new Date(); cutD.setDate(cutD.getDate()-30);
+  const cutSerial=(cutD-new Date(Date.UTC(1899,11,30)))/86400000;
   const members={};
   for(let i=1;i<rows.length;i++){
     const r=rows[i]; if(!r||r[idx.mem]==null||r[idx.mem]==="")continue;
@@ -126,7 +129,9 @@ function parseWorkbook(file,buf){
     const grade=normGrade(r[idx.grade]);
     const paid=(num(r[idx.m0])+num(r[idx.m1])+num(r[idx.m2]))>0;
     const self=(num(r[idx.s0])+num(r[idx.s1])+num(r[idx.s2]))>0;
-    members[id]={grade,paid,self};
+    const ov=oi>=0?r[oi]:null; const on=Number(ov);
+    const active=oi>=0&&(ov instanceof Date? ov>=cutD : (!isNaN(on)&&on>=cutSerial));
+    members[id]={grade,paid,self,active};
   }
   const game=guessGame(file.name, rows[1]&&idx.game>=0?rows[1][idx.game]:"");
   return {game, members, rowCount:rows.length-1, memCount:Object.keys(members).length};
@@ -144,12 +149,14 @@ function aggregate(){
   Object.keys(byGame).sort((a,b)=>KNOWN.indexOf(a)-KNOWN.indexOf(b)).forEach(game=>{
     const agg={};
     for(const id in byGame[game]){ const m=byGame[game][id];
-      if(!m.grade||!m.paid)continue;
-      const o=agg[m.grade]=agg[m.grade]||{pu:0,pool:0};
-      o.pu++; if(!m.self)o.pool++;
+      if(!m.grade)continue;
+      const o=agg[m.grade]=agg[m.grade]||{pu:0,pool:0,active:0};
+      if(m.paid){ o.pu++; if(!m.self)o.pool++; }
+      if(m.active)o.active++;
     }
+    for(const gr in agg){ if(!agg[gr].pu&&!agg[gr].active)delete agg[gr]; }
     const order=[...GRADES, ...Object.keys(agg).filter(g=>!GRADES.includes(g))];
-    order.forEach(gr=>{ if(agg[gr])out.push({game,grade:gr,pu:agg[gr].pu,pool:agg[gr].pool}); });
+    order.forEach(gr=>{ if(agg[gr])out.push({game,grade:gr,pu:agg[gr].pu,pool:agg[gr].pool,active:agg[gr].active}); });
   });
   return out;
 }
@@ -167,13 +174,13 @@ function renderOut(){
   const panel=document.getElementById("resultPanel");
   if(!rows.length){panel.style.display="none";return;}
   panel.style.display="";
-  const tot={}; rows.forEach(r=>{const t=tot[r.game]=tot[r.game]||{pu:0,pool:0};t.pu+=r.pu;t.pool+=r.pool;});
+  const tot={}; rows.forEach(r=>{const t=tot[r.game]=tot[r.game]||{pu:0,pool:0,active:0};t.pu+=r.pu;t.pool+=r.pool;t.active+=(r.active||0);});
   document.getElementById("out").innerHTML=
-    `<thead><tr><th>game</th><th>grade</th><th>pu (90일 과금)</th><th>pool (미전환)</th></tr></thead><tbody>`+
-    rows.map(r=>`<tr><td>${r.game}</td><td>${r.grade}</td><td>${r.pu.toLocaleString()}</td><td>${r.pool.toLocaleString()}</td></tr>`).join("")+
-    Object.keys(tot).map(g=>`<tr style="color:var(--accent);font-weight:600"><td>${g}</td><td>합계</td><td>${tot[g].pu.toLocaleString()}</td><td>${tot[g].pool.toLocaleString()}</td></tr>`).join("")+
+    `<thead><tr><th>game</th><th>grade</th><th>pu (90일 과금)</th><th>pool (미전환)</th><th>active (30일 접속)</th></tr></thead><tbody>`+
+    rows.map(r=>`<tr><td>${r.game}</td><td>${r.grade}</td><td>${r.pu.toLocaleString()}</td><td>${r.pool.toLocaleString()}</td><td>${(r.active||0).toLocaleString()}</td></tr>`).join("")+
+    Object.keys(tot).map(g=>`<tr style="color:var(--accent);font-weight:600"><td>${g}</td><td>합계</td><td>${tot[g].pu.toLocaleString()}</td><td>${tot[g].pool.toLocaleString()}</td><td>${tot[g].active.toLocaleString()}</td></tr>`).join("")+
     `</tbody>`;
-  const tsv="game\tgrade\tpu\tpool\n"+rows.map(r=>[r.game,r.grade,r.pu,r.pool].join("\t")).join("\n");
+  const tsv="game\tgrade\tpu\tpool\tactive\n"+rows.map(r=>[r.game,r.grade,r.pu,r.pool,r.active||0].join("\t")).join("\n");
   document.getElementById("tsvBox").value=tsv;
 }
 
