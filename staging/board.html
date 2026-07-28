@@ -126,7 +126,7 @@
   #s4table thead tr:first-child th{text-align:center;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--border);}
   #s4table thead tr:last-child th{color:var(--muted);font-weight:600;}
   /* ⑦ 월간 지표 */
-  #s7table{border-collapse:collapse;width:100%;font-size:12.8px;min-width:1080px;}
+  #s7table{border-collapse:collapse;width:100%;font-size:12.8px;min-width:1300px;}
   #s7table th,#s7table td{padding:8px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums;}
   #s7table th{color:var(--muted);font-weight:600;font-size:11.5px;}
   #s7table thead tr:first-child th{text-align:center;border-bottom:1px solid var(--border);}
@@ -964,9 +964,10 @@ function renderMonthly(){
   const head=`<thead>
     <tr><th class="lbl" rowspan="2">${mView==="game"?"게임":"월"}</th>
       <th colspan="${hasMau?5:4}">MPU (순결제자)</th>
-      <th colspan="${hasMau?4:3}" class="grp">매출</th></tr>
+      <th colspan="${hasMau?6:5}" class="grp">매출 · ARPPU</th></tr>
     <tr>${hasMau?"<th>MAU</th>":""}<th>전체 MPU</th><th>자체결제 MPU</th><th>스토어 MPU</th><th>자체 전환율</th>
-      ${hasMau?"<th class=\"grp\">결제율(MPU÷MAU)</th>":""}<th class="${hasMau?"":"grp"}">전체 매출</th><th>자체결제 매출</th><th>자체 비중</th></tr></thead>`;
+      ${hasMau?"<th class=\"grp\">결제율(MPU÷MAU)</th>":""}<th class="${hasMau?"":"grp"}">전체 매출</th><th>자체결제 매출</th><th>자체 비중</th>
+      <th>ARPPU(전체)</th><th>ARPPU(자체결제)</th></tr></thead>`;
   const cells=(s,prev)=>`
     ${hasMau?`<td>${num(s.mau)}</td>`:""}
     <td>${num(s.tmpu)}</td>
@@ -976,7 +977,9 @@ function renderMonthly(){
     ${hasMau?`<td class="grp">${pctv(s.pur)}</td>`:""}
     <td class="${hasMau?"":"grp"}">${억(s.rev)}</td>
     <td style="color:var(--purple)">${억(s.d2c)}</td>
-    <td>${pctv(s.ratio,"var(--peak)")}</td>`;
+    <td>${pctv(s.ratio,"var(--peak)")}</td>
+    <td style="color:var(--muted)">${s.arppuT?만(s.arppuT)+"원":'<span style="color:var(--muted)">–</span>'}</td>
+    <td style="color:var(--purple);font-weight:600">${s.arppuS?만(s.arppuS)+"원":'<span style="color:var(--muted)">–</span>'}${prev&&prev.arppuS?` <span style="font-size:10.5px;font-weight:400">${mom(s.arppuS,prev.arppuS)}</span>`:""}</td>`;
   let body;
   if(mView==="game"){
     const gorder=CODES.slice().sort((a,b)=>{const rk=x=>x==="DS"?1:x==="IMGN"?2:0;return rk(a)-rk(b);});
@@ -991,7 +994,7 @@ function renderMonthly(){
     foot.innerHTML=`${allSelected()?"전 프로젝트 합산":codes.join("+")} · ${months.length}개월 (기간 필터 적용)`;
   }
   tb.innerHTML=head+"<tbody>"+body+"</tbody>";
-  foot.innerHTML+=`<br>전체 MPU=시트 <b>mpu_total</b> · 자체결제 MPU=<b>mpu</b> · MAU=<b>mau</b> 탭${hasMau?"":' <span style="color:var(--peak)">(미연동 — 시트 업데이트에서 월간(전체) 파일을 올리면 MAU 열이 자동 생성됩니다)</span>'} · 매출=일별 상세 합산 · MPU는 월간 순결제자라 일별 PU 합산과 다릅니다`;
+  foot.innerHTML+=`<br>전체 MPU=시트 <b>mpu_total</b> · 자체결제 MPU=<b>mpu</b> · MAU=<b>mau</b> 탭${hasMau?"":' <span style="color:var(--peak)">(미연동 — 시트 업데이트에서 월간(전체) 파일을 올리면 MAU 열이 자동 생성됩니다)</span>'} · 매출=일별 상세 합산 · <b>ARPPU(자체결제)=자체결제 매출 ÷ 자체결제 MPU</b> · ARPPU(전체)=전체 매출 ÷ 전체 MPU · MPU는 월간 순결제자라 일별 PU 합산과 다릅니다`;
 
   // ---- 차트: 자체 MPU + 스토어 MPU 스택, 선=자체 전환율(우축) ----
   const gorder=CODES.slice().sort((a,b)=>{const rk=x=>x==="DS"?1:x==="IMGN"?2:0;return rk(a)-rk(b);});
