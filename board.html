@@ -125,6 +125,15 @@
   #s4table td.mon,#s4table th.lbl{text-align:left;}
   #s4table thead tr:first-child th{text-align:center;color:var(--muted);font-size:11px;font-weight:600;border-bottom:1px solid var(--border);}
   #s4table thead tr:last-child th{color:var(--muted);font-weight:600;}
+  /* ⑦ 월간 지표 */
+  #s7table{border-collapse:collapse;width:100%;font-size:12.8px;min-width:1080px;}
+  #s7table th,#s7table td{padding:8px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums;}
+  #s7table th{color:var(--muted);font-weight:600;font-size:11.5px;}
+  #s7table thead tr:first-child th{text-align:center;border-bottom:1px solid var(--border);}
+  #s7table td.lbl,#s7table th.lbl{text-align:left;font-weight:600;color:var(--text);}
+  #s7table tbody tr:hover{background:var(--panel-2);}
+  #s7table tr.cur td{background:rgba(45,212,167,.07);}
+  .mtag{font-size:10px;color:var(--peak);margin-left:4px;font-weight:500;}
   #themeBtn,.themeTgl{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:7px 11px;border-radius:8px;font-size:14px;cursor:pointer;line-height:1;}
   .themeTgl{background:var(--panel-2);padding:6px 9px;font-size:13px;}
   .sortable{transition:box-shadow .15s;}
@@ -271,6 +280,21 @@
       <div class="msGrid" id="msGrid"></div>
       <div class="foot">데이터=시트 <b>actions</b> 탭(month·theme·category·item) · <span style="color:#5b9df5">기능</span>·<span style="color:#2dd4a7">프로모션</span>·<span style="color:#f5a623">테스트</span>·<span style="color:#a48ef2">분석</span></div>
     </div>
+    <div class="panel sortable" data-sec="monthly" draggable="false">
+      <h2><span class="drag" title="드래그하여 순서 변경">⠿</span> <span class="secnum"></span> 월간 지표 <span>MPU(순결제자) 중심 — 전체 · 자체결제 · 스토어 · MAU</span></h2>
+      <div style="display:flex;gap:14px;align-items:center;font-size:12px;margin:8px 0 10px;flex-wrap:wrap">
+        <span class="seg" id="mViewSeg">
+          <button data-v="month" class="active">월별 추이</button>
+          <button data-v="game">게임별</button>
+        </span>
+        <div style="display:flex;align-items:center;gap:8px"><b style="color:var(--text)">프로젝트</b> <select class="pjSel"></select></div>
+        <div style="display:flex;align-items:center;gap:8px" id="mMonthWrap"><b style="color:var(--text)">기준 월</b> <select id="mMonth"></select></div>
+      </div>
+      <div class="cards" id="s7cards"></div>
+      <div class="chart-box" style="height:300px"><canvas id="s7chart" role="img" aria-label="월간 MPU 추이"></canvas></div>
+      <div style="overflow-x:auto;margin-top:14px"><table id="s7table"></table></div>
+      <div class="foot" id="s7foot"></div>
+    </div>
   </div>
 
   <div class="hint" style="text-align:center;color:var(--muted);font-size:12.5px;margin-top:4px">다음 섹터는 여기에 이어서 함께 만들어갑니다 · 카드/추이 제목의 <b>⠿</b>를 잡고 끌면 순서가 바뀝니다 · 섹션 제목의 <b>🔗 URL</b>을 누르면 <b>지금 보고 있는 상태 그대로</b>(필터·기간·테마·시트 연결 포함) 그 섹션만 열리는 노션 임베드용 주소가 복사됩니다 — 다른 PC에서 열어도 동일합니다</div>
@@ -335,23 +359,26 @@ function jlAgg(codes){ let pu=0,av=0,act=0,has=false;
   return {pu,av,act:JL_HAS_ACT?act:null,has}; }
 // 필터 상태 영속화 (localStorage) — 새로고침·노션 임베드 재로드에도 유지
 const FILT_LS="board-filters";
-function saveFilters(){ try{ localStorage.setItem(FILT_LS, JSON.stringify({curGran,curMetric,curProj,fromD,toD,kpiView,kpiMonth,jlGrade,s5cov})); }catch(e){} }
+function saveFilters(){ try{ localStorage.setItem(FILT_LS, JSON.stringify({curGran,curMetric,curProj,fromD,toD,kpiView,kpiMonth,jlGrade,s5cov,mView,mMonth})); }catch(e){} }
 function loadFilters(){
   try{ const s=JSON.parse(localStorage.getItem(FILT_LS)); if(s){
     if(s.curGran)curGran=s.curGran; if(s.curMetric)curMetric=s.curMetric; if(s.curProj)curProj=s.curProj;
     if(s.fromD)fromD=s.fromD; if(s.toD)toD=s.toD;
     if(s.kpiView)kpiView=s.kpiView; if(s.kpiMonth)kpiMonth=s.kpiMonth;
-    if(s.jlGrade)jlGrade=s.jlGrade; if(s.s5cov!==undefined)s5cov=s.s5cov; } }catch(e){}
+    if(s.jlGrade)jlGrade=s.jlGrade; if(s.s5cov!==undefined)s5cov=s.s5cov;
+    if(s.mView)mView=s.mView; if(s.mMonth)mMonth=s.mMonth; } }catch(e){}
   // URL 파라미터가 있으면 최우선 적용 (공유 링크 상태)
   if(qp("gran"))curGran=qp("gran");   if(qp("metric"))curMetric=qp("metric");
   if(qp("proj"))curProj=qp("proj");   if(qp("from"))fromD=qp("from"); if(qp("to"))toD=qp("to");
   if(qp("view"))kpiView=qp("view");   if(qp("month"))kpiMonth=qp("month");
   if(qp("grade"))jlGrade=qp("grade"); if(qp("cov"))s5cov=+qp("cov");
+  if(qp("mview"))mView=qp("mview");   if(qp("mmonth"))mMonth=qp("mmonth");
 }
 function syncFilterUI(){
   document.querySelectorAll("#granSeg button").forEach(b=>b.classList.toggle("active",b.dataset.g===curGran));
   document.querySelectorAll("#metricSeg button").forEach(b=>b.classList.toggle("active",b.dataset.m===curMetric));
   document.querySelectorAll("#kpiViewSeg button").forEach(b=>b.classList.toggle("active",b.dataset.v===kpiView));
+  document.querySelectorAll("#mViewSeg button").forEach(b=>b.classList.toggle("active",b.dataset.v===mView));
   const jg=document.getElementById("jlGrade"); if(jg)jg.value=jlGrade;
 }
 const selCodes=()=> curProj==="ALL"?CODES.slice():(CODES.includes(curProj)?[curProj]:[]);
@@ -454,6 +481,17 @@ async function loadTotalMPU(url){
   }catch(e){}
 }
 const totalMpuOf=(m,codes=selCodes())=>{ let t=0,has=false; codes.forEach(c=>{ if(TMPU[c]&&TMPU[c][m]!=null){t+=TMPU[c][m];has=true;} }); return has?t:null; };
+// 월간 MAU 탭('mau') 로드 (month×게임코드) — 없으면 ⑦에서 MAU 관련 지표만 – 표시
+let MAU={};
+async function loadMAU(url){
+  MAU={};
+  try{ const grid=await fetchGrid(url,"mau");
+    const hdr=(grid[0]||[]).map(x=>String(x||"").trim().toUpperCase()); const colOf={}; CODES.forEach(c=>colOf[c]=hdr.indexOf(c));
+    for(let i=1;i<grid.length;i++){ const g=grid[i]; if(!g)continue; const m=parseYM(g[0]); if(!m)continue;
+      CODES.forEach(c=>{ if(colOf[c]>=0){ const v=toNum(g[colOf[c]]); if(v!=null)(MAU[c]=MAU[c]||{})[m]=v; } }); }
+  }catch(e){}
+}
+const mauOf=(m,codes=selCodes())=>{ let t=0,has=false; codes.forEach(c=>{ if(MAU[c]&&MAU[c][m]!=null){t+=MAU[c][m];has=true;} }); return has?t:null; };
 // 인게임(스토어) 결제자 = 기준월 전체 MPU − 자체 MPU. mpu_total 탭 없으면 표시 안 함(–)
 function ingameBase(codes,b){ const tot=totalMpuOf(b.curKey,codes); if(tot==null)return null; return Math.max(0,tot-b.curPU); }
 // ⑥ 월별 마일스톤 탭('actions') 로드: month,theme,category,item (내부 전략 텍스트 — 시트에서만, 미내장)
@@ -598,6 +636,7 @@ function render(){
 
   renderCards(rows);
   renderKPI();
+  renderMonthly();
   document.getElementById("s1foot").textContent =
     `${rows.length}개 구간 · ${allSelected()?"전 프로젝트 합산":curProj} · 비중(우축)=자체결제/전체매출 · 점선=목표 비중 · 목표 막대=사업계획×목표비중(2026)`;
 }
@@ -862,6 +901,119 @@ function renderMilestone(){
     renderKPI();
   }));
 }
+/* ===== ⑦ 월간 지표 — MPU(순결제자) 중심 ===== */
+let mView="month", mMonth="", chart7=null;
+// 기간 필터 안에서 데이터가 있는 월 목록 (매출·MPU·MAU 중 하나라도 있으면 포함)
+function monthKeys(codes){
+  const bd=mergedByDate(codes); const s=new Set();
+  for(const d in bd){ if(fromD&&d<fromD)continue; if(toD&&d>toD)continue; s.add(d.slice(0,7)); }
+  const inR=m=>{ const a=m+"-01", b=m+"-"+String(daysInMonth(m)).padStart(2,"0");
+    return !((fromD&&b<fromD)||(toD&&a>toD)); };
+  codes.forEach(c=>[MPU[c],TMPU[c],MAU[c]].forEach(o=>{ if(o)Object.keys(o).forEach(m=>{ if(inR(m))s.add(m); }); }));
+  return [...s].sort();
+}
+// 월×프로젝트 지표 한 줄
+function mStats(m,codes){
+  const bd=mergedByDate(codes);
+  let rev=0,d2c=0; const days=new Set();
+  for(const d in bd){ if(d.slice(0,7)!==m)continue; const o=bd[d]; rev+=o.total; d2c+=o.web+o.apk+o.pc; days.add(d); }
+  const tot=totalMpuOf(m,codes), self=mpuOf(m,codes), mau=mauOf(m,codes);
+  return {m, rev, d2c, days:days.size, complete:days.size>=daysInMonth(m),
+    mau, tmpu:tot, mpu:self,
+    store:(tot!=null&&self!=null)?Math.max(0,tot-self):null,   // 스토어(인앱) 결제자 = 전체 − 자체
+    conv:(tot&&self!=null)?self/tot*100:null,                   // 자체결제 전환율 = 자체MPU ÷ 전체MPU
+    ratio:rev?d2c/rev*100:null,
+    arppuT:tot?rev/tot:null, arppuS:self?d2c/self:null,
+    pur:(mau&&tot!=null)?tot/mau*100:null,                      // 결제율 = 전체MPU ÷ MAU
+    arpmau:mau?rev/mau:null};
+}
+function renderMonthly(){
+  const tb=document.getElementById("s7table"); if(!tb)return;
+  const foot=document.getElementById("s7foot"), cardEl=document.getElementById("s7cards");
+  const codes=selCodes();
+  const months=monthKeys(codes);
+  const S={}; months.forEach(m=>S[m]=mStats(m,codes));   // 월별 지표 1회 계산 후 재사용
+  // 기준 월 셀렉터 (게임별 뷰에서 사용)
+  const sel=document.getElementById("mMonth");
+  const wrap=document.getElementById("mMonthWrap"); if(wrap)wrap.style.display = mView==="game"?"flex":"none";
+  if(!months.includes(mMonth)) mMonth = months.filter(m=>S[m].complete).pop() || months[months.length-1] || "";
+  if(sel) sel.innerHTML=months.map(m=>`<option value="${m}" ${m===mMonth?"selected":""}>${+m.slice(5)}월 (${m.slice(0,4)})</option>`).join("");
+  if(!codes.length||!months.length){ tb.innerHTML=""; cardEl.innerHTML=""; if(chart7){chart7.destroy();chart7=null;}
+    foot.textContent = codes.length?"선택한 기간에 월간 데이터가 없습니다.":"프로젝트를 선택하세요."; return; }
+
+  const hasMau=months.some(m=>S[m].mau!=null);
+  const num=(v,suf="")=>v==null?'<span style="color:var(--muted)">–</span>':N(v)+suf;
+  const pctv=(v,col)=>v==null?'<span style="color:var(--muted)">–</span>':`<span style="color:${col||"inherit"}">${v.toFixed(1)}%</span>`;
+  const mom=(cur,prv)=>{ if(cur==null||prv==null||!prv)return '<span style="color:var(--muted)">–</span>';
+    const d=(cur/prv-1)*100; const up=d>=0;
+    return `<span style="color:${Math.abs(d)<0.05?"var(--muted)":up?"var(--green)":"var(--down)"}">${up?"▲ +":"▼ −"}${Math.abs(d).toFixed(1)}%</span>`; };
+
+  // ---- 요약 카드: 최근 완결월 (없으면 마지막 월) ----
+  const curM = months.filter(m=>S[m].complete).pop() || months[months.length-1];
+  const cur=S[curM], prvM=months[months.indexOf(curM)-1], prv=prvM?S[prvM]:null;
+  const cardMom=(a,b)=>b?`<div class="s">전월 대비 ${mom(a,b)}</div>`:"";
+  cardEl.innerHTML=`
+    <div class="card"><div class="l">기준 월</div><div class="v">${+curM.slice(5)}월</div><div class="s">${cur.complete?"완결":"진행 중("+cur.days+"일)"} · ${allSelected()?"전 프로젝트":curProj}</div></div>
+    ${hasMau?`<div class="card"><div class="l">MAU</div><div class="v">${num(cur.mau)}</div>${cardMom(cur.mau,prv&&prv.mau)}</div>`:""}
+    <div class="card"><div class="l">전체 MPU</div><div class="v">${num(cur.tmpu)}</div>${cardMom(cur.tmpu,prv&&prv.tmpu)}</div>
+    <div class="card"><div class="l">자체결제 MPU</div><div class="v" style="color:var(--accent)">${num(cur.mpu)}</div>${cardMom(cur.mpu,prv&&prv.mpu)}</div>
+    <div class="card"><div class="l">자체 전환율</div><div class="v" style="color:var(--green)">${cur.conv!=null?cur.conv.toFixed(1)+"%":"–"}</div><div class="s">자체 MPU ÷ 전체 MPU</div></div>
+    <div class="card"><div class="l">ARPPU(자체)</div><div class="v" style="color:var(--purple)">${cur.arppuS?만(cur.arppuS)+"원":"–"}</div><div class="s">자체 매출 ÷ 자체 MPU</div></div>`;
+
+  // ---- 표 ----
+  const head=`<thead>
+    <tr><th class="lbl" rowspan="2">${mView==="game"?"게임":"월"}</th>
+      <th colspan="${hasMau?5:4}">MPU (순결제자)</th>
+      <th colspan="${hasMau?4:3}" class="grp">매출</th></tr>
+    <tr>${hasMau?"<th>MAU</th>":""}<th>전체 MPU</th><th>자체결제 MPU</th><th>스토어 MPU</th><th>자체 전환율</th>
+      ${hasMau?"<th class=\"grp\">결제율(MPU÷MAU)</th>":""}<th class="${hasMau?"":"grp"}">전체 매출</th><th>자체결제 매출</th><th>자체 비중</th></tr></thead>`;
+  const cells=(s,prev)=>`
+    ${hasMau?`<td>${num(s.mau)}</td>`:""}
+    <td>${num(s.tmpu)}</td>
+    <td style="color:var(--accent);font-weight:600">${num(s.mpu)}${prev?` <span style="font-size:10.5px;font-weight:400">${mom(s.mpu,prev.mpu)}</span>`:""}</td>
+    <td style="color:var(--muted)">${num(s.store)}</td>
+    <td>${pctv(s.conv,"var(--green)")}</td>
+    ${hasMau?`<td class="grp">${pctv(s.pur)}</td>`:""}
+    <td class="${hasMau?"":"grp"}">${억(s.rev)}</td>
+    <td style="color:var(--purple)">${억(s.d2c)}</td>
+    <td>${pctv(s.ratio,"var(--peak)")}</td>`;
+  let body;
+  if(mView==="game"){
+    const gorder=CODES.slice().sort((a,b)=>{const rk=x=>x==="DS"?1:x==="IMGN"?2:0;return rk(a)-rk(b);});
+    body=gorder.map(c=>{ const s=mStats(mMonth,[c]);
+      return `<tr><td class="lbl">${c}</td>${cells(s,null)}</tr>`; }).join("");
+    const tt=mStats(mMonth,CODES);
+    body+=`<tr style="font-weight:700"><td class="lbl">합계</td>${cells(tt,null)}</tr>`;
+    foot.innerHTML=`<b>${+mMonth.slice(5)}월</b> 전 게임 비교 · 스토어 MPU=전체−자체 · 자체 전환율=자체 MPU÷전체 MPU`;
+  } else {
+    body=months.map((m,i)=>{ const s=S[m], p=i>0?S[months[i-1]]:null;
+      return `<tr class="${m===curM?"cur":""}"><td class="lbl">${+m.slice(5)}월 <span style="color:var(--muted);font-weight:400;font-size:11px">${m.slice(2,4)}년</span>${s.complete?"":'<span class="mtag">진행중</span>'}</td>${cells(s,p)}</tr>`; }).join("");
+    foot.innerHTML=`${allSelected()?"전 프로젝트 합산":codes.join("+")} · ${months.length}개월 (기간 필터 적용)`;
+  }
+  tb.innerHTML=head+"<tbody>"+body+"</tbody>";
+  foot.innerHTML+=`<br>전체 MPU=시트 <b>mpu_total</b> · 자체결제 MPU=<b>mpu</b> · MAU=<b>mau</b> 탭${hasMau?"":' <span style="color:var(--peak)">(미연동 — 시트 업데이트에서 월간(전체) 파일을 올리면 MAU 열이 자동 생성됩니다)</span>'} · 매출=일별 상세 합산 · MPU는 월간 순결제자라 일별 PU 합산과 다릅니다`;
+
+  // ---- 차트: 자체 MPU + 스토어 MPU 스택, 선=자체 전환율(우축) ----
+  const gorder=CODES.slice().sort((a,b)=>{const rk=x=>x==="DS"?1:x==="IMGN"?2:0;return rk(a)-rk(b);});
+  const keys = mView==="game"? gorder : months;
+  const st = mView==="game"? keys.map(c=>mStats(mMonth,[c])) : keys.map(m=>S[m]);
+  const labels = mView==="game"? keys : keys.map(m=>+m.slice(5)+"월");
+  const grid=gridC(), tk=tickC();
+  const ds=[
+    {type:"bar",label:"자체결제 MPU",data:st.map(s=>s.mpu),backgroundColor:CH_COL.apk,stack:"a",yAxisID:"y",borderRadius:2,order:2},
+    {type:"bar",label:"스토어 MPU",data:st.map(s=>s.store),backgroundColor:COL.etc,stack:"a",yAxisID:"y",borderRadius:2,order:2},
+    {type:"line",label:"자체 전환율",data:st.map(s=>s.conv),borderColor:"#2dd4a7",borderWidth:2.5,pointRadius:2,tension:.25,yAxisID:"y2",order:0}
+  ];
+  if(hasMau) ds.push({type:"line",label:"MAU",data:st.map(s=>s.mau),borderColor:COL.ratio,borderWidth:1.5,borderDash:[5,4],pointRadius:2,tension:.25,yAxisID:"y",order:1});
+  const opts={responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
+    scales:{ x:{stacked:true,grid:{display:false},ticks:{color:tk}},
+      y:{stacked:true,grid:{color:grid},ticks:{color:tk,callback:v=>N(v)}},
+      y2:{position:"right",grid:{display:false},min:0,suggestedMax:100,ticks:{color:tk,callback:v=>v+"%"}} },
+    plugins:{ legend:{labels:{color:tk,boxWidth:12,font:{size:11}}},
+      tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y==null?"-":(c.dataset.yAxisID==="y2"?c.parsed.y.toFixed(1)+"%":N(c.parsed.y)+"명")}`}} }};
+  if(chart7){ chart7.data={labels,datasets:ds}; chart7.options=opts; chart7.update(); }
+  else chart7=new Chart(document.getElementById("s7chart"),{data:{labels,datasets:ds},options:opts});
+}
 // 선택 프로젝트의 해당 월 전체매출 실적(비중 계산용)
 function planActualTotal(m,bd){ let t=0,has=false; for(const d in bd){ if(d.slice(0,7)===m){t+=bd[d].total;has=true;} } return has?t:null; }
 // 목표 단계 버튼 (단계·월·비중)
@@ -873,7 +1025,7 @@ function buildStageButtons(){ const seg=document.getElementById("kpiStageSeg"); 
 async function boot(url){
   // 미러(하드코딩 스냅샷) 모드: 시트 없이 내장 데이터 사용
   if(window.__MIRROR__){ const D=window.__MIRROR__;
-    CODES=D.CODES.slice(); PJ=D.PJ; PLAN=D.PLAN||{}; TGTR=D.TGTR||{}; MPU=D.MPU||{}; TMPU=D.TMPU||{}; JLG=D.JLG||{}; JL_HAS_ACT=!!D.JL_HAS_ACT; ACT=D.ACT||{};
+    CODES=D.CODES.slice(); PJ=D.PJ; PLAN=D.PLAN||{}; TGTR=D.TGTR||{}; MPU=D.MPU||{}; TMPU=D.TMPU||{}; JLG=D.JLG||{}; JL_HAS_ACT=!!D.JL_HAS_ACT; ACT=D.ACT||{}; MAU=D.MAU||{};
     afterLoad(); return; }
   SHEET_URL=url;
   try{
@@ -889,6 +1041,7 @@ async function boot(url){
     await loadMPU(url);
     await loadTotalMPU(url);
     await loadJL(url);
+    await loadMAU(url);
     await loadActions(url);
     localStorage.setItem("kpiplanner-sheet",url);
     try{const s=JSON.parse(localStorage.getItem(DASH_LS))||{};if(s.masterSheetUrl!==url){s.masterSheetUrl=url;localStorage.setItem(DASH_LS,JSON.stringify(s));}}catch(e){}
@@ -934,6 +1087,9 @@ document.getElementById("setupGo").addEventListener("click",()=>{const u=documen
 document.getElementById("kpiViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("kpiStageSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiMonth=b.dataset.m;s5cov=null;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("jlGrade").addEventListener("change",e=>{jlGrade=e.target.value;renderKPI();});
+// ⑦ 월간 지표 컨트롤
+document.getElementById("mViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;mView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderMonthly();saveFilters();});
+document.getElementById("mMonth").addEventListener("change",e=>{mMonth=e.target.value;renderMonthly();saveFilters();});
 document.getElementById("s5cov").addEventListener("input",e=>{s5cov=+e.target.value;renderStrategy();});
 // 밤/낮 모드 — 헤더 버튼 + 매출 추이 섹션 내 버튼 공용
 function updateThemeBtns(){ const ic=isLight()?"☀️":"🌙"; ["themeBtn","s1theme"].forEach(id=>{const b=document.getElementById(id);if(b)b.textContent=ic;}); }
@@ -963,6 +1119,7 @@ function copySecLink(sec,btn){
   p.set("proj",curProj); p.set("gran",curGran); p.set("metric",curMetric);
   if(fromD)p.set("from",fromD); if(toD)p.set("to",toD);
   p.set("view",kpiView); p.set("month",kpiMonth); p.set("grade",jlGrade);
+  p.set("mview",mView); if(mMonth)p.set("mmonth",mMonth);
   if(s5cov!=null)p.set("cov",s5cov);
   p.set("theme",isLight()?"light":"dark"); p.set("vals",showVals?"1":"0");
   if(HIDDEN.size)p.set("hide",[...HIDDEN].join("|"));   // 레전드에서 끈 항목
