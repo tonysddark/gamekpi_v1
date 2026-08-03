@@ -1113,7 +1113,9 @@ function dailyCalc(codes){
   const cmp = last? mtdSum(bd,cmpYm,last) : null;
   const proj = last? cs/last*dim : null;               // 월말 예상 매출(선형)
   return {day,dim,last,cs,ct,A,Akeep,Amonth,aSrc,aNote,actMpu,full,plan,tR,tgtRev,tgtMpu,pf,rem,need,cmp,cmpYm,
-    projMpuAct:(actMpu&&last)?actMpu/last*dim:null,     // 실적 MPU 기반 월말 예상
+    arppuNow:(actMpu&&cs)?cs/actMpu:null,               // 현재 ARPPU = 월 누적 자체결제 ÷ 실적 MPU
+    dayAvg:last?cs/last:null,                           // 현재 일평균 자체결제
+    tgtDay:tgtRev!=null?tgtRev/dim:null,                // 목표 일평균 = 목표 금액 ÷ 총일수
     mtdR:ct?cs/ct*100:null, mRev:A?cs/A:null, projRev:proj, projMpu:(proj!=null&&A)?proj/A:null,
     recent7:(()=>{ const a=day.filter(x=>x.act).slice(-7); return a.length?a.reduce((s,x)=>s+x.s,0)/a.length:null; })()};
 }
@@ -1163,11 +1165,15 @@ function renderDaily(){
       ${paceNow?bar((C.actMpu!=null?C.actMpu:C.mRev)/paceNow*100,"var(--teal)"):""}</div>
     <div class="card"><div class="l">추정 MPU (매출 환산)</div><div class="v" style="color:var(--accent)">${C.mRev!=null?N(C.mRev):"–"}</div>
       <div class="s">${C.actMpu!=null?"실적 대비 "+gap(C.mRev,C.actMpu)+" → ARPPU "+(C.mRev>C.actMpu?"상승":"하락"):"MPU 실적 없음 — 매출÷ARPPU"}</div></div>
-    <div class="card"><div class="l">월말 예상 MPU</div><div class="v" style="color:var(--purple)">${(C.projMpuAct||C.projMpu)!=null?N(C.projMpuAct||C.projMpu):"–"}</div>
-      <div class="s">목표 ${C.tgtMpu!=null?N(C.tgtMpu):"–"} · ${gap(C.projMpuAct||C.projMpu,C.tgtMpu)}${((C.projMpuAct||C.projMpu)!=null&&C.tgtMpu)?" ("+((C.projMpuAct||C.projMpu)/C.tgtMpu*100).toFixed(1)+"%)":""}</div>
-      <div class="s" style="opacity:.75">${C.projMpuAct!=null?"실적 MPU 선형 확장":"추정 기반"}</div></div>
+    <div class="card"><div class="l">현재 ARPPU <span class="dtag">월 누적</span></div>
+      <div class="v" style="color:${(C.arppuNow!=null&&C.Akeep)?(C.arppuNow>=C.Akeep?"var(--green)":"var(--down)"):"var(--text)"}">${C.arppuNow!=null?만(C.arppuNow)+"원":"–"}</div>
+      <div class="s">KPI ${C.Akeep?만(C.Akeep)+"원":"–"}${(C.arppuNow!=null&&C.Akeep)?" · "+(C.arppuNow>=C.Akeep?up("▲ +"+만(C.arppuNow-C.Akeep)+"원"):dn("▼ 부족 "+만(C.Akeep-C.arppuNow)+"원"))+" ("+(C.arppuNow/C.Akeep*100).toFixed(0)+"%)":""}</div>
+      ${(C.arppuNow!=null&&C.Akeep)?bar(C.arppuNow/C.Akeep*100,C.arppuNow>=C.Akeep?"var(--green)":"var(--down)"):""}</div>
+    <div class="card"><div class="l">현재 일평균</div><div class="v">${C.dayAvg!=null?억(C.dayAvg):"–"}</div>
+      <div class="s">최근 7일 ${C.recent7!=null?억(C.recent7):"–"} · 목표 일평균 ${C.tgtDay!=null?억(C.tgtDay):"–"}</div>
+      ${C.tgtDay?bar(C.dayAvg/C.tgtDay*100,C.dayAvg>=C.tgtDay?"var(--green)":"var(--peak)"):""}</div>
     <div class="card"><div class="l">잔여 필요 일평균</div><div class="v">${C.need!=null?억(C.need):"–"}</div>
-      <div class="s">최근 7일 ${C.recent7!=null?억(C.recent7):"–"}${(C.need!=null&&C.recent7)?" · "+(C.need>C.recent7?dn("+"+((C.need/C.recent7-1)*100).toFixed(0)+"% 필요"):up("여유")):""}</div></div>`;
+      <div class="s">현재 일평균 대비 ${(C.need!=null&&C.dayAvg)?(C.need>C.dayAvg?dn("+"+((C.need/C.dayAvg-1)*100).toFixed(0)+"% 필요"):up("여유")):"–"}</div></div>`;
 
   // ---- 표 ----
   tb.innerHTML=`<thead><tr><th class="lbl">일자</th><th>전체</th><th>자체결제</th><th>일 비중</th><th>일 PU</th>
@@ -1190,6 +1196,7 @@ function renderDaily(){
 
   foot.innerHTML=`<b>자체결제 MPU(실적)</b> = 시트 <b>mpu</b> 탭의 ${+dMonth.slice(5)}월 값${C.actMpu!=null?"("+N(C.actMpu)+"명"+(C.full?"·완결":"·진행 중이라 월 누적 부분값")+")":" — 없음"} · 월 단위 1개 값이라 <b>일자별 곡선은 매출로 환산</b>합니다`
     +`<br>추정 MPU = 월 누적 자체결제 ÷ <b>${C.aSrc}</b>(${C.A?만(C.A)+"원":"–"})${C.aNote} · <b>목표 MPU = 사업계획 ${C.plan!=null?억(C.plan):"–"} × 목표 ${C.tR!=null?C.tR.toFixed(0)+"%":"–"} ÷ 유지 ARPPU(${C.Akeep?만(C.Akeep)+"원":"–"}) = ${C.tgtMpu!=null?N(C.tgtMpu)+"명":"–"}</b> — ④와 동일하게 <b>항상 유지 ARPPU 기준</b>(진행월 ARPPU로는 목표가 왜곡되므로 고정) · 목표 페이스 = 목표 MPU × 경과일 ÷ ${C.dim}`
+    +`<br><b>현재 ARPPU</b> = 월 누적 자체결제 ÷ 실적 MPU — <b>월 누적 지표라 월초엔 낮게 나옵니다</b>(재결제가 쌓일수록 상승) · 현재 일평균 = 월 누적 ÷ 경과일 · 목표 일평균 = 목표 금액 ÷ ${C.dim}일`
     +`<br>보정계수 k = ${C.pf?C.pf.k.toFixed(3)+" (완결월 "+C.pf.base.map(m=>+m.slice(5)+"월").join("·")+" MPU ÷ 일PU 합)":'<span style="color:var(--peak)">산출 불가(완결월 MPU 없음)</span>'} · ${allSelected()?"전 프로젝트 합산":codes.join("+")}`;
   drawDaily();
 }
