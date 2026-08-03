@@ -1236,7 +1236,7 @@ function drawDaily(){
       {label:"추정 MPU (일PU × 보정)",data:C.day.map(x=>x.act?x.mPu:null),borderColor:CH_COL.apk,borderWidth:2,borderDash:[2,3],pointRadius:1.5,tension:.2,order:1},
       {label:"목표 페이스",data:C.day.map(x=>x.pace),borderColor:CH_COL.web,borderWidth:2,borderDash:[7,4],pointRadius:0,order:2},
       {label:"필요 경로",data:needLine,borderColor:"#f5a623",borderWidth:2,borderDash:[5,3],pointRadius:0,spanGaps:true,order:2}
-    ];
+    );
     if(C.cmp){ const bd=mergedByDate(selCodes()); let cc=0;
       ds.push({label:dCmp==="yoy"?"전년 동기간":"전월 동기간",
         data:C.day.map(x=>{ const k=C.cmpYm+"-"+String(x.d).padStart(2,"0"); const o=bd[k];
