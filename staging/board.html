@@ -319,10 +319,10 @@
       <div style="display:flex;gap:13px;align-items:center;font-size:12px;margin:8px 0 2px;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:7px"><b style="color:var(--text)">프로젝트</b> <select class="pjSel"></select></div>
         <div style="display:flex;align-items:center;gap:7px"><b style="color:var(--text)">기준 월</b> <select id="dMonth"></select></div>
-        <div style="display:flex;align-items:center;gap:7px"><b style="color:var(--text)">ARPPU</b>
-          <select id="dArppu">
+        <div style="display:flex;align-items:center;gap:7px"><b style="color:var(--text)">추정용 ARPPU</b>
+          <select id="dArppu" title="목표 MPU는 이 설정과 무관하게 항상 유지 ARPPU로 계산됩니다">
             <option value="keep" selected>유지 ARPPU (④와 동일·고정)</option>
-            <option value="month">기준월 실적 ARPPU</option>
+            <option value="month">기준월 실적 ARPPU (완결월만)</option>
           </select></div>
         <span class="seg" id="dCmpSeg"><button data-c="mom" class="active">전월 동기간</button><button data-c="yoy">전년 동기간</button></span>
         <span id="dInfo" style="color:var(--muted)"></span>
@@ -1084,13 +1084,19 @@ function dailyCalc(codes){
     if(o){ last=d; day.push({d,t:o.total,s:o.web+o.apk+o.pc,pu:o.d2cpu||0,act:1}); }
     else day.push({d,act:0}); }
   const b=baseStats(bd,codes);
-  const mMpu=mpuOf(dMonth,codes);
-  let A=b.arppu, aSrc="유지 ARPPU(④와 동일)";
-  if(dArppu==="month"&&mMpu){ let rev=0; day.forEach(x=>{if(x.act)rev+=x.s;});
-    if(rev>0){ A=rev/mMpu; aSrc=(+dMonth.slice(5))+"월 실적 ARPPU"; } }
+  const actMpu=mpuOf(dMonth,codes);                       // mpu 탭 실적 (진행월이면 그 파일 기준일까지의 누적 순결제자)
+  const full=last>=dim;                                   // 기준월 완결 여부
+  const Akeep=b.arppu;                                    // 유지 ARPPU = 최근 완결 3개월 (④와 동일)
+  let mRev0=0; day.forEach(x=>{if(x.act)mRev0+=x.s;});
+  const Amonth=(full&&actMpu)?mRev0/actMpu:null;          // 기준월 실적 ARPPU — 완결월에서만 유효
+  let A=Akeep, aSrc="유지 ARPPU(④와 동일)", aNote="";
+  if(dArppu==="month"){
+    if(Amonth){ A=Amonth; aSrc=(+dMonth.slice(5))+"월 실적 ARPPU"; }
+    else aNote=" <span style='color:var(--peak)'>(진행 중인 월은 실적 ARPPU가 왜곡되어 유지 ARPPU를 적용)</span>";
+  }
   const plan=planOf(dMonth,codes), tR=TGTR[dMonth]!=null?TGTR[dMonth]:null;
   const tgtRev=(plan!=null&&tR!=null)?plan*tR/100:null;
-  const tgtMpu=(tgtRev!=null&&A)?tgtRev/A:null;
+  const tgtMpu=(tgtRev!=null&&Akeep)?tgtRev/Akeep:null;   // 목표는 항상 유지 ARPPU 기준 (④의 목표 MPU와 동일)
   const pf=puFactor(codes);
   // 누적
   let cs=0,ct=0,cpu=0;
@@ -1100,12 +1106,14 @@ function dailyCalc(codes){
     x.pace=tgtMpu!=null?tgtMpu*x.d/dim:null; });
   const rem=dim-last, need=(tgtRev!=null&&rem>0)?Math.max(0,(tgtRev-cs)/rem):null;
   let csN=cs;
-  day.forEach(x=>{ if(!x.act&&need!=null){ csN+=need; x.need=need; x.csNeed=csN; x.mNeed=A?csN/A:null; } });
+  // 필요 경로는 목표와 같은 축(유지 ARPPU)으로 계산해야 종점이 목표 MPU와 일치
+  day.forEach(x=>{ if(!x.act&&need!=null){ csN+=need; x.need=need; x.csNeed=csN; x.mNeed=Akeep?csN/Akeep:null; } });
   // 동기간 비교
   const cmpYm = dCmp==="yoy"? ymShift(dMonth,-12) : ymShift(dMonth,-1);
   const cmp = last? mtdSum(bd,cmpYm,last) : null;
   const proj = last? cs/last*dim : null;               // 월말 예상 매출(선형)
-  return {day,dim,last,cs,ct,A,aSrc,plan,tR,tgtRev,tgtMpu,pf,rem,need,cmp,cmpYm,
+  return {day,dim,last,cs,ct,A,Akeep,Amonth,aSrc,aNote,actMpu,full,plan,tR,tgtRev,tgtMpu,pf,rem,need,cmp,cmpYm,
+    projMpuAct:(actMpu&&last)?actMpu/last*dim:null,     // 실적 MPU 기반 월말 예상
     mtdR:ct?cs/ct*100:null, mRev:A?cs/A:null, projRev:proj, projMpu:(proj!=null&&A)?proj/A:null,
     recent7:(()=>{ const a=day.filter(x=>x.act).slice(-7); return a.length?a.reduce((s,x)=>s+x.s,0)/a.length:null; })()};
 }
@@ -1149,11 +1157,15 @@ function renderDaily(){
       <div class="s">목표 ${C.tgtRev!=null?억(C.tgtRev):"–"}${C.tgtRev!=null?" · 잔여 "+억(Math.max(0,C.tgtRev-C.cs)):""}</div>
       ${C.tgtRev?bar(C.cs/C.tgtRev*100,"var(--accent)"):""}</div>
     <div class="card" style="border-color:var(--teal);box-shadow:0 0 0 1px var(--teal) inset">
-      <div class="l">누적 추정 MPU</div><div class="v" style="color:var(--teal)">${C.mRev!=null?N(C.mRev):"–"}</div>
-      <div class="s">목표 페이스 ${paceNow!=null?N(paceNow):"–"} · ${gap(C.mRev,paceNow)}</div>
-      ${paceNow?bar(C.mRev/paceNow*100,"var(--teal)"):""}</div>
-    <div class="card"><div class="l">월말 예상 MPU</div><div class="v" style="color:var(--purple)">${C.projMpu!=null?N(C.projMpu):"–"}</div>
-      <div class="s">목표 ${C.tgtMpu!=null?N(C.tgtMpu):"–"} · ${gap(C.projMpu,C.tgtMpu)}${(C.projMpu!=null&&C.tgtMpu)?" ("+(C.projMpu/C.tgtMpu*100).toFixed(1)+"%)":""}</div></div>
+      <div class="l">자체결제 MPU ${C.actMpu!=null?'<span class="dtag">실적</span>':'<span class="dtag">추정</span>'}</div>
+      <div class="v" style="color:var(--teal)">${C.actMpu!=null?N(C.actMpu):(C.mRev!=null?N(C.mRev):"–")}</div>
+      <div class="s">목표 페이스 ${paceNow!=null?N(paceNow):"–"} · ${gap(C.actMpu!=null?C.actMpu:C.mRev,paceNow)}</div>
+      ${paceNow?bar((C.actMpu!=null?C.actMpu:C.mRev)/paceNow*100,"var(--teal)"):""}</div>
+    <div class="card"><div class="l">추정 MPU (매출 환산)</div><div class="v" style="color:var(--accent)">${C.mRev!=null?N(C.mRev):"–"}</div>
+      <div class="s">${C.actMpu!=null?"실적 대비 "+gap(C.mRev,C.actMpu)+" → ARPPU "+(C.mRev>C.actMpu?"상승":"하락"):"MPU 실적 없음 — 매출÷ARPPU"}</div></div>
+    <div class="card"><div class="l">월말 예상 MPU</div><div class="v" style="color:var(--purple)">${(C.projMpuAct||C.projMpu)!=null?N(C.projMpuAct||C.projMpu):"–"}</div>
+      <div class="s">목표 ${C.tgtMpu!=null?N(C.tgtMpu):"–"} · ${gap(C.projMpuAct||C.projMpu,C.tgtMpu)}${((C.projMpuAct||C.projMpu)!=null&&C.tgtMpu)?" ("+((C.projMpuAct||C.projMpu)/C.tgtMpu*100).toFixed(1)+"%)":""}</div>
+      <div class="s" style="opacity:.75">${C.projMpuAct!=null?"실적 MPU 선형 확장":"추정 기반"}</div></div>
     <div class="card"><div class="l">잔여 필요 일평균</div><div class="v">${C.need!=null?억(C.need):"–"}</div>
       <div class="s">최근 7일 ${C.recent7!=null?억(C.recent7):"–"}${(C.need!=null&&C.recent7)?" · "+(C.need>C.recent7?dn("+"+((C.need/C.recent7-1)*100).toFixed(0)+"% 필요"):up("여유")):""}</div></div>`;
 
@@ -1176,7 +1188,8 @@ function renderDaily(){
         <td>${x.mNeed!=null?N(x.mNeed):"–"}</td>
         <td>${x.pace!=null?N(x.pace):"–"}</td><td>–</td></tr>`; }).join("")+"</tbody>";
 
-  foot.innerHTML=`추정 MPU = MTD 자체결제 ÷ <b>${C.aSrc}</b>(${C.A?만(C.A)+"원":"–"}) · 목표 MPU = 사업계획 ${C.plan!=null?억(C.plan):"–"} × 목표 ${C.tR!=null?C.tR.toFixed(0)+"%":"–"} ÷ ARPPU = <b>${C.tgtMpu!=null?N(C.tgtMpu)+"명":"–"}</b> (④ 전환 목표와 동일 기준) · 목표 페이스 = 목표 MPU × 경과일 ÷ ${C.dim}`
+  foot.innerHTML=`<b>자체결제 MPU(실적)</b> = 시트 <b>mpu</b> 탭의 ${+dMonth.slice(5)}월 값${C.actMpu!=null?"("+N(C.actMpu)+"명"+(C.full?"·완결":"·진행 중이라 월 누적 부분값")+")":" — 없음"} · 월 단위 1개 값이라 <b>일자별 곡선은 매출로 환산</b>합니다`
+    +`<br>추정 MPU = 월 누적 자체결제 ÷ <b>${C.aSrc}</b>(${C.A?만(C.A)+"원":"–"})${C.aNote} · <b>목표 MPU = 사업계획 ${C.plan!=null?억(C.plan):"–"} × 목표 ${C.tR!=null?C.tR.toFixed(0)+"%":"–"} ÷ 유지 ARPPU(${C.Akeep?만(C.Akeep)+"원":"–"}) = ${C.tgtMpu!=null?N(C.tgtMpu)+"명":"–"}</b> — ④와 동일하게 <b>항상 유지 ARPPU 기준</b>(진행월 ARPPU로는 목표가 왜곡되므로 고정) · 목표 페이스 = 목표 MPU × 경과일 ÷ ${C.dim}`
     +`<br>보정계수 k = ${C.pf?C.pf.k.toFixed(3)+" (완결월 "+C.pf.base.map(m=>+m.slice(5)+"월").join("·")+" MPU ÷ 일PU 합)":'<span style="color:var(--peak)">산출 불가(완결월 MPU 없음)</span>'} · ${allSelected()?"전 프로젝트 합산":codes.join("+")}`;
   drawDaily();
 }
@@ -1212,8 +1225,13 @@ function drawDaily(){
         tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y==null?"-":(c.dataset.yAxisID==="y2"?c.parsed.y.toFixed(1)+"%":억(c.parsed.y))}`}}}};
     chart8r=upsertChart("c8rev",{type:"bar",data:{labels,datasets:ds},options:opts});
   } else if(dTab==="mpu"){
-    const needLine=C.day.map(x=>x.act?(x.d===C.last?x.mRev:null):x.mNeed);
-    const ds=[
+    const startNow = C.actMpu!=null?C.actMpu:(C.last?C.day[C.last-1].mRev:null); // 필요 경로 출발점 = 실적 MPU(있으면)
+    const needLine=C.day.map(x=>x.act?(x.d===C.last?startNow:null):x.mNeed);
+    const ds=[];
+    if(C.actMpu!=null&&C.last)  // mpu 탭 실적 = 월 1개 값 → 최신일 위치에 점으로
+      ds.push({label:"자체결제 MPU (실적)",data:C.day.map(x=>x.d===C.last?C.actMpu:null),
+        borderColor:"#2dd4a7",backgroundColor:"#2dd4a7",pointRadius:6,pointHoverRadius:8,showLine:false,order:-1});
+    ds.push(
       {label:"추정 MPU (매출 ÷ ARPPU)",data:C.day.map(x=>x.act?x.mRev:null),borderColor:"#2dd4a7",backgroundColor:"rgba(45,212,167,.10)",borderWidth:2.6,pointRadius:1.5,tension:.2,fill:true,order:0},
       {label:"추정 MPU (일PU × 보정)",data:C.day.map(x=>x.act?x.mPu:null),borderColor:CH_COL.apk,borderWidth:2,borderDash:[2,3],pointRadius:1.5,tension:.2,order:1},
       {label:"목표 페이스",data:C.day.map(x=>x.pace),borderColor:CH_COL.web,borderWidth:2,borderDash:[7,4],pointRadius:0,order:2},
@@ -1222,7 +1240,7 @@ function drawDaily(){
     if(C.cmp){ const bd=mergedByDate(selCodes()); let cc=0;
       ds.push({label:dCmp==="yoy"?"전년 동기간":"전월 동기간",
         data:C.day.map(x=>{ const k=C.cmpYm+"-"+String(x.d).padStart(2,"0"); const o=bd[k];
-          if(!o||x.d>daysInMonth(C.cmpYm))return null; cc+=o.web+o.apk+o.pc; return C.A?cc/C.A:null; }),
+          if(!o||x.d>daysInMonth(C.cmpYm))return null; cc+=o.web+o.apk+o.pc; return C.Akeep?cc/C.Akeep:null; }),
         borderColor:"rgba(139,150,173,.8)",borderWidth:1.6,pointRadius:0,order:3}); }
     const opts={responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},
       scales:{x:{grid:{display:false},ticks:{color:tk,autoSkip:false,callback:(v,i)=>(i===0||i===C.dim-1||(i+1)%skip===0)?labels[i]:""}},
@@ -1385,6 +1403,15 @@ secBox.addEventListener("dragover",e=>{
   const after=[...secBox.querySelectorAll(".sortable:not(.dragging)")].find(el=>{ const r=el.getBoundingClientRect(); return e.clientY < r.top + r.height/2; });
   if(after) secBox.insertBefore(dragEl, after); else secBox.appendChild(dragEl);
 });
+
+// 검증용 노출 (upload.html의 __sp와 동일한 목적 — 계산식 회귀 확인용)
+window.__board={ get:()=>D8, calc:()=>dailyCalc(selCodes()), render:()=>render(),
+  inject:d=>{ if(d.PJ){PJ=d.PJ;} if(d.CODES){CODES=d.CODES;} if(d.MPU){MPU=d.MPU;} if(d.TMPU){TMPU=d.TMPU;}
+    if(d.PLAN){PLAN=d.PLAN;} if(d.TGTR){TGTR=d.TGTR;} if(d.ACT){ACT=d.ACT;} if(d.JLG){JLG=d.JLG;}
+    if(d.state)Object.entries(d.state).forEach(([k,v])=>{ switch(k){
+      case"curProj":curProj=v;break; case"fromD":fromD=v;break; case"toD":toD=v;break;
+      case"dMonth":dMonth=v;break; case"dArppu":dArppu=v;break; case"dTab":dTab=v;break; case"dCmp":dCmp=v;break; } });
+    afterLoad(); return D8; } };
 
 loadOrder(); // 섹션 번호 매기기 + 저장된 순서 복원
 
