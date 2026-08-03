@@ -62,7 +62,7 @@
 <div class="banner">
   인식 · <b>결제사(pg)·플랫폼별</b> → <code>코드-kpi</code> · <b>daily_kpi 자체결제</b> → <code>코드</code> · <b>daily_kpi(순수)</b> → <code>코드-daily</code>(DAU·순결제자 PU·전체 ARPPU·광고).
   겹치는 날은 값이 <b>바뀐 경우에만</b> 교체(정산 지연 수정치 반영), 동일하면 건너뜀. 파일에 없는 과거 날짜는 그대로 보존.<br>
-  <b>월간·우수고객</b> · <b>monthly_kpi(자체결제)</b> → <code>mpu</code>(월간 자체 MPU) · <b>monthly_kpi(전체)</b> → <code>mpu_total</code>(월간 전체 MPU) + <code>mau</code>(MAU 열이 있으면 자동) · <b>JL 회원파일</b> → <code>jl</code>(등급별 90일 과금·미전환 풀·활동 유저=최근 30일 접속).
+  <b>월간·우수고객</b> · <b>monthly_kpi(자체결제)</b> → <code>mpu</code>(월간 자체 MPU) · <b>monthly_kpi(전체)</b> → <code>mpu_total</code>(월간 전체 MPU) · <b>JL 회원파일</b> → <code>jl</code>(등급별 90일 과금·미전환 풀·활동 유저=최근 30일 접속).
   이 3종은 기존 시트값과 <b>병합해 탭 전체를 출력</b>합니다 — 일부 게임만 올려도 나머지 게임 값은 보존.
 </div>
 
@@ -138,7 +138,7 @@ function detectKind(hl){
   if(hl.some(h=>{const x=h.replace(/\s/g,"");return x==="dru"||x.includes("iaa")||x.includes("install")||x.includes("nnpu")||x==="pur";}))return "daily";
   if(hl.some(h=>{const x=h.replace(/\s/g,"");return x.includes("자체결제pu")||x.includes("자체결제매출");}))return "summary";
   return ""; }
-const SPECIAL_KINDS=["mpu","mpu_total","mau","jl"];  // mau = 전체 monthly_kpi의 MAU 열에서 파생
+const SPECIAL_KINDS=["mpu","mpu_total","jl"];
 
 async function parseFile(file){
   const wb=XLSX.read(await file.arrayBuffer(),{type:"array"});
@@ -231,7 +231,7 @@ function render(){
 /* ===== 월간·우수고객 특수 탭 (mpu / mpu_total / jl) ===== */
 const MATRIX_GAMES=["POTC","GBTW","WWM","DS","RESU","IMGN"];
 const JL_GRADE_ORDER=["CLUB","실버","골드","플래티넘","플래티넘MVP"];
-let SP={mpu:{},mpu_total:{},mau:{},jl:{}};      // 파일에서 들어온 값 {kind:{game:...}}
+let SP={mpu:{},mpu_total:{},jl:{}};      // 파일에서 들어온 값 {kind:{game:...}}
 let SP_FILES=[];                          // 표시용 [{name,kind,game,info,err}]
 let SP_EXIST={};                          // 기존 시트 탭 캐시 {kind:{games:[],data:{}}}
 
@@ -291,25 +291,20 @@ function parseSpecial(name,kind,aoa,hdr,hl){
       : hl.findIndex(h=>h.replace(/\s/g,"")==="mpu");
     if(vcol<0){entry.err=(kind==="mpu"?"'자체 결제 PU'":"'MPU'")+" 열 없음";return entry;}
     entry.monthly={};
-    // MAU는 전체(monthly_kpi) 파일에서만 — 게임 전체 기준이라 자체결제 파일보다 신뢰 가능. 열이 있을 때만 mau 탭 생성
-    const mcol = kind==="mpu_total" ? hl.findIndex(h=>h.replace(/\s/g,"")==="mau") : -1;
-    if(mcol>=0)entry.monthlyMau={};
     for(let i=1;i<aoa.length;i++){ const r=aoa[i]; const iso=toISO(r[0]); if(!iso)continue;
-      const v=num(r[vcol]); entry.monthly[iso.slice(0,7)]=Math.round(v);
-      if(mcol>=0){ const mv=num(r[mcol]); if(mv)entry.monthlyMau[iso.slice(0,7)]=Math.round(mv); } }
-    entry.info=Object.keys(entry.monthly).length+"개월"+(mcol>=0?" · MAU 포함":"");
+      const v=num(r[vcol]); entry.monthly[iso.slice(0,7)]=Math.round(v); }
+    entry.info=Object.keys(entry.monthly).length+"개월";
   }
   return entry;
 }
 // SP_FILES → SP 재집계 (게임 병합·JL은 회원 dedupe)
 function rebuildSP(){
-  SP={mpu:{},mpu_total:{},mau:{},jl:{}};
+  SP={mpu:{},mpu_total:{},jl:{}};
   // jl: 게임별 회원 합치고 등급 집계
   const jlMem={};
   SP_FILES.forEach(f=>{ if(f.err||!f.game)return;
     if(f.kind==="jl"){ const g=jlMem[f.game]=jlMem[f.game]||{}; for(const id in f.members){ if(!g[id])g[id]=f.members[id]; } }
-    else { const g=SP[f.kind][f.game]=SP[f.kind][f.game]||{}; Object.assign(g,f.monthly);
-      if(f.monthlyMau){ const a=SP.mau[f.game]=SP.mau[f.game]||{}; Object.assign(a,f.monthlyMau); } } });
+    else { const g=SP[f.kind][f.game]=SP[f.kind][f.game]||{}; Object.assign(g,f.monthly); } });
   for(const game in jlMem){ const agg={};
     for(const id in jlMem[game]){ const m=jlMem[game][id]; if(!m.grade)continue;
       const o=agg[m.grade]=agg[m.grade]||{pu:0,pool:0,active:0};
@@ -476,7 +471,7 @@ drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("over"
 fileInput.addEventListener("change",e=>addFiles([...e.target.files]));
 document.getElementById("applyBtn").addEventListener("click",applyToSheet);
 document.getElementById("csvBtn").addEventListener("click",downloadCsv);
-document.getElementById("clearBtn").addEventListener("click",()=>{FILES=[];SP_FILES=[];SP={mpu:{},mpu_total:{},mau:{},jl:{}};SP_EXIST={};document.getElementById("fileList").innerHTML="";document.getElementById("specialList").innerHTML="";document.getElementById("filesPanel").style.display="none";document.getElementById("specialPanel").style.display="none";document.getElementById("status").className="status";document.getElementById("spStatus").className="status";});
+document.getElementById("clearBtn").addEventListener("click",()=>{FILES=[];SP_FILES=[];SP={mpu:{},mpu_total:{},jl:{}};SP_EXIST={};document.getElementById("fileList").innerHTML="";document.getElementById("specialList").innerHTML="";document.getElementById("filesPanel").style.display="none";document.getElementById("specialPanel").style.display="none";document.getElementById("status").className="status";document.getElementById("spStatus").className="status";});
 // 검증용 노출
 window.__sp={parseSpecial,buildTab,rebuildSP,parseYM,normGrade,guessGameLoose,detectKind,
   setFiles:f=>{SP_FILES=f;return renderSpecial();},get:()=>({SP,SP_FILES,SP_EXIST})};
