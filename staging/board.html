@@ -1185,8 +1185,10 @@ let D8=null;
 function upsertChart(id,cfg){
   const el=document.getElementById(id); if(!el)return null;
   const ex=Chart.getChart(el);
-  if(ex){ ex.data=cfg.data; ex.options=cfg.options; ex.update(); return ex; }
-  return new Chart(el,cfg);
+  if(ex){ ex.data=cfg.data; ex.options=cfg.options; ex.update(); ex.resize(); return ex; }
+  const c=new Chart(el,cfg);
+  c.resize();   // 탭 전환 직후엔 레이아웃 폭이 0으로 잡힐 수 있어 강제 재측정
+  return c;
 }
 // 탭이 보일 때만 차트 생성/갱신 (숨김 상태로 만들면 폭이 0으로 잡힘)
 function drawDaily(){
@@ -1208,7 +1210,7 @@ function drawDaily(){
         y2:{position:"right",min:0,suggestedMax:Math.max(60,(C.tR||40)*1.6),grid:{display:false},ticks:{color:tk,callback:v=>v.toFixed(0)+"%"}}},
       plugins:{legend:{labels:{color:tk,boxWidth:12,font:{size:11}}},
         tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y==null?"-":(c.dataset.yAxisID==="y2"?c.parsed.y.toFixed(1)+"%":억(c.parsed.y))}`}}}};
-    chart8r=upsertChart("c8rev",{data:{labels,datasets:ds},options:opts});
+    chart8r=upsertChart("c8rev",{type:"bar",data:{labels,datasets:ds},options:opts});
   } else if(dTab==="mpu"){
     const needLine=C.day.map(x=>x.act?(x.d===C.last?x.mRev:null):x.mNeed);
     const ds=[
@@ -1227,7 +1229,7 @@ function drawDaily(){
         y:{grid:{color:grid},ticks:{color:tk,callback:v=>N(v)}}},
       plugins:{legend:{labels:{color:tk,boxWidth:12,font:{size:11}}},
         tooltip:{callbacks:{label:c=>` ${c.dataset.label}: ${c.parsed.y==null?"-":N(c.parsed.y)+"명"}`}}}};
-    chart8m=upsertChart("c8mpu",{data:{labels,datasets:ds},options:opts});
+    chart8m=upsertChart("c8mpu",{type:"line",data:{labels,datasets:ds},options:opts});
   }
 }
 // 선택 프로젝트의 해당 월 전체매출 실적(비중 계산용)
