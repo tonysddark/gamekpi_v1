@@ -254,6 +254,16 @@
     font-size: 11px; font-weight: 700; vertical-align: middle;
   }
   #eventsBody .m-empty { padding: 16px 4px; font-size: 13px; }
+  /* 정렬 가능한 표 헤더 */
+  .sk {
+    display: inline-flex; align-items: center; gap: 2px; cursor: pointer;
+    user-select: none; border-radius: 5px; padding: 1px 3px;
+  }
+  .sk:hover { color: var(--text); background: rgba(79,140,255,.12); }
+  .sk .arw { font-size: 9px; opacity: .3; }
+  .sk.on { color: var(--accent); }
+  .sk.on .arw { opacity: 1; }
+  th .sk.sub { font-size: 11px; font-weight: 400; margin-top: 1px; }
 </style>
 </head>
 <body>
@@ -546,8 +556,13 @@ const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 �
 
 /* ================= 버전 ================= */
 /* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
-const APP_VERSION = "1.14.0";
+const APP_VERSION = "1.20.1";
 const VERSION_HISTORY = [
+  { ver: "1.20.1", date: "2026-08-06", type: "기능", changes: [
+    "🎯 이벤트 효과 분석 표 정렬 — 머리글 클릭으로 오름/내림 전환(#·기간·일수·이벤트·기준·자체결제 일평균·매출 vs 직전·비중·비중 vs 직전·PU vs 직전)",
+    "값이 없는 행(데이터 기간 밖 이벤트)은 정렬 방향과 무관하게 항상 아래 · 겹침 묶음(8-1·8-2) 내부 순서는 유지 · 정렬 상태는 localStorage 저장",
+    "헤더 버전 배지가 1.14.0에 멈춰 있던 표기 오류 수정",
+  ]},
   { ver: "1.20.0", date: "2026-07-28", type: "기능", changes: [
     "KPI 현황판 ⑧ KPI 일별 트래킹 — 탭 3개(매출·비중 / MPU KPI 흐름 / 일자별 상세) + 요약 카드 6개. 월간 ARPPU 유지 가정으로 MTD 매출을 MPU로 환산해 목표 페이스와 비교, 실적 없는 잔여일은 목표치(필요 자체결제·필요 경로)만 표시",
     "추정 MPU 2경로 — ①매출÷유지ARPPU(④와 동일 기준) ②일별 PU × 보정계수 k(완결 3개월 MPU÷일PU합). 두 선이 벌어지면 ARPPU 이탈 신호 · 전월/전년 동기간(같은 일수) 비교",
@@ -712,6 +727,7 @@ let events = [];          // [{game,start,end,type,title,memo}]
 let eventSheetUrl = "";
 let lastSync = "";
 let viewMode = "dash";    // dash | events
+let evSort = { key: "num", dir: "desc" }; // 이벤트 효과 표 정렬 (기본: 최신 이벤트부터)
 let gameSheets = {};      // { 게임명: 구글시트 URL } — KPI 데이터 소스
 let masterSheetUrl = "";  // 메인 스프레드시트(멀티 탭) URL
 let chartOrder = [];      // 차트 패널 순서 (드래그로 변경)
@@ -750,6 +766,7 @@ function loadState() {
       masterSheetUrl = saved.masterSheetUrl || "";
       chartOrder = saved.chartOrder || [];
       lastSnapshotLoaded = saved.lastSnapshotLoaded || "";
+      if (saved.evSort && saved.evSort.key) evSort = { key: saved.evSort.key, dir: saved.evSort.dir === "asc" ? "asc" : "desc" };
       activeGame = saved.activeGame && (saved.activeGame === "ALL" || games[saved.activeGame])
         ? saved.activeGame : Object.keys(games)[0];
       return;
@@ -760,7 +777,7 @@ function loadState() {
 }
 function saveState() {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ games, target: targetPct, theme, activeGame, events, eventSheetUrl, lastSync, gameSheets, chartOrder, lastSnapshotLoaded, masterSheetUrl }));
+    localStorage.setItem(LS_KEY, JSON.stringify({ games, target: targetPct, theme, activeGame, events, eventSheetUrl, lastSync, gameSheets, chartOrder, lastSnapshotLoaded, masterSheetUrl, evSort }));
   } catch (e) {}
 }
 function toast(msg) {
@@ -1599,20 +1616,38 @@ function renderEvents() {
     return;
   }
   evPageGroups = eventGroups(evts).map((g, k) => ({ ...g, num: k + 1 }));
-  const list = [...evPageGroups].reverse(); // 최신순
+
+  // 이벤트별 행 + 정렬 키 (그룹 묶음은 유지하되 행 단위로 정렬)
+  const rows = [];
+  evPageGroups.forEach(g => {
+    const multi = g.events.length > 1;
+    g.events.forEach((e, idx) => {
+      const ctxE = groupRowsCtx({ events: [e] });          // 이벤트별 게임 컨텍스트
+      const eff = periodEffect(ctxE.rows, e.start, e.end); // 각 이벤트 자기 기간 vs 직전 동일 일수
+      rows.push({ g, e, ctxE, eff, numLabel: multi ? `${g.num}-${idx + 1}` : `${g.num}` });
+    });
+  });
+  const list = sortEvRows(rows);
+
+  const sh = (k, label, cls) => {
+    const on = evSort.key === k;
+    return `<span class="sk${on ? " on" : ""}${cls ? " " + cls : ""}" data-sk="${k}">${label}<span class="arw">${on ? (evSort.dir === "asc" ? "▲" : "▼") : "↕"}</span></span>`;
+  };
   body.innerHTML = `
     <div class="table-wrap"><table>
       <thead><tr>
-        <th>#</th><th>기간</th><th>이벤트</th><th>기준</th>
-        <th>자체결제 일평균</th><th>매출 vs 직전</th><th>비중</th><th>비중 vs 직전</th><th>PU vs 직전</th>
+        <th>${sh("num", "#")}</th>
+        <th>${sh("start", "기간")}<br>${sh("days", "일수", "sub")}</th>
+        <th>${sh("title", "이벤트")}</th>
+        <th>${sh("base", "기준")}</th>
+        <th>${sh("d2c", "자체결제 일평균")}</th>
+        <th>${sh("d2cDelta", "매출 vs 직전")}</th>
+        <th>${sh("ratio", "비중")}</th>
+        <th>${sh("ratioDelta", "비중 vs 직전")}</th>
+        <th>${sh("puDelta", "PU vs 직전")}</th>
       </tr></thead>
-      <tbody>${list.map(g => {
-        const multi = g.events.length > 1;
-        return g.events.map((e, idx) => {
-          const ctxE = groupRowsCtx({ events: [e] });      // 이벤트별 게임 컨텍스트
-          const eff = periodEffect(ctxE.rows, e.start, e.end); // 각 이벤트 자기 기간 vs 직전 동일 일수
-          const numLabel = multi ? `${g.num}-${idx + 1}` : `${g.num}`;
-          return `<tr class="ev-row" data-num="${g.num}" style="cursor:pointer" title="클릭하면 상세 보기">
+      <tbody>${list.map(({ g, e, ctxE, eff, numLabel }) =>
+        `<tr class="ev-row" data-num="${g.num}" style="cursor:pointer" title="클릭하면 상세 보기">
             <td><span class="ev-num" style="background:${typeColor(e.type)}">${numLabel}</span></td>
             <td>${mmdd(e.start)}${e.end !== e.start ? "~" + mmdd(e.end) : ""}<br><span style="color:var(--muted);font-size:11px">${eff ? eff.days + "일" : "-"}</span></td>
             <td style="text-align:left"><span class="ev-badge" style="background:${typeColor(e.type)}">${e.type}</span> ${e.title}${e.game !== "ALL" ? ` <span style="color:var(--muted);font-size:11px">[${e.game}]</span>` : ""}</td>
@@ -1622,17 +1657,53 @@ function renderEvents() {
             <td>${eff ? fmtPct(eff.cur.ratio) : "-"}</td>
             <td>${eff ? evDelta(eff.ratioDelta, "%p") : "-"}</td>
             <td>${eff ? evDelta(eff.puDelta, "%") : "-"}</td>
-          </tr>`;
-        }).join("");
-      }).join("")}</tbody>
+          </tr>`).join("")}</tbody>
     </table></div>
-    <div class="m-empty" style="margin-top:8px">행을 클릭하면 상세 내용을 볼 수 있습니다 · "vs 직전" = 이벤트 기간 평균을 직전 동일 일수 평균과 비교 · 겹치는 기간도 <b>이벤트별로 각자 기간 성과</b>를 표시(번호 6-1·6-2는 같은 차트 밴드 묶음)</div>`;
+    <div class="m-empty" style="margin-top:8px">행을 클릭하면 상세 내용을 볼 수 있습니다 · <b>표 머리글을 클릭하면 오름/내림 정렬</b>(값 없는 행은 항상 아래) · "vs 직전" = 이벤트 기간 평균을 직전 동일 일수 평균과 비교 · 겹치는 기간도 <b>이벤트별로 각자 기간 성과</b>를 표시(번호 6-1·6-2는 같은 차트 밴드 묶음)</div>`;
   body.querySelectorAll(".ev-row").forEach(tr => {
     tr.addEventListener("click", () => {
       const g = evPageGroups.find(x => x.num === Number(tr.dataset.num));
       if (g) showEventDetail(g);
     });
   });
+  body.querySelectorAll(".sk").forEach(sp => {
+    sp.addEventListener("click", ev => {
+      ev.stopPropagation();
+      const k = sp.dataset.sk;
+      if (evSort.key === k) evSort = { key: k, dir: evSort.dir === "asc" ? "desc" : "asc" };
+      else evSort = { key: k, dir: EV_SORT_TEXT.has(k) ? "asc" : "desc" };
+      saveState();
+      renderEvents();
+    });
+  });
+}
+/* 이벤트 표 정렬 — 값 없는 행(-)은 방향과 무관하게 항상 아래 */
+const EV_SORT_TEXT = new Set(["title", "base"]);
+const EV_SORT_KEY = {
+  num: r => r.g.num,   // 그룹 단위로만 정렬 → 묶음 내 순서(8-1,8-2…)는 항상 유지
+  start: r => r.e.start,
+  days: r => r.eff ? r.eff.days : null,
+  title: r => r.e.title,
+  base: r => r.ctxE.label,
+  d2c: r => r.eff ? r.eff.cur.d2c : null,
+  d2cDelta: r => r.eff ? r.eff.d2cDelta : null,
+  ratio: r => r.eff ? r.eff.cur.ratio : null,
+  ratioDelta: r => r.eff ? r.eff.ratioDelta : null,
+  puDelta: r => r.eff ? r.eff.puDelta : null
+};
+function sortEvRows(rows) {
+  const kf = EV_SORT_KEY[evSort.key] || EV_SORT_KEY.num;
+  const dir = evSort.dir === "asc" ? 1 : -1;
+  const nil = v => v == null || v === "" || (typeof v === "number" && isNaN(v));
+  return rows.map((r, i) => ({ r, i })).sort((a, b) => {
+    const va = kf(a.r), vb = kf(b.r);
+    if (nil(va) && nil(vb)) return a.i - b.i;
+    if (nil(va)) return 1;
+    if (nil(vb)) return -1;
+    const c = typeof va === "number" && typeof vb === "number"
+      ? va - vb : String(va).localeCompare(String(vb), "ko");
+    return c ? c * dir : a.i - b.i;
+  }).map(x => x.r);
 }
 
 function applyView() {
