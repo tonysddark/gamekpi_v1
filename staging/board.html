@@ -850,6 +850,11 @@ function kpiCalc(codes,m,b,bd){
   // 완결월은 실적=예상, 미래월은 실적 없음(–)이고 진행월 페이스를 예상으로 쓴다
   const am=b.actM[m], nd=am?am.days.size:0, dim=daysInMonth(m);
   const 실적 = nd? am.srev : null, 실적일수 = nd;
+  // 전체 매출 실측 — 사업계획과 같은 기준(전 채널 IAP 합)으로 비교
+  const 총실적 = nd? planActualTotal(m,bd) : null;
+  const 총예상 = (총실적!=null&&nd)? 총실적/nd*dim : null;
+  const 계획달성 = (총실적!=null&&plan)? 총실적/plan*100 : null;
+  const 계획페이스 = (총예상!=null&&plan)? 총예상/plan*100 : null;
   let 현황, 현황Tag="", 현황Tip="";
   if(fullComplete){ 현황=am.srev; 현황Tag="확정"; 현황Tip=`${+m.slice(5)}월 확정 실적 ${억(am.srev)}`; }
   else if(nd){ 현황=am.srev/nd*dim; 현황Tag=`${nd}/${dim}일 환산`;
@@ -860,11 +865,11 @@ function kpiCalc(codes,m,b,bd){
   const 부족 = 목표!=null? Math.max(0,목표-현황) : null;
   const 목표PU = (목표!=null&&A)? 목표/A : null;
   const 전환 = 목표PU!=null? Math.max(0,목표PU-b.curPU) : null;
-  return {A,plan,fullComplete,ratio,목표,실적,실적일수,현황,현황Tag,현황Tip,부족,목표PU,전환};
+  return {A,plan,fullComplete,ratio,목표,실적,실적일수,총실적,총예상,계획달성,계획페이스,현황,현황Tag,현황Tip,부족,목표PU,전환};
 }
 // 지표 셀(3번째 컬럼부터) — 프로젝트 조합/월 공용
 function kpiMetricCells(codes,m,b,bd){
-  const {A,plan,fullComplete,ratio,목표,실적,실적일수,현황,현황Tag,현황Tip,부족,목표PU,전환}=kpiCalc(codes,m,b,bd);
+  const {A,plan,fullComplete,ratio,목표,실적,실적일수,총실적,총예상,계획달성,계획페이스,현황,현황Tag,현황Tip,부족,목표PU,전환}=kpiCalc(codes,m,b,bd);
   const 남은 = (목표!=null)? Math.max(0,목표-(실적||0)) : null;   // 목표까지 실제로 남은 금액
   const ig = ingameBase(codes,b);                                       // 인게임(스토어) 결제자 = 전체−자체
   const cr = (전환!=null&&ig>0)? 전환/ig*100 : null;                     // 전환율 = 전환필요 ÷ 인게임MPU
@@ -876,6 +881,7 @@ function kpiMetricCells(codes,m,b,bd){
     (cov>=100?`<b style="color:var(--green)">달성 가능 (${cov.toFixed(1)}%)</b>`:`<b style="color:var(--peak)">추가 전략 필요 (${cov.toFixed(0)}%)</b>`));
   return `
     <td>${plan!=null?억(plan):"–"}</td>
+    <td style="font-weight:600" title="${총실적!=null?`전체 매출 실측 ${억(총실적)}(${실적일수}일)${총예상!=null?` · 페이스 예상 ${억(총예상)}`:""}${계획달성!=null?` · 사업계획 대비 ${계획달성.toFixed(0)}%`:""}${계획페이스!=null?`(페이스 ${계획페이스.toFixed(0)}%)`:""}`:"해당 월 실적 데이터 없음"}">${총실적!=null?억(총실적):"–"}${총실적!=null?` <span style="color:${계획페이스==null?'var(--muted)':계획페이스>=100?'var(--green)':'var(--peak)'};font-size:10px">${fullComplete?(계획달성!=null?계획달성.toFixed(0)+"%":"확정"):(계획페이스!=null?"페이스 "+계획페이스.toFixed(0)+"%":실적일수+"일")}</span>`:""}</td>
     <td>${ratio!=null?ratio.toFixed(0)+"%":"–"}${fullComplete?' <span style="color:var(--muted);font-size:10px">실적</span>':''}</td>
     <td style="color:var(--purple)">${목표!=null?억(목표):"–"}</td>
     <td style="font-weight:600" title="${실적!=null?`${실적일수}일 누적 실적`:"해당 월 실적 데이터 없음"}">${실적!=null?억(실적):"–"}${실적!=null&&!fullComplete?` <span style="color:var(--muted);font-size:10px">${실적일수}일</span>`:""}</td>
@@ -896,11 +902,11 @@ function renderKPI(){
   const sr=document.getElementById("stageRow"); if(sr) sr.style.display = kpiView==="game"?"flex":"none";
   if(!selCodes().length){ el.innerHTML=""; foot.textContent="프로젝트를 선택하세요."; return; }
   const months=["2026-07","2026-08","2026-09","2026-10","2026-11","2026-12"];
-  const g1=`<th>사업계획</th><th>목표 비중</th><th>목표 금액</th><th>실적(누적)</th><th>페이스 예상</th><th>부족 금액</th>`;
+  const g1=`<th>사업계획</th><th>전체 실적(누적)</th><th>목표 비중</th><th>목표 금액</th><th>자체결제 실적(누적)</th><th>페이스 예상</th><th>부족 금액</th>`;
   const g2=`<th class="grp">6월 자체결제</th><th>목표</th><th>전환 필요</th><th>미전환 풀</th><th>목표 전환율</th>`;
   const g3=`<th class="grp">우수고객 PU</th><th>가용 대상(클럽 포함)</th><th>전원 전환시 커버리지</th>`;
   // 월 ARPPU는 rowspan 독립 열 — 부족 금액까지(고정 영역)와 colspan이 겹치지 않게 분리
-  const buildHead=(c1,c2)=>`<thead><tr><th class="lbl" rowspan="2">${c1}</th><th class="lbl" rowspan="2">${c2}</th><th colspan="6">목표 · 실적</th><th rowspan="2">월 ARPPU(유지)</th><th colspan="5" class="grp">MPU (순결제자)</th><th colspan="3" class="grp">우수고객(JL)</th></tr><tr>${g1}${g2}${g3}</tr></thead>`;
+  const buildHead=(c1,c2)=>`<thead><tr><th class="lbl" rowspan="2">${c1}</th><th class="lbl" rowspan="2">${c2}</th><th colspan="7">목표 · 실적</th><th rowspan="2">월 ARPPU(유지)</th><th colspan="5" class="grp">MPU (순결제자)</th><th colspan="3" class="grp">우수고객(JL)</th></tr><tr>${g1}${g2}${g3}</tr></thead>`;
   const mpuNote = Object.keys(MPU).length? "월간 MPU(순결제자) 기준" : `<b style="color:var(--down)">PU 잠정</b>(mpu 미연동)`;
   let head, body, note;
   if(kpiView==="game"){
@@ -911,12 +917,12 @@ function renderKPI(){
       const bd=mergedByDate([c]); const b=baseStats(bd,[c]);
       return `<tr><td class="mon" style="font-weight:600">${c}</td><td class="mon" style="color:var(--peak)">${stg}</td>${kpiMetricCells([c],m,b,bd)}</tr>`;
     }).join("");
-    note=`<b>${+m.slice(5)}월 (${stg})</b> 전 게임 비교 · 게임별 유지 ARPPU 적용 · <b>실적=그 달 누적 실제 금액</b>, <b>페이스 예상=실적÷경과일×월일수(예측치)</b>${dataLagNote()}`;
+    note=`<b>${+m.slice(5)}월 (${stg})</b> 전 게임 비교 · 게임별 유지 ARPPU 적용 · <b>전체 실적=전 채널 매출 실측(사업계획과 같은 기준)</b> · <b>자체결제 실적=그 달 누적 실제 금액</b>, <b>페이스 예상=실적÷경과일×월일수(예측치)</b>${dataLagNote()}`;
   } else {
     const codes=selCodes(); const bd=mergedByDate(codes); const b=baseStats(bd,codes);
     head=buildHead("단계","월");
     body=months.map(m=>`<tr><td class="mon" style="color:var(--peak)">${STAGE[m]||""}</td><td class="mon">${+m.slice(5)}월</td>${kpiMetricCells(codes,m,b,bd)}</tr>`).join("");
-    note=`${allSelected()?"전 프로젝트 합산":selCodes().join("+")} · 실적=누적 실제 금액 / 페이스 예상=run-rate 환산${b.prog?`(${+b.prog.m.slice(5)}월 ${b.prog.n}/${b.prog.dim}일 → ${억(b.progRun)})`:""}${dataLagNote()} · 유지 ARPPU ${만(b.arppu)}원`;
+    note=`${allSelected()?"전 프로젝트 합산":selCodes().join("+")} · 전체 실적=전 채널 매출 실측(사업계획 대비 % 병기) / 자체결제 실적=누적 실제 금액 / 페이스 예상=run-rate 환산${b.prog?`(${+b.prog.m.slice(5)}월 ${b.prog.n}/${b.prog.dim}일 → ${억(b.progRun)})`:""}${dataLagNote()} · 유지 ARPPU ${만(b.arppu)}원`;
   }
   el.innerHTML=head+"<tbody>"+body+"</tbody>";
   stickyKPI();
@@ -928,13 +934,13 @@ function stickyKPI(){
   const tbl=document.getElementById("s4table");
   if(!tbl||!tbl.tHead||!tbl.tBodies.length)return;
   const br=tbl.tBodies[0].rows[0]; if(!br)return;
-  const N=8; // 고정 열 수 (라벨 2 + 사업계획~부족 금액 6)
+  const N=9; // 고정 열 수 (라벨 2 + 사업계획~부족 금액 7)
   const w=[]; for(let i=0;i<N;i++)w[i]=br.cells[i]?br.cells[i].getBoundingClientRect().width:0;
   const left=[0]; for(let i=1;i<N;i++)left[i]=left[i-1]+w[i-1];
   const set=(cell,li,end)=>{ if(!cell)return; cell.classList.add("stickCol"); cell.style.left=left[li]+"px"; if(end)cell.classList.add("stickEnd"); };
   const h0=tbl.tHead.rows[0], h1=tbl.tHead.rows[1];
   if(h0){ set(h0.cells[0],0); set(h0.cells[1],1); set(h0.cells[2],2,true); } // 라벨2(rowspan) + 목표·실적(colspan5)
-  if(h1){ for(let i=0;i<6;i++)set(h1.cells[i],i+2,i===5); }                  // 2행 헤더 = 사업계획~부족 금액
+  if(h1){ for(let i=0;i<7;i++)set(h1.cells[i],i+2,i===6); }                  // 2행 헤더 = 사업계획~부족 금액
   [...tbl.tBodies[0].rows].forEach(r=>{ for(let i=0;i<N;i++)set(r.cells[i],i,i===N-1); });
 }
 window.addEventListener("resize",()=>stickyKPI()); // 창 크기 변경 시 열 너비 재측정
