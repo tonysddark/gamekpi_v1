@@ -115,6 +115,15 @@
   .range-ctl.on input[type=date] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
   .range-ctl button { background: var(--panel); border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer; }
   .range-ctl button:hover { color: var(--text); border-color: var(--accent); }
+  /* 월 선택 · 집계 단위 토글 */
+  .month-ctl { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .month-ctl select {
+    background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 6px 9px; font-size: 12px; cursor: pointer;
+  }
+  .month-ctl.on select { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .seg.mini { width: max-content; margin: 0 0 8px; }
+  .seg.mini button { padding: 4px 11px; font-size: 11px; }
   /* KPI cards */
   .cards {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -302,6 +311,9 @@
     <button data-days="90">90일</button>
     <button data-days="0">전체</button>
   </div>
+  <div class="month-ctl" id="monthCtl" title="특정 월을 고르면 그 달 1일~말일이 기간으로 적용됩니다">
+    월 <select id="monthSel"><option value="">전체 기간</option></select>
+  </div>
   <div class="target-ctl" id="targetCtl">
     목표 비중 <input type="number" id="targetInput" value="32" min="0" max="100" step="1"> %
   </div>
@@ -333,6 +345,7 @@
   <div class="panel chart-panel" id="p-weekly">
     <div class="p-tools"><button class="p-btn drag" title="드래그로 순서 변경">⠿</button><button class="p-btn expand" title="확대 / 돌아가기">⛶</button></div>
     <h2 id="chWeeklyTitle">주별 자체결제 매출 &amp; 비중 <span>월요일 시작 주 단위 합계</span></h2>
+    <div class="seg mini" id="wkGranSeg"><button data-g="week" class="active">주별</button><button data-g="month">월별</button></div>
     <div class="chart-box"><canvas id="chWeekly"></canvas></div>
   </div>
   <div class="panel chart-panel" id="p-putrend">
@@ -351,7 +364,8 @@
 </div>
 
 <div class="panel" id="tablePanel" style="margin-top:14px">
-  <h2>일별 상세 <span>최근일부터, 선택 기간 · ★ = 피크 TOP5 / ▼ = 최저</span></h2>
+  <h2 id="tblTitle">일별 상세 <span>최근일부터, 선택 기간 · ★ = 피크 TOP5 / ▼ = 최저</span></h2>
+  <div class="seg mini" id="tblGranSeg"><button data-g="day" class="active">일별</button><button data-g="month">월별</button></div>
   <div class="table-wrap" style="max-height:420px; overflow-y:auto">
     <table id="dataTable">
       <thead><tr>
@@ -556,8 +570,14 @@ const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 �
 
 /* ================= 버전 ================= */
 /* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
-const APP_VERSION = "1.20.4";
+const APP_VERSION = "1.21.0";
 const VERSION_HISTORY = [
+  { ver: "1.21.0", date: "2026-08-31", type: "기능", changes: [
+    "메인 대시보드 월별 보기 — 상단 월 선택 드롭다운(고르면 그 달 1일~말일이 기간으로 적용), 프리셋·직접 기간 지정과 상호 배타",
+    "주별 패널에 주별/월별 토글 — 월별은 달력 월 단위 합계(게임별 스택·비중선 동일), 미완결 기간은 툴팁에 일수 표시",
+    "일별 상세 표에 일별/월별 토글 — 월별은 DAU 일평균·전체 IAP·자체결제·비중·PU 합·ARPPU·일평균 자체결제를 전월 대비 증감과 함께 표시",
+    "월 선택·집계 단위는 localStorage 저장 — 새로고침해도 유지",
+  ]},
   { ver: "1.20.4", date: "2026-08-31", type: "기능", changes: [
     "KPI 현황판 ④ 전체 실적(누적) 열 추가 — 사업계획 바로 옆에 전 채널 매출 실측을 같은 기준으로 병기, 사업계획 대비 달성률·페이스 % 배지",
     "열 이름 명확화 — 실적(누적) → 자체결제 실적(누적) (전체 매출 실적과 구분)",
@@ -743,6 +763,9 @@ let eventSheetUrl = "";
 let lastSync = "";
 let viewMode = "dash";    // dash | events
 let evSort = { key: "num", dir: "desc" }; // 이벤트 효과 표 정렬 (기본: 최신 이벤트부터)
+let selMonth = "";     // 월 선택 (YYYY-MM) — 고르면 그 달 1일~말일이 기간으로 적용
+let tblGran = "day";   // 일별 상세 표 집계 단위 (day | month)
+let wkGran = "week";   // 주별 패널 집계 단위 (week | month)
 let gameSheets = {};      // { 게임명: 구글시트 URL } — KPI 데이터 소스
 let masterSheetUrl = "";  // 메인 스프레드시트(멀티 탭) URL
 let chartOrder = [];      // 차트 패널 순서 (드래그로 변경)
@@ -782,6 +805,10 @@ function loadState() {
       chartOrder = saved.chartOrder || [];
       lastSnapshotLoaded = saved.lastSnapshotLoaded || "";
       if (saved.evSort && saved.evSort.key) evSort = { key: saved.evSort.key, dir: saved.evSort.dir === "asc" ? "asc" : "desc" };
+      selMonth = saved.selMonth || "";
+      tblGran = saved.tblGran === "month" ? "month" : "day";
+      wkGran = saved.wkGran === "month" ? "month" : "week";
+      if (selMonth) { rangeFromD = selMonth + "-01"; rangeToD = monthEndOf(selMonth); }
       activeGame = saved.activeGame && (saved.activeGame === "ALL" || games[saved.activeGame])
         ? saved.activeGame : Object.keys(games)[0];
       return;
@@ -792,7 +819,7 @@ function loadState() {
 }
 function saveState() {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ games, target: targetPct, theme, activeGame, events, eventSheetUrl, lastSync, gameSheets, chartOrder, lastSnapshotLoaded, masterSheetUrl, evSort }));
+    localStorage.setItem(LS_KEY, JSON.stringify({ games, target: targetPct, theme, activeGame, events, eventSheetUrl, lastSync, gameSheets, chartOrder, lastSnapshotLoaded, masterSheetUrl, evSort, selMonth, tblGran, wkGran }));
   } catch (e) {}
 }
 function toast(msg) {
@@ -839,6 +866,23 @@ function weekKey(dateStr) {
   d.setDate(d.getDate() - (d.getDay() + 6) % 7); // 월요일로
   // 로컬 기준으로 포맷 (toISOString은 UTC 변환으로 KST에서 하루 앞당겨짐)
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+const monthEndOf = ym => { const [y, m] = ym.split("-").map(Number); return ym + "-" + String(new Date(y, m, 0).getDate()).padStart(2, "0"); };
+const daysOfMonth = ym => { const [y, m] = ym.split("-").map(Number); return new Date(y, m, 0).getDate(); };
+/* 보유 데이터에 존재하는 월 (최신순) */
+function monthsAvailable() {
+  const s = new Set(); currentSorted().forEach(r => s.add(r.date.slice(0, 7)));
+  return [...s].sort().reverse();
+}
+/* 월 단위 합계 — weeklyAgg 와 같은 형태(+pu·dau) */
+function monthlyAgg(rows) {
+  const o = {};
+  rows.forEach(r => {
+    const k = r.date.slice(0, 7);
+    const t = o[k] = o[k] || { iap: 0, d2c: 0, pu: 0, dau: 0, days: 0 };
+    t.iap += r.iap; t.d2c += r.d2c; t.pu += (r.pu || 0); t.dau += (r.dau || 0); t.days++;
+  });
+  return o;
 }
 function weeklyAgg(rows) {
   const weeks = {};
@@ -1423,17 +1467,22 @@ function renderCharts() {
     })
   });
 
-  /* ---- 4. 주별 ---- */
+  /* ---- 4. 주별 / 월별 (토글) ---- */
+  const wkAgg = wkGran === "month" ? monthlyAgg : weeklyAgg;
+  const wkLabelOf = k => wkGran === "month" ? (+k.slice(5)) + "월" : mmdd(k) + "주";
+  const wkUnit = wkGran === "month" ? "월별" : "주별";
+  const wkSub = wkGran === "month" ? "달력 월 단위 합계 · 선택 기간 안의 월만 (여러 달을 보려면 상단 기간을 전체/90일로)" : "월요일 시작 주 단위 합계";
+  const wkFullDays = k => wkGran === "month" ? daysOfMonth(k) : 7;
   let wkLabels, wkDatasets, wkMeta;
   if (isAll) {
     document.getElementById("chWeeklyTitle").innerHTML =
-      '주별 게임별 자체결제 매출 &amp; 전체 비중 <span>월요일 시작 주 단위 합계</span>';
+      `${wkUnit} 게임별 자체결제 매출 &amp; 전체 비중 <span>${wkSub}</span>`;
     const perGame = {};
     gameNames.forEach(g => {
       const inRange = sortedRows(games[g] || []).filter(r => dateIdx[r.date] != null);
-      perGame[g] = weeklyAgg(inRange);
+      perGame[g] = wkAgg(inRange);
     });
-    const totalWk = weeklyAgg(rows);
+    const totalWk = wkAgg(rows);
     wkLabels = Object.keys(totalWk).sort();
     wkMeta = wkLabels.map(k => totalWk[k]);
     wkDatasets = [
@@ -1446,19 +1495,19 @@ function renderCharts() {
     ];
   } else {
     document.getElementById("chWeeklyTitle").innerHTML =
-      '주별 자체결제 매출 &amp; 비중 <span>월요일 시작 주 단위 합계</span>';
-    const wk = weeklyAgg(rows);
+      `${wkUnit} 자체결제 매출 &amp; 비중 <span>${wkSub}</span>`;
+    const wk = wkAgg(rows);
     wkLabels = Object.keys(wk).sort();
     wkMeta = wkLabels.map(k => wk[k]);
     wkDatasets = [
-      { type: "line", label: "주간 비중(%)", data: wkLabels.map(k => wk[k].iap ? wk[k].d2c / wk[k].iap * 100 : null),
+      { type: "line", label: (wkGran === "month" ? "월간" : "주간") + " 비중(%)", data: wkLabels.map(k => wk[k].iap ? wk[k].d2c / wk[k].iap * 100 : null),
         yAxisID: "y2", borderColor: cssVar("--accent-2"), borderWidth: 2, pointRadius: 3, tension: .3 },
-      { type: "bar", label: "주간 자체결제 매출", data: wkLabels.map(k => wk[k].d2c),
+      { type: "bar", label: (wkGran === "month" ? "월간" : "주간") + " 자체결제 매출", data: wkLabels.map(k => wk[k].d2c),
         yAxisID: "y", backgroundColor: cssVar("--accent"), borderRadius: 3, maxBarThickness: 46 },
     ];
   }
   charts.weekly = new Chart(document.getElementById("chWeekly"), {
-    data: { labels: wkLabels.map(k => mmdd(k) + "주"), datasets: wkDatasets },
+    data: { labels: wkLabels.map(wkLabelOf), datasets: wkDatasets },
     options: baseOpts(th, {
       scales: {
         x: { grid: { display: false } },
@@ -1467,7 +1516,8 @@ function renderCharts() {
       },
       plugins: { tooltip: { callbacks: {
         label: wonTip,
-        afterBody: items => { const m = wkMeta[items[0].dataIndex]; return m && m.days < 7 ? `(${m.days}일치 데이터)` : ""; }
+        afterBody: items => { const i = items[0].dataIndex, m = wkMeta[i];
+          return m && m.days < wkFullDays(wkLabels[i]) ? `(${m.days}일치 데이터 — 기간 미완결)` : ""; }
       } } }
     })
   });
@@ -1547,7 +1597,42 @@ function renderCharts() {
 }
 
 /* ================= 테이블 ================= */
+/* 월 선택 드롭다운 — 보유 데이터의 월 목록으로 채운다 */
+function renderMonthSel() {
+  const sel = document.getElementById("monthSel");
+  if (!sel) return;
+  const ms = monthsAvailable();
+  if (selMonth && !ms.includes(selMonth)) selMonth = "";   // 게임 전환 등으로 없는 월이면 해제
+  sel.innerHTML = `<option value="">전체 기간</option>` +
+    ms.map(m => `<option value="${m}"${m === selMonth ? " selected" : ""}>${m.slice(0, 4)}년 ${+m.slice(5)}월</option>`).join("");
+  document.getElementById("monthCtl").classList.toggle("on", !!selMonth);
+}
+/* 월 선택 적용 — 그 달 1일~말일을 커스텀 기간으로 넣는다 */
+function applyMonth(ym) {
+  selMonth = ym || "";
+  if (selMonth) { rangeFromD = selMonth + "-01"; rangeToD = monthEndOf(selMonth); }
+  else { rangeFromD = rangeToD = ""; }
+  document.getElementById("rangeFrom").value = rangeFromD;
+  document.getElementById("rangeTo").value = rangeToD;
+  document.getElementById("rangeCtl").classList.toggle("on", customRange());
+  document.querySelectorAll("#rangeSeg button").forEach(x =>
+    x.classList.toggle("active", !customRange() && Number(x.dataset.days) === rangeDays));
+  saveState();
+  renderMonthSel();
+  renderHeader();
+  renderCards();
+  renderCharts();
+  renderTable();
+}
 function renderTable() {
+  const gseg = document.getElementById("tblGranSeg");
+  if (gseg) gseg.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.g === tblGran));
+  if (tblGran === "month") return renderTableMonthly();
+  document.getElementById("tblTitle").innerHTML =
+    "일별 상세 <span>최근일부터, 선택 기간 · ★ = 피크 TOP5 / ▼ = 최저</span>";
+  document.querySelector("#dataTable thead").innerHTML = `<tr>
+    <th>날짜</th><th>DAU</th><th>전체 IAP 매출</th><th>자체결제 매출</th>
+    <th>비중</th><th>PU</th><th>ARPPU</th><th>ARPDAU</th></tr>`;
   const rows = ranged();
   const peakDates = new Set(topNOf(rows, r => r.d2c).map(t => t.date));
   const low = minOf(rows, r => r.d2c);
@@ -1564,6 +1649,44 @@ function renderTable() {
       <td>${fmtNum(r.arppu)}</td>
       <td>${r.arpdau != null ? Number(r.arpdau).toLocaleString() : "-"}</td>
     </tr>`).join("");
+}
+/* 월별 집계 표 — 선택 기간 안의 월을 최신순으로, 전월 대비 증감 포함 */
+function renderTableMonthly() {
+  document.getElementById("tblTitle").innerHTML =
+    "월별 상세 <span>최신 월부터, 선택 기간 · 작은 숫자는 전월 대비 · 미완결 월은 일수 표시</span>";
+  document.querySelector("#dataTable thead").innerHTML = `<tr>
+    <th>월</th><th>DAU(일평균)</th><th>전체 IAP 매출</th><th>자체결제 매출</th>
+    <th>비중</th><th>PU(합)</th><th>ARPPU</th><th>일평균 자체결제</th></tr>`;
+  const agg = monthlyAgg(ranged());
+  const keys = Object.keys(agg).sort();            // 오름차순으로 전월비 계산 후 뒤집는다
+  const tgt = targetPct / 100;
+  const dlt = (cur, prev) => {
+    if (prev == null || !prev || cur == null) return "";
+    const v = (cur / prev - 1) * 100;
+    const c = v > 0.05 ? "var(--up)" : v < -0.05 ? "var(--down)" : "var(--muted)";
+    return ` <span style="color:${c};font-size:11px">${v > 0 ? "+" : ""}${v.toFixed(1)}%</span>`;
+  };
+  const html = keys.map((k, i) => {
+    const m = agg[k], p = i > 0 ? agg[keys[i - 1]] : null;
+    const ratio = m.iap ? m.d2c / m.iap : null;
+    const pRatio = p && p.iap ? p.d2c / p.iap : null;
+    const arppu = m.pu ? m.d2c / m.pu : null;
+    const pArppu = p && p.pu ? p.d2c / p.pu : null;
+    const full = m.days >= daysOfMonth(k);
+    const rDlt = (pRatio != null && ratio != null)
+      ? ` <span style="color:var(--muted);font-size:11px">${ratio - pRatio > 0 ? "+" : ""}${((ratio - pRatio) * 100).toFixed(1)}%p</span>` : "";
+    return `<tr>
+      <td><b>${k.slice(0, 4)}.${k.slice(5)}</b>${full ? "" : ` <span style="color:var(--muted);font-size:11px">${m.days}일</span>`}</td>
+      <td>${m.days ? fmtNum(m.dau / m.days) : "-"}</td>
+      <td>${fmtNum(m.iap)}${dlt(m.iap, p && p.iap)}</td>
+      <td>${fmtNum(m.d2c)}${dlt(m.d2c, p && p.d2c)}</td>
+      <td class="${ratio >= tgt ? "ok" : "no"}">${fmtPct(ratio)}${rDlt}</td>
+      <td>${fmtNum(m.pu)}${dlt(m.pu, p && p.pu)}</td>
+      <td>${arppu != null ? fmtNum(arppu) : "-"}${dlt(arppu, pArppu)}</td>
+      <td>${m.days ? fmtNum(m.d2c / m.days) : "-"}</td>
+    </tr>`;
+  }).reverse().join("");
+  document.querySelector("#dataTable tbody").innerHTML = html;
 }
 
 /* ================= 탭 & 헤더 ================= */
@@ -1609,8 +1732,12 @@ function renderTabs() {
 function renderHeader() {
   document.getElementById("gameName").textContent = activeGame === "ALL" ? "전체 게임" : activeGame;
   const s = currentSorted();
-  document.getElementById("periodLabel").textContent = s.length
-    ? `${s[0].date} ~ ${s[s.length - 1].date} · ${s.length}일` : "";
+  // 라벨은 "지금 보고 있는 구간" — 월/기간을 고르면 그 구간, 아니면 프리셋이 자른 구간
+  const r = ranged();
+  document.getElementById("periodLabel").textContent = r.length
+    ? `${r[0].date} ~ ${r[r.length - 1].date} · ${r.length}일` +
+      (selMonth ? ` · ${+selMonth.slice(5)}월` : customRange() ? " · 기간 지정" : rangeDays > 0 ? ` · 최근 ${rangeDays}일` : " · 전체")
+    : "";
   // 커스텀 기간 입력의 선택 가능 범위 = 보유 데이터 범위
   if (s.length) {
     const f = document.getElementById("rangeFrom"), t = document.getElementById("rangeTo");
@@ -1727,6 +1854,7 @@ function applyView() {
   document.getElementById("chartsGrid").style.display = dash ? "" : "none";
   document.getElementById("tablePanel").style.display = dash ? "" : "none";
   document.getElementById("rangeSeg").style.display = dash ? "" : "none";
+  document.getElementById("monthCtl").style.display = dash ? "" : "none";
   document.getElementById("targetCtl").style.display = dash ? "" : "none";
   document.getElementById("eventsPanel").style.display = dash ? "none" : "";
   document.querySelectorAll("#viewSeg button").forEach(b =>
@@ -1736,6 +1864,7 @@ function applyView() {
 function renderAll() {
   renderHeader();
   renderTabs();
+  renderMonthSel();
   renderCards();
   renderCharts();
   renderTable();
@@ -2170,11 +2299,13 @@ document.querySelectorAll("#rangeSeg button").forEach(b => {
     document.querySelectorAll("#rangeSeg button").forEach(x => x.classList.remove("active"));
     b.classList.add("active");
     rangeDays = Number(b.dataset.days);
-    // 프리셋 선택 시 커스텀 기간 해제
+    // 프리셋 선택 시 커스텀 기간·월 선택 해제
     rangeFromD = rangeToD = "";
+    selMonth = ""; renderMonthSel();
     document.getElementById("rangeFrom").value = "";
     document.getElementById("rangeTo").value = "";
     document.getElementById("rangeCtl").classList.remove("on");
+    renderHeader();
     renderCards();
     renderCharts();
     renderTable();
@@ -2185,10 +2316,14 @@ document.querySelectorAll("#rangeSeg button").forEach(b => {
 function applyCustomRange() {
   rangeFromD = document.getElementById("rangeFrom").value || "";
   rangeToD = document.getElementById("rangeTo").value || "";
+  // 날짜를 직접 건드리면 월 선택 해제 (그 달 전체와 정확히 같으면 유지)
+  if (selMonth && !(rangeFromD === selMonth + "-01" && rangeToD === monthEndOf(selMonth))) { selMonth = ""; renderMonthSel(); }
+  saveState();
   const on = customRange();
   document.getElementById("rangeCtl").classList.toggle("on", on);
   document.querySelectorAll("#rangeSeg button").forEach(x =>
     x.classList.toggle("active", !on && Number(x.dataset.days) === rangeDays));
+  renderHeader();
   renderCards();
   renderCharts();
   renderTable();
@@ -2198,7 +2333,29 @@ document.getElementById("rangeTo").addEventListener("change", applyCustomRange);
 document.getElementById("rangeClear").addEventListener("click", () => {
   document.getElementById("rangeFrom").value = "";
   document.getElementById("rangeTo").value = "";
+  selMonth = "";
   applyCustomRange();
+  renderMonthSel();
+});
+
+/* 월 선택 — 고른 달의 1일~말일을 기간으로 적용 */
+document.getElementById("monthSel").addEventListener("change", e => applyMonth(e.target.value));
+
+/* 집계 단위 토글 — 주별/월별 차트, 일별/월별 표 */
+document.querySelectorAll("#wkGranSeg button").forEach(b => {
+  b.addEventListener("click", () => {
+    wkGran = b.dataset.g;
+    document.querySelectorAll("#wkGranSeg button").forEach(x => x.classList.toggle("active", x === b));
+    saveState();
+    renderCharts();
+  });
+});
+document.querySelectorAll("#tblGranSeg button").forEach(b => {
+  b.addEventListener("click", () => {
+    tblGran = b.dataset.g;
+    saveState();
+    renderTable();
+  });
 });
 
 /* 목표 비중 */
