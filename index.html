@@ -263,6 +263,9 @@
     font-size: 11px; font-weight: 700; vertical-align: middle;
   }
   #eventsBody .m-empty { padding: 16px 4px; font-size: 13px; }
+  /* 임베드 모드(?embed=1) — 헤더·탭·컨트롤을 숨겨 섹션만 노출 (커스텀 보드·노션용) */
+  html.embed body { padding: 0; }
+  html.embed header, html.embed .tabs, html.embed .controls, html.embed .footer-note { display: none !important; }
   /* 정렬 가능한 표 헤더 */
   .sk {
     display: inline-flex; align-items: center; gap: 2px; cursor: pointer;
@@ -286,6 +289,7 @@
   <a class="btn" href="board.html" style="text-decoration:none" title="자체결제 KPI 현황판 (필터·매출 추이·단계별 KPI)">🗂️ KPI 현황판</a>
   <a class="btn" href="kpi-planner.html" style="text-decoration:none" title="자체결제 안착 KPI 플래너">🎯 KPI 플래너</a>
   <a class="btn" href="overview.html" style="text-decoration:none" title="프로젝트별 ARPPU·PU 전사 비교">📊 전사 비교</a>
+  <a class="btn" href="custom.html" style="text-decoration:none" title="필요한 섹션만 골라 담는 커스텀 보드">🧩 커스텀 보드</a>
   <a class="btn" id="reportLink" href="report.html" style="text-decoration:none" title="리포트 위젯 (요약·추이·채널·월별·TOP·일별 트래킹)" onclick="try{var s=JSON.parse(localStorage.getItem('d2c-dashboard-v2'))||{};var g=(s.activeGame&&s.activeGame!=='ALL')?s.activeGame:'';var q=[];if(s.masterSheetUrl)q.push('sheet='+encodeURIComponent(s.masterSheetUrl));if(g)q.push('game='+encodeURIComponent(g));location.href='report.html'+(q.length?'?'+q.join('&'):'');return false;}catch(e){return true;}">📋 리포트 위젯</a>
   <a class="btn" href="upload.html" style="text-decoration:none" title="다운로드한 KPI 엑셀 → 시트 자동 반영">📥 시트 업데이트</a>
   <a class="btn" href="guide.html" style="text-decoration:none" title="사용 가이드">📖 가이드</a>
@@ -570,10 +574,17 @@ const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 �
 
 /* ================= 버전 ================= */
 /* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
-const APP_VERSION = "1.23.1";
+const APP_VERSION = "1.24.0";
 const VERSION_HISTORY = [
+  { ver: "1.24.0", date: "2026-08-31", type: "기능", changes: [
+    "커스텀 보드(custom.html) 신규 — 여러 페이지에 흩어진 섹션을 한 화면에 골라 담는 조립 화면. KPI 현황판 7개 섹션 + 리포트 위젯 9개 + 전체 페이지 3개(전사 비교·플래너·이벤트 효과) 중 선택",
+    "섹션별 게임·높이·너비(1/2열) 개별 지정, 드래그·▲▼로 순서 변경, 열 수(1/2/3)·밤낮 모드, 프리셋 3종(경영 보고용·일일 점검용·이벤트 분석용)",
+    "구성은 localStorage 저장 + 🔗 URL 박제(?w=섹션~게임~높이~너비,…&cols&theme) — 다른 PC·노션에서 같은 화면 · 섹션은 화면에 보일 때 불러오는 지연 로드, ⤓ 전체 불러오기 버튼 제공",
+    "메인 대시보드 임베드 파라미터 추가 — ?view=events(이벤트 효과 페이지)·?embed=1(헤더·필터 숨김)·?theme=",
+  ]},
   { ver: "1.23.1", date: "2026-08-31", type: "기능", changes: [
     "전사 비교 게임별 월별 상세에 매출 열 추가 — 월 다음에 전체 매출 · 자체결제 매출, '채널 분해' 토글로 ㄴWEB/APK/PC(자체결제 대비 % 병기) 열 확장",
+    "메인 대시보드 임베드 파라미터 — ?view=events(이벤트 효과 페이지) · ?embed=1(헤더·필터 숨김) · ?theme= 지원 (커스텀 보드·노션 임베드용)",
     "채널 분해 상태는 localStorage 유지 — 프로젝트를 바꾸거나 전체 비교를 다녀와도 보존",
   ]},
   { ver: "1.23.0", date: "2026-08-31", type: "기능", changes: [
@@ -2609,6 +2620,15 @@ document.getElementById("eventModal").addEventListener("click", e => {
 
 /* 시작 */
 loadState();
+/* 임베드/뷰 파라미터 — ?view=events 이면 이벤트 효과 페이지로, ?embed=1 이면 머리말·필터 숨김 */
+(function(){
+  try{
+    const q = new URLSearchParams(location.search);
+    const v = q.get("view"); if(v === "events" || v === "dash") viewMode = v;
+    if(q.get("embed") === "1") document.documentElement.classList.add("embed");
+    const t = q.get("theme"); if(t === "dark" || t === "light") theme = t;
+  }catch(e){}
+})();
 applyTheme();
 applyChartOrder();
 document.getElementById("targetInput").value = targetPct;

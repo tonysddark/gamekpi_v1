@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>커스텀 보드</title>
+<script src="assets/gsheet.js"></script>
+<style>
+  :root{ --bg:#f6f7fb; --card:#fff; --card2:#f1f3f9; --bd:#e6e9f0; --tx:#1c2333; --mut:#6b7688;
+    --accent:#2f6fed; --purple:#7c53e6; --green:#0f9d6e; --peak:#d97706; --down:#dc2626; }
+  :root[data-theme="dark"]{ --bg:#0f1420; --card:#1a2132; --card2:#151c2b; --bd:#2c3752; --tx:#e8ecf5; --mut:#8b96ad;
+    --accent:#4f8cff; --purple:#c084fc; --green:#34d399; --peak:#fbbf24; --down:#f87171; }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Pretendard','Malgun Gothic',-apple-system,sans-serif;background:var(--bg);color:var(--tx);padding:14px 16px 60px}
+  a{color:var(--accent);text-decoration:none}
+  /* 헤더 */
+  header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  h1{font-size:19px;letter-spacing:-.3px}
+  h1 span{color:var(--accent)}
+  .sub{font-size:12px;color:var(--mut)}
+  .nav{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+  .btn{background:var(--card);border:1px solid var(--bd);color:var(--tx);border-radius:9px;padding:6px 11px;font-size:12px;cursor:pointer;white-space:nowrap}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .btn.primary:hover{color:#fff;opacity:.92}
+  .btn.warn:hover{border-color:var(--down);color:var(--down)}
+  /* 툴바 */
+  .bar{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;display:flex;
+    align-items:center;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-bottom:12px}
+  .bar b{color:var(--tx)}
+  .seg{display:inline-flex;border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+  .seg button{background:transparent;border:none;color:var(--mut);padding:5px 10px;font-size:11.5px;cursor:pointer}
+  .seg button.active{background:var(--accent);color:#fff;font-weight:600}
+  select{background:var(--card);border:1px solid var(--bd);color:var(--tx);padding:5px 8px;border-radius:8px;font-size:12px}
+  /* 그리드 */
+  #grid{display:grid;gap:12px}
+  .cell{background:var(--card);border:1px solid var(--bd);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+  .cell.drag{opacity:.45;outline:2px dashed var(--accent)}
+  .cell-h{display:flex;align-items:center;gap:7px;padding:8px 10px;border-bottom:1px solid var(--bd);background:var(--card2);flex-wrap:wrap}
+  .cell-h .t{font-size:12.5px;font-weight:700}
+  .cell-h .g{font-size:10.5px;color:#fff;background:var(--accent);border-radius:6px;padding:1px 6px;font-weight:600}
+  .cell-h .src{font-size:10.5px;color:var(--mut);border:1px solid var(--bd);border-radius:6px;padding:1px 6px}
+  .cell-h .tools{margin-left:auto;display:flex;gap:4px}
+  .ic{background:transparent;border:1px solid var(--bd);color:var(--mut);border-radius:7px;padding:2px 7px;font-size:11px;cursor:pointer;line-height:1.5}
+  .ic:hover{color:var(--accent);border-color:var(--accent)}
+  .ic.del:hover{color:var(--down);border-color:var(--down)}
+  .ic.mv{cursor:grab}
+  .cell-cfg{display:none;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bd);flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--mut)}
+  .cell.open .cell-cfg{display:flex}
+  .cell iframe{width:100%;border:0;display:block;background:transparent}
+  .ph{padding:26px 10px;text-align:center;color:var(--mut);font-size:12px}
+  /* 빈 상태 */
+  .empty{background:var(--card);border:1px dashed var(--bd);border-radius:14px;padding:34px 20px;text-align:center;color:var(--mut);font-size:13px;line-height:1.9}
+  .empty b{color:var(--tx)}
+  .presets{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px}
+  /* 카탈로그 모달 */
+  .ov{position:fixed;inset:0;background:rgba(10,14,24,.62);z-index:50;display:none;align-items:center;justify-content:center;padding:18px}
+  .ov.on{display:flex}
+  .modal{background:var(--card);border:1px solid var(--bd);border-radius:14px;width:min(720px,100%);max-height:86vh;display:flex;flex-direction:column}
+  .modal h3{font-size:15px;padding:15px 18px 11px;border-bottom:1px solid var(--bd)}
+  .modal h3 small{font-weight:400;color:var(--mut);font-size:12px;margin-left:6px}
+  .mbody{padding:12px 18px;overflow-y:auto}
+  .mfoot{padding:11px 18px;border-top:1px solid var(--bd);display:flex;gap:8px;justify-content:flex-end}
+  .grp-t{font-size:11.5px;color:var(--mut);margin:12px 0 7px;font-weight:600}
+  .grp-t:first-child{margin-top:0}
+  .pick{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px}
+  .pk{border:1px solid var(--bd);border-radius:10px;padding:9px 11px;cursor:pointer;background:var(--card2)}
+  .pk:hover{border-color:var(--accent)}
+  .pk .n{font-size:12.5px;font-weight:600}
+  .pk .d{font-size:11px;color:var(--mut);margin-top:3px;line-height:1.45}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--accent);
+    color:var(--tx);padding:9px 18px;border-radius:10px;font-size:12.5px;z-index:99;opacity:0;transition:opacity .3s;pointer-events:none}
+  .toast.on{opacity:1}
+  .foot{color:var(--mut);font-size:11.5px;margin-top:18px;line-height:1.7}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🧩 <span>커스텀</span> 보드</h1>
+  <span class="sub" id="sub">필요한 섹션만 골라 한 화면에</span>
+  <div class="nav">
+    <button class="btn" id="addBtn">➕ 섹션 추가</button>
+    <button class="btn" id="loadAllBtn" title="스크롤을 기다리지 않고 담은 섹션을 전부 불러옵니다 (인쇄·캡처용)">⤓ 전체 불러오기</button>
+    <button class="btn" id="linkBtn" title="지금 구성을 링크에 담아 복사 — 다른 PC·노션에서 같은 화면">🔗 URL</button>
+    <button class="btn" id="themeBtn" title="밤/낮 모드">🌙</button>
+    <button class="btn warn" id="clearBtn">초기화</button>
+    <a class="btn" href="index.html">📊 대시보드</a>
+    <a class="btn" href="board.html">🗂️ KPI 현황판</a>
+    <a class="btn" href="overview.html">📈 전사 비교</a>
+  </div>
+</header>
+
+<div class="bar">
+  <span>기본 게임 <select id="gameSel"></select></span>
+  <span>열 <span class="seg" id="colSeg">
+    <button data-c="1">1</button><button data-c="2" class="active">2</button><button data-c="3">3</button>
+  </span></span>
+  <span id="sheetState"></span>
+  <span style="margin-left:auto">섹션 카드의 <b>⚙</b> 로 게임·높이·너비를 개별 지정하고, <b>⣿</b> 를 끌어 순서를 바꿉니다</span>
+</div>
+
+<div id="grid"></div>
+<div class="empty" id="empty" style="display:none">
+  아직 담은 섹션이 없습니다. <b>➕ 섹션 추가</b> 로 원하는 섹션을 고르세요.<br>
+  KPI 현황판 7개 · 리포트 위젯 9개 · 전체 페이지 3개 중에서 골라 담을 수 있습니다.
+  <div class="presets">
+    <button class="btn primary" data-preset="exec">경영 보고용 담기</button>
+    <button class="btn" data-preset="daily">일일 점검용 담기</button>
+    <button class="btn" data-preset="event">이벤트 분석용 담기</button>
+  </div>
+</div>
+
+<div class="foot" id="foot"></div>
+
+<div class="ov" id="ov">
+  <div class="modal">
+    <h3>섹션 추가 <small>클릭하면 보드 맨 아래에 담깁니다</small></h3>
+    <div class="mbody" id="mbody"></div>
+    <div class="mfoot"><button class="btn" id="ovClose">닫기</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ===================================================================
+   커스텀 보드 — 다른 페이지의 섹션을 iframe 으로 골라 담는 조립 화면
+   · KPI 현황판(board.html) 섹션은 ?sec= 단독 임베드를 그대로 사용
+   · 리포트 위젯(report.html)은 ?view= 임베드 모드를 사용
+   · 데이터는 각 iframe 이 시트에서 직접 읽는다 (이 페이지는 데이터를 다루지 않음)
+   =================================================================== */
+const qp = new URLSearchParams(location.search);
+const CODES = (window.GSheet && GSheet.KNOWN_CODES) ? GSheet.KNOWN_CODES.slice() : [];
+
+/* 시트 URL — ?sheet= > 대시보드 저장값 > 플래너 저장값 */
+function sheetUrl(){
+  const s = qp.get("sheet"); if(s) return s.trim();
+  const id = qp.get("sid"); if(id) return "https://docs.google.com/spreadsheets/d/"+id.trim();
+  try{ const j=JSON.parse(localStorage.getItem("d2c-dashboard-v2")); if(j&&j.masterSheetUrl) return j.masterSheetUrl; }catch(e){}
+  return localStorage.getItem("kpiplanner-sheet") || "";
+}
+const SHEET = sheetUrl();
+
+/* 담을 수 있는 섹션 목록 — h=기본 높이(px), w=기본 너비(1|2 열), game=게임 지정 의미 있음 */
+const CATALOG = [
+  { g:"KPI 현황판 (board)", items:[
+    { id:"b:cards",     name:"요약 카드",        d:"전체·자체결제·WEB/APK/PC 합계",         h:250, w:2, game:1 },
+    { id:"b:chart",     name:"매출 추이",         d:"채널 스택 + 비중선 + 우측 정보 패널",     h:560, w:2, game:1 },
+    { id:"b:kpi",       name:"단계별 KPI",        d:"목표·실적·부족·MPU·우수고객 (기준 탭)",   h:520, w:2, game:1 },
+    { id:"b:strategy",  name:"추가 전략 KPI",      d:"목표 부족분 충당 waterfall",            h:620, w:2, game:1 },
+    { id:"b:milestone", name:"월별 마일스톤",      d:"하반기 액션 로드맵 카드",               h:360, w:2, game:1 },
+    { id:"b:monthly",   name:"월간 지표",          d:"MPU·자체 전환율·ARPPU",                h:560, w:2, game:1 },
+    { id:"b:daily",     name:"KPI 일별 트래킹",     d:"매출·MPU 목표 페이스 (탭 4개)",         h:640, w:2, game:1 },
+  ]},
+  { g:"리포트 위젯 (report)", items:[
+    { id:"r:summary", name:"요약 KPI",       d:"기간 합계 카드",              h:250, w:1, game:1, needGame:1 },
+    { id:"r:trend",   name:"추이",           d:"매출 + 비중 일별",            h:360, w:1, game:1, needGame:1 },
+    { id:"r:channel", name:"채널",           d:"WEB·APK·PC 비교",            h:360, w:1, game:1, needGame:1 },
+    { id:"r:monthly", name:"월별 (리포트)",   d:"월 단위 매출·비중",           h:400, w:1, game:1, needGame:1 },
+    { id:"r:top",     name:"TOP",            d:"상위 일자",                  h:360, w:1, game:1, needGame:1 },
+    { id:"r:target",  name:"KPI 목표",        d:"목표 대비 진척",              h:400, w:1, game:1, needGame:1 },
+    { id:"r:daily",   name:"일별 트래킹 (리포트)", d:"일 목표 페이스",          h:420, w:1, game:1, needGame:1 },
+    { id:"r:events",  name:"이벤트",          d:"기간 내 이벤트 효과",          h:400, w:1, game:1, needGame:1 },
+    { id:"r:country", name:"국가별",          d:"국가 매출 분포",              h:400, w:1, game:1, needGame:1 },
+  ]},
+  { g:"전체 페이지", items:[
+    { id:"p:overview", name:"전사 비교",       d:"프로젝트별 ARPPU·PU·매출",   h:760, w:2 },
+    { id:"p:planner",  name:"KPI 플래너",      d:"하반기 목표 시뮬레이터",      h:780, w:2 },
+    { id:"p:events",   name:"이벤트 효과 분석", d:"메인 대시보드 이벤트 페이지",  h:640, w:2 },
+  ]},
+];
+const DEF = {}; CATALOG.forEach(g=>g.items.forEach(i=>DEF[i.id]=i));
+
+/* 프리셋 — 자주 쓰는 조합 */
+const PRESETS = {
+  exec:  ["b:cards","b:kpi","b:chart","b:monthly"],
+  daily: ["b:cards","b:daily","b:chart","r:trend"],
+  event: ["p:events","b:chart","r:events","b:cards"],
+};
+
+/* ===== 상태 ===== */
+const LS = "custom-board-v1";
+let items = [];              // [{id, game, h, w}]
+let cols = 2;
+let baseGame = "";           // 기본 게임 (빈 값 = 전체 프로젝트)
+let theme = "dark";
+
+function load(){
+  // URL 우선 — 공유 링크로 열면 그 구성 그대로
+  const w = qp.get("w");
+  if(w){
+    items = w.split(",").filter(Boolean).map(s=>{
+      const [id,game,h,wd] = s.split("~");
+      if(!DEF[id]) return null;
+      return { id, game: game||"", h: +h||DEF[id].h, w: +wd||DEF[id].w };
+    }).filter(Boolean);
+    cols = +qp.get("cols") || 2;
+    baseGame = qp.get("proj") || "";
+    theme = qp.get("theme") || localStorage.getItem("board-theme") || "dark";
+    return;
+  }
+  try{
+    const s = JSON.parse(localStorage.getItem(LS));
+    if(s){
+      items = (s.items||[]).filter(x=>DEF[x.id]);
+      cols = s.cols || 2;
+      baseGame = s.baseGame || "";
+    }
+  }catch(e){}
+  theme = localStorage.getItem("board-theme") || "dark";
+}
+function save(){
+  try{ localStorage.setItem(LS, JSON.stringify({items, cols, baseGame})); }catch(e){}
+}
+
+/* ===== 렌더 ===== */
+function iframeSrc(it){
+  const d = DEF[it.id];
+  const [src, key] = it.id.split(":");
+  const game = it.game || baseGame;
+  const p = new URLSearchParams();
+  if(SHEET) p.set("sheet", SHEET);
+  p.set("theme", theme);
+  if(src === "b"){
+    p.set("sec", key);
+    if(game) p.set("proj", game);
+    return "board.html?" + p.toString();
+  }
+  if(src === "r"){
+    p.set("view", key);
+    p.set("game", game || CODES[0] || "POTC");   // 리포트 위젯은 game 필수
+    p.set("period", "30");
+    p.set("wid", "cb-" + key + "-" + (game||"base"));
+    return "report.html?" + p.toString();
+  }
+  if(it.id === "p:overview") return "overview.html?" + p.toString();
+  if(it.id === "p:planner")  return "kpi-planner.html?" + p.toString();
+  if(it.id === "p:events"){ p.set("view","events"); p.set("embed","1"); return "index.html?" + p.toString(); }
+  return "about:blank";
+}
+
+function render(){
+  document.documentElement.dataset.theme = theme;
+  document.getElementById("themeBtn").textContent = theme === "dark" ? "🌙" : "☀️";
+  document.getElementById("grid").style.gridTemplateColumns = `repeat(${cols}, minmax(0,1fr))`;
+  document.querySelectorAll("#colSeg button").forEach(b=>b.classList.toggle("active", +b.dataset.c===cols));
+  document.getElementById("empty").style.display = items.length ? "none" : "";
+  document.getElementById("sheetState").innerHTML = SHEET
+    ? `시트 연결됨 · 각 섹션이 직접 읽습니다`
+    : `<b style="color:var(--down)">연결된 시트가 없습니다</b> — 대시보드/현황판에서 시트를 먼저 연결하세요`;
+
+  const grid = document.getElementById("grid");
+  grid.innerHTML = items.map((it,i)=>{
+    const d = DEF[it.id];
+    const game = it.game || baseGame;
+    const span = Math.min(it.w||d.w, cols);
+    return `<div class="cell" data-i="${i}" style="grid-column:span ${span}">
+      <div class="cell-h">
+        <button class="ic mv" draggable="true" title="끌어서 순서 변경">⣿</button>
+        <span class="t">${d.name}</span>
+        ${game?`<span class="g">${game}</span>`:`<span class="src">전체</span>`}
+        <span class="src">${it.id.startsWith("b:")?"현황판":it.id.startsWith("r:")?"리포트":"페이지"}</span>
+        <span class="tools">
+          <button class="ic cfg" title="게임·높이·너비">⚙</button>
+          <button class="ic up" title="위로">▲</button>
+          <button class="ic dn" title="아래로">▼</button>
+          <button class="ic new" title="새 탭에서 열기">↗</button>
+          <button class="ic del" title="빼기">✕</button>
+        </span>
+      </div>
+      <div class="cell-cfg">
+        <span>게임 <select class="cg">
+          <option value=""${!it.game?" selected":""}>기본(${baseGame||"전체"})</option>
+          ${CODES.map(c=>`<option value="${c}"${it.game===c?" selected":""}>${c}</option>`).join("")}
+        </select></span>
+        <span>높이 <select class="ch">
+          ${[280,360,440,520,620,760,900].map(h=>`<option value="${h}"${(it.h||d.h)===h?" selected":""}>${h}px</option>`).join("")}
+        </select></span>
+        <span>너비 <select class="cw">
+          <option value="1"${(it.w||d.w)===1?" selected":""}>1열</option>
+          <option value="2"${(it.w||d.w)===2?" selected":""}>2열</option>
+        </select></span>
+        <span style="color:var(--mut)">${d.d}</span>
+      </div>
+      <div class="ph">스크롤하면 불러옵니다…</div>
+    </div>`;
+  }).join("");
+
+  bindCells();
+  observeCells();
+  document.getElementById("foot").innerHTML = items.length
+    ? `섹션 ${items.length}개 · 각 섹션은 화면에 보일 때 불러옵니다(지연 로드) · 섹션마다 시트를 따로 읽으므로 10개 이상 담으면 첫 로드가 느려질 수 있습니다 · 구성은 이 브라우저에 저장되고, 🔗 URL 로 다른 PC·노션에 그대로 옮길 수 있습니다`
+    : "";
+}
+
+function bindCells(){
+  document.querySelectorAll("#grid .cell").forEach(cell=>{
+    const i = +cell.dataset.i;
+    cell.querySelector(".cfg").addEventListener("click",()=>cell.classList.toggle("open"));
+    cell.querySelector(".del").addEventListener("click",()=>{ items.splice(i,1); save(); render(); });
+    cell.querySelector(".up").addEventListener("click",()=>move(i,-1));
+    cell.querySelector(".dn").addEventListener("click",()=>move(i,1));
+    cell.querySelector(".new").addEventListener("click",()=>window.open(iframeSrc(items[i]),"_blank"));
+    cell.querySelector(".cg").addEventListener("change",e=>{ items[i].game=e.target.value; save(); render(); });
+    cell.querySelector(".ch").addEventListener("change",e=>{ items[i].h=+e.target.value; save(); render(); });
+    cell.querySelector(".cw").addEventListener("change",e=>{ items[i].w=+e.target.value; save(); render(); });
+    // 드래그로 순서 변경
+    const h = cell.querySelector(".mv");
+    h.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/plain", i); cell.classList.add("drag"); });
+    h.addEventListener("dragend",()=>cell.classList.remove("drag"));
+    cell.addEventListener("dragover",e=>e.preventDefault());
+    cell.addEventListener("drop",e=>{
+      e.preventDefault();
+      const from = +e.dataTransfer.getData("text/plain");
+      if(isNaN(from)||from===i) return;
+      const [x] = items.splice(from,1); items.splice(i,0,x); save(); render();
+    });
+  });
+}
+function move(i,d){
+  const j = i+d; if(j<0||j>=items.length) return;
+  const [x] = items.splice(i,1); items.splice(j,0,x); save(); render();
+}
+
+/* 지연 로드 — 화면에 들어올 때 iframe 을 만든다 */
+let io = null;
+function loadCell(cell){
+  if(!cell || cell.querySelector("iframe")) return false;
+  const it = items[+cell.dataset.i]; if(!it) return false;
+  const f = document.createElement("iframe");
+  f.src = iframeSrc(it);
+  f.style.height = (it.h || DEF[it.id].h) + "px";
+  f.loading = "lazy";
+  f.title = DEF[it.id].name;
+  const ph = cell.querySelector(".ph"); if(ph) ph.remove();
+  cell.appendChild(f);
+  if(io) io.unobserve(cell);
+  return true;
+}
+function loadAllCells(){
+  let n = 0;
+  document.querySelectorAll("#grid .cell").forEach(c=>{ if(loadCell(c)) n++; });
+  return n;
+}
+function observeCells(){
+  if(io) io.disconnect();
+  io = new IntersectionObserver(es=>{
+    es.forEach(e=>{ if(e.isIntersecting) loadCell(e.target); });
+  }, { rootMargin: "300px" });
+  document.querySelectorAll("#grid .cell").forEach(c=>io.observe(c));
+}
+
+/* ===== 카탈로그 ===== */
+function openCatalog(){
+  document.getElementById("mbody").innerHTML = CATALOG.map(g=>`
+    <div class="grp-t">${g.g}</div>
+    <div class="pick">${g.items.map(i=>`
+      <div class="pk" data-add="${i.id}"><div class="n">${i.name}</div><div class="d">${i.d}</div></div>`).join("")}</div>`).join("");
+  document.querySelectorAll("#mbody .pk").forEach(p=>p.addEventListener("click",()=>{
+    const d = DEF[p.dataset.add];
+    items.push({ id:p.dataset.add, game:"", h:d.h, w:d.w });
+    save(); render(); toast(d.name+" 담았습니다");
+  }));
+  document.getElementById("ov").classList.add("on");
+}
+function toast(m){
+  const t=document.getElementById("toast"); t.textContent=m; t.classList.add("on");
+  setTimeout(()=>t.classList.remove("on"),1800);
+}
+
+/* ===== 이벤트 ===== */
+document.getElementById("addBtn").addEventListener("click", openCatalog);
+document.getElementById("loadAllBtn").addEventListener("click", ()=>{
+  const n = loadAllCells();
+  toast(n ? n+"개 섹션을 불러옵니다" : "이미 다 불러왔습니다");
+});
+document.getElementById("ovClose").addEventListener("click", ()=>document.getElementById("ov").classList.remove("on"));
+document.getElementById("ov").addEventListener("click", e=>{ if(e.target.id==="ov") e.currentTarget.classList.remove("on"); });
+document.getElementById("themeBtn").addEventListener("click", ()=>{
+  theme = theme==="dark" ? "light" : "dark";
+  try{ localStorage.setItem("board-theme", theme); }catch(e){}
+  render();
+});
+document.getElementById("clearBtn").addEventListener("click", ()=>{
+  if(!items.length || !confirm("담은 섹션을 모두 비울까요?")) return;
+  items = []; save(); render();
+});
+document.querySelectorAll("#colSeg button").forEach(b=>b.addEventListener("click",()=>{
+  cols = +b.dataset.c; save(); render();
+}));
+document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click",()=>{
+  items = PRESETS[b.dataset.preset].map(id=>({ id, game:"", h:DEF[id].h, w:DEF[id].w }));
+  save(); render(); toast("프리셋을 담았습니다");
+}));
+document.getElementById("linkBtn").addEventListener("click", ()=>{
+  const p = new URLSearchParams();
+  if(SHEET) p.set("sheet", SHEET);
+  p.set("w", items.map(it=>[it.id, it.game, it.h, it.w].join("~")).join(","));
+  p.set("cols", cols);
+  if(baseGame) p.set("proj", baseGame);
+  p.set("theme", theme);
+  const url = location.origin + location.pathname + "?" + p.toString();
+  navigator.clipboard.writeText(url).then(()=>toast("링크를 복사했습니다 — 다른 PC·노션에서 같은 구성"))
+    .catch(()=>prompt("복사에 실패했습니다. 아래 주소를 직접 복사하세요.", url));
+});
+
+load();
+
+/* 기본 게임 셀렉트 */
+(function(){
+  const s = document.getElementById("gameSel");
+  s.innerHTML = `<option value="">전체 프로젝트</option>` + CODES.map(c=>`<option value="${c}">${c}</option>`).join("");
+  s.value = baseGame;
+  s.addEventListener("change", e=>{ baseGame = e.target.value; save(); render(); });
+})();
+
+render();
+</script>
+</body>
+</html>
