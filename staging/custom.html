@@ -93,6 +93,9 @@
 
 <div class="bar">
   <span>기본 게임 <select id="gameSel"></select></span>
+  <span>목표 기준 <span class="seg" id="cbBaseSeg" title="현황판 섹션(④·⑧)의 목표 금액 기준 — 사업계획×비중 / 전체 매출 실측×비중">
+    <button data-b="plan" class="active">사업목표</button><button data-b="actual">실적</button>
+  </span></span>
   <span>열 <span class="seg" id="colSeg">
     <button data-c="1">1</button><button data-c="2" class="active">2</button><button data-c="3">3</button>
   </span></span>
@@ -200,6 +203,7 @@ const LS = "custom-board-v1";
 let items = [];              // [{id, game, h, w}]
 let cols = 2;
 let baseGame = "";           // 기본 게임 (빈 값 = 전체 프로젝트)
+let kpiBaseSel = "plan";     // 현황판 섹션의 목표 기준 (plan | actual)
 let theme = "dark";
 
 function load(){
@@ -213,6 +217,7 @@ function load(){
     }).filter(Boolean);
     cols = +qp.get("cols") || 2;
     baseGame = qp.get("proj") || "";
+    kpiBaseSel = qp.get("kbase") === "actual" ? "actual" : "plan";
     theme = qp.get("theme") || localStorage.getItem("board-theme") || "dark";
     return;
   }
@@ -222,15 +227,18 @@ function load(){
       items = (s.items||[]).filter(x=>DEF[x.id]);
       cols = s.cols || 2;
       baseGame = s.baseGame || "";
+      kpiBaseSel = s.kpiBaseSel === "actual" ? "actual" : "plan";
     }
   }catch(e){}
   theme = localStorage.getItem("board-theme") || "dark";
 }
 function save(){
-  try{ localStorage.setItem(LS, JSON.stringify({items, cols, baseGame})); }catch(e){}
+  try{ localStorage.setItem(LS, JSON.stringify({items, cols, baseGame, kpiBaseSel})); }catch(e){}
 }
 
 /* ===== 렌더 ===== */
+/* 배포 버전 — iframe URL 에 붙여 브라우저가 옛 섹션을 캐시해 두는 것을 막는다 */
+const CB_VER = "1.26.1";
 function iframeSrc(it){
   const d = DEF[it.id];
   const [src, key] = it.id.split(":");
@@ -238,9 +246,11 @@ function iframeSrc(it){
   const p = new URLSearchParams();
   if(SHEET) p.set("sheet", SHEET);
   p.set("theme", theme);
+  p.set("v", CB_VER);
   if(src === "b"){
     p.set("sec", key);
     if(game) p.set("proj", game);
+    p.set("kbase", kpiBaseSel);          // 목표 기준 — 커스텀 보드 상단에서 지정
     return "board.html?" + p.toString();
   }
   if(src === "r"){
@@ -274,6 +284,7 @@ function render(){
   document.getElementById("themeBtn").textContent = theme === "dark" ? "🌙" : "☀️";
   document.getElementById("grid").style.gridTemplateColumns = `repeat(${cols}, minmax(0,1fr))`;
   document.querySelectorAll("#colSeg button").forEach(b=>b.classList.toggle("active", +b.dataset.c===cols));
+  document.querySelectorAll("#cbBaseSeg button").forEach(b=>b.classList.toggle("active", b.dataset.b===kpiBaseSel));
   document.getElementById("empty").style.display = items.length ? "none" : "";
   document.getElementById("sheetState").innerHTML = SHEET
     ? `시트 연결됨 · 각 섹션이 직접 읽습니다`
@@ -418,6 +429,9 @@ document.getElementById("clearBtn").addEventListener("click", ()=>{
 document.querySelectorAll("#colSeg button").forEach(b=>b.addEventListener("click",()=>{
   cols = +b.dataset.c; save(); render();
 }));
+document.querySelectorAll("#cbBaseSeg button").forEach(b=>b.addEventListener("click",()=>{
+  kpiBaseSel = b.dataset.b; save(); render();      // 섹션 iframe 을 새 기준으로 다시 불러온다
+}));
 document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click",()=>{
   items = PRESETS[b.dataset.preset].map(id=>({ id, game:"", h:DEF[id].h, w:DEF[id].w }));
   save(); render(); toast("프리셋을 담았습니다");
@@ -427,6 +441,7 @@ document.getElementById("linkBtn").addEventListener("click", ()=>{
   if(SHEET) p.set("sheet", SHEET);
   p.set("w", items.map(it=>[it.id, it.game, it.h, it.w].join("~")).join(","));
   p.set("cols", cols);
+  p.set("kbase", kpiBaseSel);
   if(baseGame) p.set("proj", baseGame);
   p.set("theme", theme);
   const url = location.origin + location.pathname + "?" + p.toString();
