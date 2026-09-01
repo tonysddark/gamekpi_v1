@@ -47,6 +47,16 @@
   .grp{border-left:1px solid var(--border);}
   .heat{border-radius:6px;font-weight:700;padding:3px 8px;display:inline-block;min-width:52px;color:#fff;}
   .prov{font-size:10px;color:var(--peak);border:1px solid var(--peak);border-radius:5px;padding:0 5px;margin-left:5px;vertical-align:1px;}
+  /* 금액 상세(전체/자체결제/채널) 펼치기 */
+  .cav{display:inline-block;width:13px;color:var(--muted);cursor:pointer;user-select:none;font-size:10px;}
+  td.pj{cursor:pointer;}
+  tr.amt td{font-size:11.5px;color:var(--muted);padding-top:2px;padding-bottom:2px;border-bottom:none;}
+  tr.amt.first td{padding-top:5px;}
+  tr.amt.last td{border-bottom:1px solid var(--border);padding-bottom:6px;}
+  tr.amt td.k{text-align:left;white-space:nowrap;}
+  tr.amt td.k.sub{padding-left:20px;}
+  tr.amt.d2c td{color:var(--accent);font-weight:600;}
+  tr.amt.tot td{color:var(--text);}
   .chart-box{position:relative;height:320px;margin-top:8px;}
   .legend{display:flex;flex-wrap:wrap;gap:13px;font-size:12px;color:var(--muted);margin:2px 0 8px;}
   .legend span{display:flex;align-items:center;gap:5px;}
@@ -96,6 +106,10 @@
         <button data-m="totARPPU">전체 ARPPU</button>
         <button data-m="d2cARPPU">자체결제 ARPPU</button>
         <button data-m="totPU">전체 일평균PU</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:8px 0 2px;font-size:11.5px;color:var(--muted)">
+        <button class="btn" id="amtAll" style="font-size:11px;padding:4px 10px">▸ 금액 전체 펼치기</button>
+        <span>프로젝트명을 클릭하면 그 게임의 <b style="color:var(--text)">전체 매출 · 자체결제 매출 · WEB/APK/PC</b> 금액이 월별로 펼쳐집니다</span>
       </div>
       <div class="tbl-wrap"><table id="allTable"></table></div>
       <div class="legend" id="allLegend"></div>
@@ -167,9 +181,12 @@ async function loadDetail(url,code){
   for(let i=1;i<grid.length;i++){
     const g=grid[i]; const date=normDate(g[ci.date]); const rev=toNum(g[ci.rev]); if(!date||rev==null)continue;
     const pu=toNum(g[ci.pu])||0; const pg=String(g[ci.pg]||"").trim(); const m=date.slice(0,7);
-    const o=agg[m]=agg[m]||{days:new Set(),totPU:0,totRev:0,d2cPU:0,d2cRev:0};
+    const o=agg[m]=agg[m]||{days:new Set(),totPU:0,totRev:0,d2cPU:0,d2cRev:0,web:0,apk:0,pc:0};
     o.days.add(date); o.totPU+=pu; o.totRev+=rev;
-    if(D2C_PGS.includes(pg)){o.d2cPU+=pu; o.d2cRev+=rev;}
+    if(D2C_PGS.includes(pg)){o.d2cPU+=pu; o.d2cRev+=rev;
+      // 채널 = 결제 플랫폼 (WEB상점 / PC / 그 외=APK 인게임) — 자체결제 매출만 분해
+      const pl=String(g[ci.platform]||"").trim().toUpperCase();
+      o[pl==="WEB"?"web":pl==="PC"?"pc":"apk"]+=rev;}
   }
   return agg;
 }
@@ -204,6 +221,30 @@ function metricVal(o,m,dly){
   }
 }
 const dlyOf=(code,m)=>DLY[code]&&DLY[code][m];
+/* 금액 표기 — 1억 이상은 억, 그 아래는 만 */
+const 액=v=>v==null?'–':(Math.abs(v)>=1e8?(v/1e8).toFixed(2)+'억':Math.round(v/1e4).toLocaleString()+'만');
+/* 금액 상세를 펼친 프로젝트 (localStorage 유지) */
+let amtOpen=new Set();
+try{ const a=JSON.parse(localStorage.getItem("ov-amt-open")); if(Array.isArray(a))amtOpen=new Set(a); }catch(e){}
+const saveAmtOpen=()=>{ try{ localStorage.setItem("ov-amt-open",JSON.stringify([...amtOpen])); }catch(e){} };
+/* 프로젝트 한 줄 → 금액 5행(전체 / 자체결제 / ㄴWEB ㄴAPK ㄴPC) */
+function amtRows(c,ms){
+  const defs=[
+    ['tot','전체 매출','',o=>o.totRev],
+    ['d2c','자체결제 매출','',o=>o.d2cRev],
+    ['','ㄴ WEB 매출','sub',o=>o.web],
+    ['','ㄴ APK 매출','sub',o=>o.apk],
+    ['','ㄴ PC 매출','sub',o=>o.pc]];
+  return defs.map(([cls,label,ind,get],i)=>{
+    const cells=ms.map(m=>{
+      const o=AGG[c][m]; if(!o)return '<td>–</td>';
+      const v=get(o); if(!v)return '<td>–</td>';   // 0(해당 채널 없음)은 – 로
+      const sh=(i>=2&&o.d2cRev)?` <span style="opacity:.65">${(v/o.d2cRev*100).toFixed(0)}%</span>`:'';
+      return `<td>${액(v)}${sh}</td>`;
+    }).join('');
+    return `<tr class="amt ${cls}${i===0?' first':''}${i===4?' last':''}"><td class="k ${ind}">${label}</td>${cells}</tr>`;
+  }).join('');
+}
 const isPct=m=>m==='puShare'||m==='revShare';
 const fmtMetric=(v,m)=> v==null?'–' : (isPct(m)?P(v):N(v));
 
@@ -230,7 +271,8 @@ function renderAll(){
   let head="<thead><tr><th>프로젝트</th>"+ms.map(m=>`<th>${+m.slice(5,7)}월</th>`).join("")+"</tr></thead>";
   let body="<tbody>";
   CODES.forEach(c=>{
-    body+=`<tr><td class="pj" style="color:${HEX[c]}">${c}</td>`;
+    const open=amtOpen.has(c);
+    body+=`<tr><td class="pj" style="color:${HEX[c]}" data-pj="${c}" title="클릭하면 금액 상세를 접었다 펼칩니다"><span class="cav">${open?'▾':'▸'}</span>${c}</td>`;
     ms.forEach(m=>{
       const o=AGG[c][m]; if(!o){body+="<td>–</td>";return;}
       const v=metricVal(o,curMetric,dlyOf(c,m)); const prov=isProvisional(m,o);
@@ -242,8 +284,17 @@ function renderAll(){
       }
     });
     body+="</tr>";
+    if(amtOpen.has(c)) body+=amtRows(c,ms);
   });
   body+="</tbody>"; t.innerHTML=head+body;
+  // 프로젝트명 클릭 = 금액 상세 토글
+  t.querySelectorAll("td.pj").forEach(td=>td.addEventListener("click",()=>{
+    const c=td.dataset.pj; if(amtOpen.has(c))amtOpen.delete(c); else amtOpen.add(c);
+    saveAmtOpen(); renderAll();
+  }));
+  const ab=document.getElementById("amtAll");
+  if(ab){ const allOpen=CODES.length>0&&CODES.every(c=>amtOpen.has(c));
+    ab.textContent = allOpen? "▾ 금액 전체 접기" : "▸ 금액 전체 펼치기"; }
   // 범례 + 차트
   const leg=document.getElementById("allLegend"); leg.innerHTML=CODES.map(c=>`<span><i style="background:${HEX[c]}"></i>${c}</span>`).join("");
   const ds=CODES.map(c=>({label:c,data:ms.map(m=>AGG[c][m]?metricVal(AGG[c][m],curMetric,dlyOf(c,m)):null),borderColor:HEX[c],backgroundColor:HEX[c],borderWidth:2,tension:.3,spanGaps:false,pointRadius:3}));
@@ -335,6 +386,11 @@ async function boot(url){
 document.getElementById("pjSel").addEventListener("change",render);
 document.getElementById("yearSel").addEventListener("change",e=>{curYear=e.target.value;render();});
 document.getElementById("metricSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;curMetric=b.dataset.m;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderAll();});
+document.getElementById("amtAll").addEventListener("click",()=>{
+  const allOpen=CODES.length>0&&CODES.every(c=>amtOpen.has(c));
+  amtOpen = allOpen? new Set() : new Set(CODES);
+  saveAmtOpen(); renderAll();
+});
 document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
 
 (function(){
