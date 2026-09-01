@@ -336,6 +336,10 @@
             <option value="month">기준월 실적 ARPPU (완결월만)</option>
           </select></div>
         <span class="seg" id="dCmpSeg"><button data-c="mom" class="active">전월 동기간</button><button data-c="yoy">전년 동기간</button></span>
+        <span class="seg" id="dBaseSeg" title="목표 금액의 기준 — ④ 단계별 KPI와 공통으로 움직입니다">
+          <button data-b="plan" class="active">사업목표 기준</button>
+          <button data-b="actual">실적 기준</button>
+        </span>
         <span id="dInfo" style="color:var(--muted)"></span>
       </div>
       <div class="cards" id="s8cards"></div>
@@ -478,7 +482,7 @@ function syncFilterUI(){
   document.querySelectorAll("#granSeg button").forEach(b=>b.classList.toggle("active",b.dataset.g===curGran));
   document.querySelectorAll("#metricSeg button").forEach(b=>b.classList.toggle("active",b.dataset.m===curMetric));
   document.querySelectorAll("#kpiViewSeg button").forEach(b=>b.classList.toggle("active",b.dataset.v===kpiView));
-  document.querySelectorAll("#kpiBaseSeg button").forEach(b=>b.classList.toggle("active",b.dataset.b===kpiBase));
+  document.querySelectorAll("#kpiBaseSeg button, #dBaseSeg button").forEach(b=>b.classList.toggle("active",b.dataset.b===kpiBase));
   document.querySelectorAll("#mViewSeg button").forEach(b=>b.classList.toggle("active",b.dataset.v===mView));
   document.querySelectorAll("#dCmpSeg button").forEach(b=>b.classList.toggle("active",b.dataset.c===dCmp));
   document.querySelectorAll("#dTabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===dTab));
@@ -1185,7 +1189,7 @@ function dailyCalc(codes){
   const actMpu=mpuOf(dMonth,codes);                       // mpu 탭 실적 (진행월이면 그 파일 기준일까지의 누적 순결제자)
   const full=last>=dim;                                   // 기준월 완결 여부
   const Akeep=b.arppu;                                    // 유지 ARPPU = 최근 완결 3개월 (④와 동일)
-  let mRev0=0; day.forEach(x=>{if(x.act)mRev0+=x.s;});
+  let mRev0=0, mTot0=0; day.forEach(x=>{if(x.act){mRev0+=x.s; mTot0+=x.t;}});
   const Amonth=(full&&actMpu)?mRev0/actMpu:null;          // 기준월 실적 ARPPU — 완결월에서만 유효
   let A=Akeep, aSrc="유지 ARPPU(④와 동일)", aNote="";
   if(dArppu==="month"){
@@ -1193,7 +1197,15 @@ function dailyCalc(codes){
     else aNote=" <span style='color:var(--peak)'>(진행 중인 월은 실적 ARPPU가 왜곡되어 유지 ARPPU를 적용)</span>";
   }
   const plan=planOf(dMonth,codes), tR=TGTR[dMonth]!=null?TGTR[dMonth]:null;
-  const tgtRev=(plan!=null&&tR!=null)?plan*tR/100:null;
+  // 목표 기준(④와 공통) — 사업목표: 사업계획×비중(월 전체) / 실적: 그 달 전체 매출 실측×비중(경과 구간)
+  const actual = kpiBase==="actual";
+  const tgtAmt = actual ? (last? mTot0 : null) : plan;
+  const tgtRev = (tgtAmt!=null && tR!=null) ? tgtAmt*tR/100 : null;
+  // 실적 기준의 목표는 '경과 구간'을 덮으므로 일 단위 환산도 경과일로 나눈다
+  const dimT = actual ? (last||dim) : dim;
+  const tgtSrc = actual
+    ? `전체 매출 실측 ${tgtAmt!=null?억(tgtAmt):"–"}(${last}일) × ${tR!=null?tR:"–"}%`
+    : `사업계획 ${plan!=null?억(plan):"–"} × ${tR!=null?tR:"–"}%`;
   const tgtMpu=(tgtRev!=null&&Akeep)?tgtRev/Akeep:null;   // 목표는 항상 유지 ARPPU 기준 (④의 목표 MPU와 동일)
   const pf=puFactor(codes);
   // 누적
@@ -1201,7 +1213,7 @@ function dailyCalc(codes){
   day.forEach(x=>{ if(x.act){ cs+=x.s; ct+=x.t; cpu+=x.pu;
       x.cs=cs; x.ct=ct; x.ratio=x.t?x.s/x.t*100:null; x.mtdR=ct?cs/ct*100:null;
       x.mRev=A?cs/A:null; x.mPu=pf?cpu*pf.k:null; }
-    x.pace=tgtMpu!=null?tgtMpu*x.d/dim:null; });
+    x.pace=tgtMpu!=null?tgtMpu*x.d/dimT:null; });
   const rem=dim-last, need=(tgtRev!=null&&rem>0)?Math.max(0,(tgtRev-cs)/rem):null;
   let csN=cs;
   // 필요 경로는 목표와 같은 축(유지 ARPPU)으로 계산해야 종점이 목표 MPU와 일치
@@ -1210,10 +1222,10 @@ function dailyCalc(codes){
   const cmpYm = dCmp==="yoy"? ymShift(dMonth,-12) : ymShift(dMonth,-1);
   const cmp = last? mtdSum(bd,cmpYm,last) : null;
   const proj = last? cs/last*dim : null;               // 월말 예상 매출(선형)
-  return {day,dim,last,cs,ct,A,Akeep,Amonth,aSrc,aNote,actMpu,full,plan,tR,tgtRev,tgtMpu,pf,rem,need,cmp,cmpYm,
+  return {day,dim,last,cs,ct,A,Akeep,Amonth,aSrc,aNote,actMpu,full,plan,tR,tgtRev,tgtMpu,tgtAmt,tgtSrc,dimT,actual,pf,rem,need,cmp,cmpYm,
     arppuNow:(actMpu&&cs)?cs/actMpu:null,               // 현재 ARPPU = 월 누적 자체결제 ÷ 실적 MPU
     dayAvg:last?cs/last:null,                           // 현재 일평균 자체결제
-    tgtDay:tgtRev!=null?tgtRev/dim:null,                // 목표 일평균 = 목표 금액 ÷ 총일수
+    tgtDay:tgtRev!=null?tgtRev/dimT:null,               // 목표 일평균 = 목표 금액 ÷ 일수(사업목표=월일수 / 실적=경과일)
     mtdR:ct?cs/ct*100:null, mRev:A?cs/A:null, projRev:proj, projMpu:(proj!=null&&A)?proj/A:null,
     recent7:(()=>{ const a=day.filter(x=>x.act).slice(-7); return a.length?a.reduce((s,x)=>s+x.s,0)/a.length:null; })()};
 }
@@ -1253,7 +1265,7 @@ function renderDaily(){
     <div class="card"><div class="l">MTD 자체결제 비중</div><div class="v" style="color:var(--peak)">${C.mtdR!=null?C.mtdR.toFixed(1)+"%":"–"}</div>
       <div class="s">목표 ${C.tR!=null?C.tR.toFixed(0)+"%":"–"}${(C.mtdR!=null&&C.tR!=null)?" · "+(C.mtdR>=C.tR?up("+"+(C.mtdR-C.tR).toFixed(1)+"%p"):dn((C.mtdR-C.tR).toFixed(1)+"%p")):""}</div>
       ${C.tR?bar(C.mtdR/C.tR*100,"var(--peak)"):""}</div>
-    <div class="card"><div class="l">목표 금액 진척</div><div class="v">${C.tgtRev?(C.cs/C.tgtRev*100).toFixed(1)+"%":"–"}</div>
+    <div class="card" title="${C.tgtSrc} = ${C.tgtRev!=null?억(C.tgtRev):"–"}"><div class="l">목표 금액 진척 <span style="color:var(--muted);font-size:10px">${C.actual?"실적 기준":"사업목표 기준"}</span></div><div class="v">${C.tgtRev?(C.cs/C.tgtRev*100).toFixed(1)+"%":"–"}</div>
       <div class="s">목표 ${C.tgtRev!=null?억(C.tgtRev):"–"}${C.tgtRev!=null?" · 잔여 "+억(Math.max(0,C.tgtRev-C.cs)):""}</div>
       ${C.tgtRev?bar(C.cs/C.tgtRev*100,"var(--accent)"):""}</div>
     <div class="card" style="border-color:var(--teal);box-shadow:0 0 0 1px var(--teal) inset">
@@ -1521,7 +1533,14 @@ function syncDates(){
 ["rangeReset","s1reset"].forEach(id=>document.getElementById(id).addEventListener("click",()=>{fromD=MIND;toD=HORIZON;syncDates();render();}));
 document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
 document.getElementById("kpiViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
-document.getElementById("kpiBaseSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiBase=b.dataset.b;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
+document.getElementById("kpiBaseSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;setKpiBase(b.dataset.b);});
+document.getElementById("dBaseSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;setKpiBase(b.dataset.b);});
+/* 목표 기준은 ④·⑧ 공통 — 어느 쪽에서 바꿔도 두 섹션이 같이 갱신된다 */
+function setKpiBase(v){
+  kpiBase=v;
+  document.querySelectorAll("#kpiBaseSeg button, #dBaseSeg button").forEach(x=>x.classList.toggle("active",x.dataset.b===v));
+  saveFilters(); renderKPI(); renderDaily();
+}
 document.getElementById("kpiStageSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiMonth=b.dataset.m;s5cov=null;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("jlGrade").addEventListener("change",e=>{jlGrade=e.target.value;renderKPI();});
 // ⑦ 월간 지표 컨트롤
