@@ -113,8 +113,8 @@
     <div class="panel sec" data-sec="ovtable">
       <h2>지표별 프로젝트 비교 <span id="allSub"></span></h2>
       <div class="seg metSeg" data-seg="1">
-        <button data-m="puShare" class="active">자체결제 PU비중</button>
-        <button data-m="revShare">자체결제 매출비중</button>
+        <button data-m="revShare" class="active">자체결제 매출비중</button>
+        <button data-m="puShare">자체결제 PU비중</button>
         <button data-m="totARPPU">전체 ARPPU</button>
         <button data-m="d2cARPPU">자체결제 ARPPU</button>
         <button data-m="totPU">전체 일평균PU</button>
@@ -129,8 +129,8 @@
     <div class="panel sec" data-sec="ovchart">
       <h2>지표 월별 추이 <span id="allSub2"></span></h2>
       <div class="seg metSeg" data-seg="2">
-        <button data-m="puShare" class="active">자체결제 PU비중</button>
-        <button data-m="revShare">자체결제 매출비중</button>
+        <button data-m="revShare" class="active">자체결제 매출비중</button>
+        <button data-m="puShare">자체결제 PU비중</button>
         <button data-m="totARPPU">전체 ARPPU</button>
         <button data-m="d2cARPPU">자체결제 ARPPU</button>
         <button data-m="totPU">전체 일평균PU</button>
@@ -177,7 +177,7 @@ const HEX={POTC:'#4f8cff',IMGN:'#34d399',GBTW:'#fbbf24',WWM:'#5eead4',DS:'#c084f
 const N=v=>Math.round(v).toLocaleString('ko-KR');
 const P=v=>v.toFixed(1)+'%';
 
-let SHEET_URL="", CODES=[], AGG={}, DLY={}, YEARS=[], curYear="", curMetric="puShare", chart=null, c1=null, c2=null, LATEST="";
+let SHEET_URL="", CODES=[], AGG={}, DLY={}, YEARS=[], curYear="", curMetric="revShare", chart=null, c1=null, c2=null, LATEST="";
 
 function getMasterUrl(){ try{const s=JSON.parse(localStorage.getItem(DASH_LS));if(s&&s.masterSheetUrl)return s.masterSheetUrl;}catch(e){} return localStorage.getItem("kpiplanner-sheet")||""; }
 function showSetup(msg){ document.getElementById("setup").style.display=""; document.getElementById("main").style.display="none"; document.getElementById("setupMsg").innerHTML=msg; document.getElementById("range").textContent="데이터 미연결"; }
