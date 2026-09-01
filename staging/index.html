@@ -266,6 +266,9 @@
   /* 임베드 모드(?embed=1) — 헤더·탭·컨트롤을 숨겨 섹션만 노출 (커스텀 보드·노션용) */
   html.embed body { padding: 0; }
   html.embed header, html.embed .tabs, html.embed .controls, html.embed .footer-note { display: none !important; }
+  html.embed .panel { margin-top: 0 !important; }
+  html.embed .cards { margin-top: 0 !important; }
+  html.embed #chartsGrid { margin-top: 0 !important; }
   /* 정렬 가능한 표 헤더 */
   .sk {
     display: inline-flex; align-items: center; gap: 2px; cursor: pointer;
@@ -574,8 +577,20 @@ const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 �
 
 /* ================= 버전 ================= */
 /* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
-const APP_VERSION = "1.24.0";
+const APP_VERSION = "1.25.0";
 const VERSION_HISTORY = [
+  { ver: "1.25.0", date: "2026-08-31", type: "기능", changes: [
+    "메인 대시보드 섹션 분리 — ?sec=cards|rev|ratio|puarppu|weekly|putrend|table|events 로 8개 섹션 단독 표시(머리말·필터 숨김), ?game=·?days=·?month=·?from=&to=·?tbl=·?wk= 로 프로젝트·기간·집계단위까지 링크 고정",
+    "커스텀 보드 카탈로그 29개로 확장 — 메인 대시보드 9개(주별/월별 매출·일별/월별 표 각각) + 전사 비교 3섹션 + 현황판 7섹션 + 리포트 위젯 9개 + 전체 페이지 3개",
+    "섹션 임베드는 이 기기의 화면 설정을 읽지도 쓰지도 않음 — 링크만 보고 항상 같은 화면(공유 시 사람마다 다르게 보이던 문제) · 임베드가 대시보드의 활성 게임·테마를 덮어쓰지 않음",
+    "섹션 임베드에서는 스냅샷 확인 요청·확대/드래그 버튼을 생략",
+  ]},
+  { ver: "1.24.1", date: "2026-08-31", type: "기능", changes: [
+    "전사 비교(overview)를 3개 섹션으로 분리 — ① 프로젝트 카드 ② 지표별 비교 표 ③ 지표 월별 추이. 섹션마다 🔗 단독 URL(?sec=ovcards|ovtable|ovchart&met=&year=)",
+    "메인 대시보드 섹션 임베드 — ?sec=cards|rev|ratio|puarppu|weekly|putrend|table|events 로 섹션 단독 표시, ?game=·?days=·?month=·?from=&to= 로 프로젝트·기간까지 링크에 고정",
+    "지표 세그를 표·차트 양쪽에 배치하고 서로 동기화 — 섹션을 따로 임베드해도 지표를 바꿀 수 있음",
+    "커스텀 보드 카탈로그에 전사 비교 3섹션 추가 (총 22개) · 전사 비교 전체 페이지 항목은 유지",
+  ]},
   { ver: "1.24.0", date: "2026-08-31", type: "기능", changes: [
     "커스텀 보드(custom.html) 신규 — 여러 페이지에 흩어진 섹션을 한 화면에 골라 담는 조립 화면. KPI 현황판 7개 섹션 + 리포트 위젯 9개 + 전체 페이지 3개(전사 비교·플래너·이벤트 효과) 중 선택",
     "섹션별 게임·높이·너비(1/2열) 개별 지정, 드래그·▲▼로 순서 변경, 열 수(1/2/3)·밤낮 모드, 프리셋 3종(경영 보고용·일일 점검용·이벤트 분석용)",
@@ -842,9 +857,19 @@ function loadState() {
   games = DEFAULT_DATA.length ? { [DEFAULT_GAME]: [...DEFAULT_DATA] } : {};
   activeGame = Object.keys(games)[0] || "ALL";
 }
+/* 섹션 임베드(iframe)는 본 대시보드와 같은 localStorage 를 쓴다.
+   임베드가 화면 설정(활성 게임·테마·월·집계단위)을 덮어쓰지 않도록 그 값만 기존 저장값을 유지한다. */
+const isEmbed = () => document.documentElement.classList.contains("embed");
 function saveState() {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify({ games, target: targetPct, theme, activeGame, events, eventSheetUrl, lastSync, gameSheets, chartOrder, lastSnapshotLoaded, masterSheetUrl, evSort, selMonth, tblGran, wkGran }));
+    const o = { games, target: targetPct, theme, activeGame, events, eventSheetUrl, lastSync, gameSheets, chartOrder, lastSnapshotLoaded, masterSheetUrl, evSort, selMonth, tblGran, wkGran };
+    if (isEmbed()) {
+      try {
+        const s = JSON.parse(localStorage.getItem(LS_KEY)) || {};
+        ["activeGame", "theme", "selMonth", "tblGran", "wkGran", "evSort"].forEach(k => { if (s[k] !== undefined) o[k] = s[k]; });
+      } catch (e) {}
+    }
+    localStorage.setItem(LS_KEY, JSON.stringify(o));
   } catch (e) {}
 }
 function toast(msg) {
@@ -1884,9 +1909,14 @@ function applyView() {
   document.getElementById("eventsPanel").style.display = dash ? "none" : "";
   document.querySelectorAll("#viewSeg button").forEach(b =>
     b.classList.toggle("active", b.dataset.view === viewMode));
+  applyEmbedSec();
 }
 
 function renderAll() {
+  // 임베드 링크의 ?game= — 데이터가 들어온 뒤 첫 렌더에서 한 번 반영(차트가 그려지기 전에)
+  if(EMBED_GAME && !embedApplied && (EMBED_GAME === "ALL" || games[EMBED_GAME])) {
+    activeGame = EMBED_GAME; embedApplied = true;
+  }
   renderHeader();
   renderTabs();
   renderMonthSel();
@@ -2048,7 +2078,10 @@ async function connectMasterSheet(url, silent) {
     }
     masterSheetUrl = url;
     if (ok.length) {
-      activeGame = Object.keys(games).length > 1 ? "ALL" : (Object.keys(games)[0] || "ALL");
+      // 임베드 링크에 ?game= 이 있으면 그걸 유지한다 (기본은 여러 개면 전체)
+      activeGame = (EMBED_GAME && (EMBED_GAME === "ALL" || games[EMBED_GAME]))
+        ? EMBED_GAME
+        : (Object.keys(games).length > 1 ? "ALL" : (Object.keys(games)[0] || "ALL"));
       saveState(); renderAll();
     }
     if (!eventSheetUrl) syncEvents(true); // 별도 이벤트 시트 없으면 마스터 events 탭에서 이벤트 자동 로드
@@ -2620,15 +2653,48 @@ document.getElementById("eventModal").addEventListener("click", e => {
 
 /* 시작 */
 loadState();
-/* 임베드/뷰 파라미터 — ?view=events 이면 이벤트 효과 페이지로, ?embed=1 이면 머리말·필터 숨김 */
+/* 임베드/섹션 파라미터 — 쿼리는 시트 연결 단계에서 지워지므로 여기서 미리 캡처한다
+   ?sec=cards|rev|ratio|puarppu|weekly|putrend|table|events → 그 섹션만 (머리말·필터 숨김)
+   ?game= 프로젝트 · ?days= 기간 프리셋 · ?month=YYYY-MM 월 · ?theme= · ?view=events|dash */
+const EQ = (()=>{ try{ return new URLSearchParams(location.search); }catch(e){ return new URLSearchParams(""); } })();
+const EMBED_SEC = EQ.get("sec") || "";
+const EMBED_GAME = (EQ.get("game") || "").toUpperCase();
+let embedApplied = false;
 (function(){
-  try{
-    const q = new URLSearchParams(location.search);
-    const v = q.get("view"); if(v === "events" || v === "dash") viewMode = v;
-    if(q.get("embed") === "1") document.documentElement.classList.add("embed");
-    const t = q.get("theme"); if(t === "dark" || t === "light") theme = t;
-  }catch(e){}
+  const v = EQ.get("view"); if(v === "events" || v === "dash") viewMode = v;
+  if(EMBED_SEC === "events") viewMode = "events";
+  if(EQ.get("embed") === "1" || EMBED_SEC) document.documentElement.classList.add("embed");
+  const t = EQ.get("theme"); if(t === "dark" || t === "light") theme = t;
+  const d = EQ.get("days"); if(d !== null && !isNaN(+d)) { rangeDays = +d; rangeFromD = rangeToD = ""; selMonth = ""; }
+  const m = EQ.get("month");
+  if(m && /^\d{4}-\d{2}$/.test(m)) { selMonth = m; rangeFromD = m + "-01"; rangeToD = monthEndOf(m); }
+  const f = EQ.get("from"), t2 = EQ.get("to");
+  if(f || t2) { rangeFromD = f || ""; rangeToD = t2 || ""; selMonth = ""; }
+  // 섹션 임베드는 이 기기의 화면 설정을 물려받지 않는다 — 링크만 보고 항상 같은 화면이 나오도록
+  if(EMBED_SEC){
+    if(!m) { selMonth = ""; if(!(f || t2) && d === null) { rangeFromD = rangeToD = ""; } }
+    tblGran = EQ.get("tbl") === "month" ? "month" : "day";
+    wkGran  = EQ.get("wk")  === "month" ? "month" : "week";
+  }
 })();
+/* ?sec= 이면 그 섹션만 남긴다 — applyView 가 매번 display 를 덮으므로 그 뒤에 다시 적용 */
+const EMBED_CHARTS = { rev:"p-rev", ratio:"p-ratio", puarppu:"p-puarppu", weekly:"p-weekly", putrend:"p-putrend" };
+function applyEmbedSec(){
+  if(!EMBED_SEC) return;
+  const show = (el,on)=>{ if(el) el.style.display = on ? "" : "none"; };
+  const chartId = EMBED_CHARTS[EMBED_SEC];
+  show(document.getElementById("cards"), EMBED_SEC === "cards");
+  show(document.getElementById("tablePanel"), EMBED_SEC === "table");
+  show(document.getElementById("eventsPanel"), EMBED_SEC === "events");
+  show(document.getElementById("chartsGrid"), !!chartId);
+  Object.values(EMBED_CHARTS).forEach(id=>show(document.getElementById(id), id === chartId));
+  if(chartId){
+    const g = document.getElementById("chartsGrid");
+    g.style.gridTemplateColumns = "1fr";
+    const p = document.getElementById(chartId);
+    const tools = p && p.querySelector(".p-tools"); if(tools) tools.style.display = "none";  // 드래그·확대 버튼 숨김
+  }
+}
 applyTheme();
 applyChartOrder();
 document.getElementById("targetInput").value = targetPct;
@@ -2637,8 +2703,9 @@ if (eventSheetUrl) syncEvents(true); // 시트 연결되어 있으면 자동 동
 /* 시트 URL 결정: ?sheet= 파라미터 > 저장된 메인 시트 > 플래너에서 연결한 시트 */
 (function(){
   try {
-    const p = new URLSearchParams(location.search).get("sheet");
-    if (p) { masterSheetUrl = p.trim(); saveState(); history.replaceState(null, "", location.pathname); }
+    const p = EQ.get("sheet");
+    // 임베드(?sec=)는 새로고침·다른 PC에서도 같은 화면이 열려야 하므로 쿼리를 지우지 않는다
+    if (p) { masterSheetUrl = p.trim(); saveState(); if(!EMBED_SEC) history.replaceState(null, "", location.pathname); }
   } catch (e) {}
   if (!masterSheetUrl) {
     const ps = localStorage.getItem("kpiplanner-sheet");
@@ -2647,7 +2714,7 @@ if (eventSheetUrl) syncEvents(true); // 시트 연결되어 있으면 자동 동
 })();
 if (masterSheetUrl) connectMasterSheet(masterSheetUrl, true); // 메인 시트 자동 동기화
 else if (Object.keys(gameSheets).length) syncAllGameSheets(true); // 개별 게임 시트 자동 동기화
-checkServerSnapshot(); // 게시된 암호화 스냅샷 확인 (빈 화면이면 불러오기 안내)
+if(!EMBED_SEC) checkServerSnapshot(); // 게시된 암호화 스냅샷 확인 (섹션 임베드는 불필요 — 안내 모달·중복 요청 방지)
 </script>
 </body>
 </html>

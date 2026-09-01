@@ -164,8 +164,24 @@ const CATALOG = [
     { id:"r:events",  name:"이벤트",          d:"기간 내 이벤트 효과",          h:400, w:1, game:1, needGame:1 },
     { id:"r:country", name:"국가별",          d:"국가 매출 분포",              h:400, w:1, game:1, needGame:1 },
   ]},
+  { g:"메인 대시보드 (index)", items:[
+    { id:"i:cards",    name:"KPI 카드",        d:"기간 합계·직전 대비·성장률",        h:250, w:2, game:1 },
+    { id:"i:rev",      name:"일별 매출 & 비중",  d:"막대=매출 · 선=비중 · 피크 TOP5",   h:420, w:2, game:1 },
+    { id:"i:ratio",    name:"비중 추이",        d:"7일 이동평균 + 목표선",            h:380, w:1, game:1 },
+    { id:"i:puarppu",  name:"PU & ARPPU",      d:"막대=PU · 선=ARPPU",              h:380, w:1, game:1 },
+    { id:"i:weekly",   name:"주별 매출",         d:"월요일 시작 주 단위 합계",          h:380, w:1, game:1 },
+    { id:"i:weeklyM",  name:"월별 매출",         d:"달력 월 단위 합계(전체 기간)",       h:380, w:1, game:1 },
+    { id:"i:putrend",  name:"PU 추이",          d:"7일 이동평균",                    h:380, w:1, game:1 },
+    { id:"i:table",    name:"일별 상세 표",       d:"날짜별 매출·비중·PU·ARPPU",        h:460, w:2, game:1 },
+    { id:"i:tableM",   name:"월별 상세 표",       d:"월별 합계 + 전월 대비(전체 기간)",    h:400, w:2, game:1 },
+  ]},
+  { g:"전사 비교 (overview)", items:[
+    { id:"o:ovcards", name:"프로젝트 카드",     d:"게임별 자체결제 PU비중 + 연초 대비",  h:200, w:2 },
+    { id:"o:ovtable", name:"지표별 비교 표",     d:"지표 5종 × 월별 · 금액 펼치기",      h:520, w:2 },
+    { id:"o:ovchart", name:"지표 추이 차트",     d:"선택 지표 월별 라인",               h:420, w:2 },
+  ]},
   { g:"전체 페이지", items:[
-    { id:"p:overview", name:"전사 비교",       d:"프로젝트별 ARPPU·PU·매출",   h:760, w:2 },
+    { id:"p:overview", name:"전사 비교(전체)",   d:"카드+표+차트 한 페이지",     h:760, w:2 },
     { id:"p:planner",  name:"KPI 플래너",      d:"하반기 목표 시뮬레이터",      h:780, w:2 },
     { id:"p:events",   name:"이벤트 효과 분석", d:"메인 대시보드 이벤트 페이지",  h:640, w:2 },
   ]},
@@ -233,6 +249,19 @@ function iframeSrc(it){
     p.set("period", "30");
     p.set("wid", "cb-" + key + "-" + (game||"base"));
     return "report.html?" + p.toString();
+  }
+  if(src === "o"){
+    p.set("sec", key);
+    return "overview.html?" + p.toString();
+  }
+  if(src === "i"){
+    // weeklyM / tableM = 같은 섹션의 월별 모드 (전체 기간)
+    p.set("sec", key === "weeklyM" ? "weekly" : key === "tableM" ? "table" : key);
+    if(game) p.set("game", game);
+    if(key === "weeklyM"){ p.set("wk", "month"); p.set("days", "0"); }
+    else if(key === "tableM"){ p.set("tbl", "month"); p.set("days", "0"); }
+    else p.set("days", "30");
+    return "index.html?" + p.toString();
   }
   if(it.id === "p:overview") return "overview.html?" + p.toString();
   if(it.id === "p:planner")  return "kpi-planner.html?" + p.toString();
