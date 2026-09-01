@@ -122,6 +122,10 @@
     <div class="cards" id="oneCards"></div>
     <div class="panel">
       <h2><span id="oneName"></span> 월별 상세 <span id="oneSub"></span></h2>
+      <div style="display:flex;align-items:center;gap:8px;margin:2px 0 6px;font-size:11.5px;color:var(--muted)">
+        <button class="btn" id="chToggle" style="font-size:11px;padding:4px 10px">▸ 채널 분해(WEB·APK·PC)</button>
+        <span>매출은 <b style="color:var(--text)">전체 · 자체결제</b> 순 · 채널은 자체결제 매출만 결제 플랫폼으로 나눈 금액</span>
+      </div>
       <div class="tbl-wrap"><table id="oneTable"></table></div>
     </div>
     <div class="panel">
@@ -227,6 +231,9 @@ const 액=v=>v==null?'–':(Math.abs(v)>=1e8?(v/1e8).toFixed(2)+'억':Math.round
 let amtOpen=new Set();
 try{ const a=JSON.parse(localStorage.getItem("ov-amt-open")); if(Array.isArray(a))amtOpen=new Set(a); }catch(e){}
 const saveAmtOpen=()=>{ try{ localStorage.setItem("ov-amt-open",JSON.stringify([...amtOpen])); }catch(e){} };
+/* 게임별 월별 상세에서 채널 열(WEB·APK·PC) 표시 여부 */
+let chOpen=false;
+try{ chOpen = localStorage.getItem("ov-ch-open")==="1"; }catch(e){}
 /* 프로젝트 한 줄 → 금액 5행(전체 / 자체결제 / ㄴWEB ㄴAPK ㄴPC) */
 function amtRows(c,ms){
   const defs=[
@@ -317,11 +324,19 @@ function renderOne(code){
   }
   // 표
   const t=document.getElementById("oneTable");
-  let head="<thead><tr><th>월</th><th>전체 일평균PU</th><th>전체 ARPPU</th><th class='grp'>자체 일평균PU</th><th>자체 ARPPU</th><th class='grp'>자체 PU비중</th><th>자체 매출비중</th></tr></thead>";
+  const chb=document.getElementById("chToggle");
+  if(chb) chb.textContent = chOpen? "▾ 채널 분해 접기" : "▸ 채널 분해(WEB·APK·PC)";
+  let head="<thead><tr><th>월</th><th class='grp'>전체 매출</th><th>자체결제 매출</th>"
+    +(chOpen?"<th>ㄴ WEB</th><th>ㄴ APK</th><th>ㄴ PC</th>":"")
+    +"<th class='grp'>전체 일평균PU</th><th>전체 ARPPU</th><th class='grp'>자체 일평균PU</th><th>자체 ARPPU</th><th class='grp'>자체 PU비중</th><th>자체 매출비중</th></tr></thead>";
   let body="<tbody>";
   ms.forEach(m=>{const o=AGG[code][m];const dl=dlyOf(code,m);const prov=isProvisional(m,o);const ps=metricVal(o,'puShare',dl);
+    const ch=v=>`<td>${v?액(v):'–'}${v&&o.d2cRev?` <span style="color:var(--muted);font-size:11px">${(v/o.d2cRev*100).toFixed(0)}%</span>`:''}</td>`;
     body+=`<tr><td class="mon">${+m.slice(5,7)}월${prov?'<span class="prov">진행중</span>':''}</td>
-      <td>${N(metricVal(o,'totPU',dl))}</td><td>${N(metricVal(o,'totARPPU',dl))}</td>
+      <td class="grp">${액(o.totRev)}</td>
+      <td style="color:var(--accent);font-weight:600">${액(o.d2cRev)}</td>
+      ${chOpen?ch(o.web)+ch(o.apk)+ch(o.pc):""}
+      <td class="grp">${N(metricVal(o,'totPU',dl))}</td><td>${N(metricVal(o,'totARPPU',dl))}</td>
       <td class="grp">${N(o.d2cPU/o.days.size)}</td><td>${N(metricVal(o,'d2cARPPU',dl))}</td>
       <td class="grp"><span class="heat" style="background:rgba(79,140,255,${(0.18+Math.min(1,ps/35)*0.7).toFixed(2)})">${P(ps)}</span></td>
       <td style="color:var(--accent);font-weight:600">${P(metricVal(o,'revShare',dl))}</td></tr>`;});
@@ -386,6 +401,11 @@ async function boot(url){
 document.getElementById("pjSel").addEventListener("change",render);
 document.getElementById("yearSel").addEventListener("change",e=>{curYear=e.target.value;render();});
 document.getElementById("metricSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;curMetric=b.dataset.m;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderAll();});
+document.getElementById("chToggle").addEventListener("click",()=>{
+  chOpen=!chOpen;
+  try{ localStorage.setItem("ov-ch-open",chOpen?"1":"0"); }catch(e){}
+  render();
+});
 document.getElementById("amtAll").addEventListener("click",()=>{
   const allOpen=CODES.length>0&&CODES.every(c=>amtOpen.has(c));
   amtOpen = allOpen? new Set() : new Set(CODES);
