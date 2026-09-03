@@ -82,7 +82,8 @@
   <div class="nav">
     <button class="btn" id="addBtn">➕ 섹션 추가</button>
     <button class="btn" id="loadAllBtn" title="스크롤을 기다리지 않고 담은 섹션을 전부 불러옵니다 (인쇄·캡처용)">⤓ 전체 불러오기</button>
-    <button class="btn" id="linkBtn" title="지금 구성을 링크에 담아 복사 — 다른 PC·노션에서 같은 화면">🔗 URL</button>
+    <button class="btn" id="linkBtn" title="지금 구성을 링크에 담아 복사 — 다른 PC·노션에서 같은 화면">🔗 보드 URL</button>
+    <button class="btn" id="secLinkBtn" title="담은 섹션들의 단독 URL 을 한 줄씩 복사 — 노션에 각각 임베드할 때">🔗 섹션 URL 전체</button>
     <button class="btn" id="themeBtn" title="밤/낮 모드">🌙</button>
     <button class="btn warn" id="clearBtn">초기화</button>
     <a class="btn" href="index.html">📊 대시보드</a>
@@ -237,6 +238,13 @@ function save(){
 }
 
 /* ===== 렌더 ===== */
+/* 섹션 단독 URL(절대주소) — 노션 임베드용 */
+function secUrl(it){ return new URL(iframeSrc(it), location.href).href; }
+/* 클립보드 복사 — 실패하면 주소창에 띄워 직접 복사하게 한다 */
+function copyText(text, msg){
+  navigator.clipboard.writeText(text).then(()=>toast(msg))
+    .catch(()=>prompt("아래 주소를 복사하세요.", text));
+}
 /* 배포 버전 — iframe URL 에 붙여 브라우저가 옛 섹션을 캐시해 두는 것을 막는다 */
 const CB_VER = "1.27.0";
 function iframeSrc(it){
@@ -305,6 +313,7 @@ function render(){
           <button class="ic cfg" title="게임·높이·너비">⚙</button>
           <button class="ic up" title="위로">▲</button>
           <button class="ic dn" title="아래로">▼</button>
+          <button class="ic lnk" title="이 섹션만 열리는 URL 복사 — 노션에 붙이면 그대로 임베드됩니다">🔗</button>
           <button class="ic new" title="새 탭에서 열기">↗</button>
           <button class="ic del" title="빼기">✕</button>
         </span>
@@ -330,7 +339,8 @@ function render(){
   bindCells();
   observeCells();
   document.getElementById("foot").innerHTML = items.length
-    ? `섹션 ${items.length}개 · 각 섹션은 화면에 보일 때 불러옵니다(지연 로드) · 섹션마다 시트를 따로 읽으므로 10개 이상 담으면 첫 로드가 느려질 수 있습니다 · 구성은 이 브라우저에 저장되고, 🔗 URL 로 다른 PC·노션에 그대로 옮길 수 있습니다`
+    ? `섹션 ${items.length}개 · 각 섹션은 화면에 보일 때 불러옵니다(지연 로드) · 섹션마다 시트를 따로 읽으므로 10개 이상 담으면 첫 로드가 느려질 수 있습니다<br>
+       <b style="color:var(--tx)">노션에 넣을 때</b> — 카드의 <b>🔗</b> 로 그 섹션만 열리는 주소를 복사해 노션에서 <b>/embed</b> 로 붙이세요(여러 개면 상단 <b>🔗 섹션 URL 전체</b>). 보드 전체를 한 장으로 넣으려면 <b>🔗 보드 URL</b> 을 쓰면 됩니다`
     : "";
 }
 
@@ -342,6 +352,7 @@ function bindCells(){
     cell.querySelector(".up").addEventListener("click",()=>move(i,-1));
     cell.querySelector(".dn").addEventListener("click",()=>move(i,1));
     cell.querySelector(".new").addEventListener("click",()=>window.open(iframeSrc(items[i]),"_blank"));
+    cell.querySelector(".lnk").addEventListener("click",()=>copyText(secUrl(items[i]), DEF[items[i].id].name+" 섹션 URL 복사 — 노션에 붙여넣으면 임베드됩니다"));
     cell.querySelector(".cg").addEventListener("change",e=>{ items[i].game=e.target.value; save(); render(); });
     cell.querySelector(".ch").addEventListener("change",e=>{ items[i].h=+e.target.value; save(); render(); });
     cell.querySelector(".cw").addEventListener("change",e=>{ items[i].w=+e.target.value; save(); render(); });
@@ -411,6 +422,11 @@ function toast(m){
 
 /* ===== 이벤트 ===== */
 document.getElementById("addBtn").addEventListener("click", openCatalog);
+document.getElementById("secLinkBtn").addEventListener("click", ()=>{
+  if(!items.length) return toast("담은 섹션이 없습니다");
+  const lines = items.map(it => `${DEF[it.id].name}${it.game?" ("+it.game+")":""}\t${secUrl(it)}`);
+  copyText(lines.join("\n"), `섹션 ${items.length}개 URL 복사 — 노션에 붙여넣고 각각 임베드하세요`);
+});
 document.getElementById("loadAllBtn").addEventListener("click", ()=>{
   const n = loadAllCells();
   toast(n ? n+"개 섹션을 불러옵니다" : "이미 다 불러왔습니다");
