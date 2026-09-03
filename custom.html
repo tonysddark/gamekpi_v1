@@ -246,7 +246,7 @@ function copyText(text, msg){
     .catch(()=>prompt("아래 주소를 복사하세요.", text));
 }
 /* 배포 버전 — iframe URL 에 붙여 브라우저가 옛 섹션을 캐시해 두는 것을 막는다 */
-const CB_VER = "1.27.0";
+const CB_VER = "1.28.0";
 function iframeSrc(it){
   const d = DEF[it.id];
   const [src, key] = it.id.split(":");
