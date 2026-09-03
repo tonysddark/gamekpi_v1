@@ -1164,6 +1164,119 @@ const eventMarkPlugin = {
     ctx.restore();
   }
 };
+/* ── 프로모션별 기간 막대(간트) ─────────────────────────────────────────
+   그룹(겹침 묶음) 하나에 선 하나였던 표기를 이벤트 하나에 막대 하나로 바꾼다.
+   겹치는 프로모션은 아래로 한 줄씩 내려 쌓는다(레인). */
+const EV_LANE_H = 13, EV_LANE_MAX = 5;
+function buildEvBars(rows, groups) {
+  if (!rows.length) return { bars: [], lanes: 0, hidden: 0 };
+  const d0 = rows[0].date, d1 = rows[rows.length - 1].date;
+  const list = [];
+  groups.forEach(g => g.events.forEach((e, ei) => {
+    if (e.end < d0 || e.start > d1) return;
+    let i0 = rows.findIndex(r => r.date >= e.start); if (i0 < 0) i0 = 0;
+    let i1 = -1; rows.forEach((r, i) => { if (r.date <= e.end) i1 = i; });
+    list.push({
+      e, g, num: g.events.length > 1 ? `${g.num}-${ei + 1}` : `${g.num}`,
+      i0, i1: Math.max(i1, i0), color: typeColor(e.type),
+      full: e.start >= d0 && e.end <= d1        // 기간이 화면 안에 온전히 들어오는지
+    });
+  }));
+  // 시작일 순 → 긴 것 우선. 겹치지 않는 첫 레인에 넣는다
+  list.sort((a, b) => a.i0 - b.i0 || (b.i1 - b.i0) - (a.i1 - a.i0) || a.num.localeCompare(b.num));
+  const laneEnd = [];
+  list.forEach(b => {
+    let L = laneEnd.findIndex(end => end < b.i0);
+    if (L < 0) L = laneEnd.length;
+    laneEnd[L] = b.i1;
+    b.lane = L;
+  });
+  const bars = list.filter(b => b.lane < EV_LANE_MAX);
+  return { bars, lanes: Math.min(laneEnd.length, EV_LANE_MAX), hidden: list.length - bars.length };
+}
+/* 차트 하단 프로모션 막대 플러그인 */
+const eventBarPlugin = {
+  id: "eventBars",
+  afterDraw(chart) {
+    const cfg = chart.options.plugins.eventBars;
+    chart.$barHits = [];
+    if (!cfg || !cfg.bars || !cfg.bars.length) return;
+    const xs = chart.scales.x, area = chart.chartArea, ctx = chart.ctx;
+    const top0 = xs.bottom + 5;                 // x축 라벨 아래에서 시작
+    const hov = chart.$hoverBar;
+    ctx.save();
+    // 마우스가 올라간 프로모션의 기간을 차트 영역에 음영으로
+    if (hov) {
+      const hx0 = xs.getPixelForValue(hov.i0), hx1 = xs.getPixelForValue(hov.i1);
+      ctx.fillStyle = hov.color + "1f";
+      ctx.fillRect(hx0 - 3, area.top, (hx1 - hx0) + 6, area.bottom - area.top);
+    }
+    ctx.font = "600 9.5px 'Pretendard','Malgun Gothic',sans-serif";
+    ctx.textBaseline = "middle";
+    cfg.bars.forEach(b => {
+      const x0 = xs.getPixelForValue(b.i0), x1 = xs.getPixelForValue(b.i1);
+      const y = top0 + b.lane * EV_LANE_H, h = EV_LANE_H - 4;
+      const bx0 = x0 - 3, bw = Math.max((x1 - x0) + 6, 7);
+      const on = hov && hov.e === b.e;
+      ctx.beginPath();
+      const r = Math.min(3.5, h / 2);
+      ctx.moveTo(bx0 + r, y); ctx.lineTo(bx0 + bw - r, y);
+      ctx.quadraticCurveTo(bx0 + bw, y, bx0 + bw, y + r);
+      ctx.lineTo(bx0 + bw, y + h - r);
+      ctx.quadraticCurveTo(bx0 + bw, y + h, bx0 + bw - r, y + h);
+      ctx.lineTo(bx0 + r, y + h);
+      ctx.quadraticCurveTo(bx0, y + h, bx0, y + h - r);
+      ctx.lineTo(bx0, y + r);
+      ctx.quadraticCurveTo(bx0, y, bx0 + r, y);
+      ctx.closePath();
+      ctx.fillStyle = on ? b.color : b.color + "d9";
+      ctx.fill();
+      if (on) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke(); }
+      // 막대가 넓으면 제목, 좁으면 번호만
+      const label = bw >= 58 ? `${b.num} ${b.e.title}` : bw >= 22 ? b.num : "";
+      if (label) {
+        ctx.save();
+        ctx.beginPath(); ctx.rect(bx0 + 3, y, bw - 6, h); ctx.clip();
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "left";
+        ctx.fillText(label, bx0 + 5, y + h / 2 + 0.5);
+        ctx.restore();
+      }
+      chart.$barHits.push({ x0: bx0, x1: bx0 + bw, y0: y, y1: y + h, bar: b });
+    });
+    if (cfg.hidden > 0) {
+      ctx.fillStyle = th_muted();
+      ctx.textAlign = "left";
+      ctx.fillText(`+${cfg.hidden}건 더 겹침`, area.left, top0 + EV_LANE_MAX * EV_LANE_H + 2);
+    }
+    ctx.restore();
+  }
+};
+const th_muted = () => cssVar("--muted") || "#8b96ad";
+/* 막대 클릭 = 그 프로모션 단독 상세 / 호버 = 기간 음영 */
+function attachEventBars(chart) {
+  const pick = (e) => {
+    const rect = chart.canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    return (chart.$barHits || []).find(h => mx >= h.x0 && mx <= h.x1 && my >= h.y0 && my <= h.y1);
+  };
+  chart.canvas.onclick = e => {
+    const hit = pick(e);
+    if (!hit) return;
+    const b = hit.bar;
+    showEventDetail({ num: b.num, start: b.e.start, end: b.e.end, events: [b.e] });
+  };
+  chart.canvas.onmousemove = e => {
+    const hit = pick(e);
+    const next = hit ? hit.bar : null;
+    chart.canvas.style.cursor = hit ? "pointer" : "";
+    chart.canvas.title = hit ? `${hit.bar.e.game} · ${hit.bar.e.type} · ${hit.bar.e.start}~${hit.bar.e.end}\n${hit.bar.e.title}` : "";
+    if ((chart.$hoverBar || null) !== next) { chart.$hoverBar = next; chart.draw(); }
+  };
+  chart.canvas.onmouseleave = () => {
+    if (chart.$hoverBar) { chart.$hoverBar = null; chart.draw(); }
+  };
+}
 function attachEventClicks(chart) {
   chart.canvas.onclick = e => {
     const rect = chart.canvas.getBoundingClientRect();
@@ -1412,7 +1525,7 @@ function renderCharts() {
   let revDatasets;
   if (isAll) {
     document.getElementById("chRevenueTitle").innerHTML =
-      '게임별 자체결제 매출 &amp; 전체 비중 <span>★ 피크 TOP5 &amp; ▼ 최저 · 막대: 게임별 자체결제(원) / 선: 전체 비중(%)</span>';
+      '게임별 자체결제 매출 &amp; 전체 비중 <span>★ 피크 TOP5 &amp; ▼ 최저 · 막대: 게임별 자체결제(원) / 선: 전체 비중(%) · 하단 막대 = 프로모션 기간</span>';
     revDatasets = [
       { type: "line", label: "전체 자체결제 비중(%)", data: ratioPct, yAxisID: "y2",
         borderColor: cssVar("--accent-2"), borderWidth: 2, pointRadius: 0, tension: .3 },
@@ -1424,7 +1537,7 @@ function renderCharts() {
     ];
   } else {
     document.getElementById("chRevenueTitle").innerHTML =
-      '일별 매출 &amp; 자체결제 비중 <span>★ 피크 TOP5 &amp; ▼ 최저 · 막대: 매출(원) / 선: 비중(%)</span>';
+      '일별 매출 &amp; 자체결제 비중 <span>★ 피크 TOP5 &amp; ▼ 최저 · 막대: 매출(원) / 선: 비중(%) · 하단 막대 = 프로모션 기간(겹치면 아래로 쌓임 · 클릭 시 상세)</span>';
     revDatasets = [
       { type: "line", label: "자체결제 비중(%)", data: ratioPct, yAxisID: "y2",
         borderColor: cssVar("--accent-2"), borderWidth: 2, pointRadius: 0, tension: .3 },
@@ -1437,18 +1550,19 @@ function renderCharts() {
         stack: "s", borderRadius: 2 },
     ];
   }
+  const evBars = buildEvBars(rows, rows.length ? eventGroups(visibleEvents()).map((g, k) => ({ ...g, num: k + 1 })) : []);
   charts.rev = new Chart(document.getElementById("chRevenue"), {
     data: { labels, datasets: revDatasets },
-    plugins: [extremePlugin, eventMarkPlugin],
+    plugins: [extremePlugin, eventBarPlugin],
     options: baseOpts(th, {
-      layout: { padding: { top: 26, bottom: 24 } },
+      layout: { padding: { top: 26, bottom: 24 + evBars.lanes * EV_LANE_H + (evBars.hidden ? 12 : 0) } },
       scales: {
         x: { grid: { display: false }, ticks: { maxTicksLimit: 14 } },
         y: { stacked: true, grid: { color: th.grid }, ticks: { callback: v => fmtWon(v) } },
         y2: { position: "right", grid: { display: false }, min: 0, ticks: { callback: v => v + "%" } }
       },
       plugins: {
-        eventMarks: { groups: evGroups },
+        eventBars: { bars: evBars.bars, hidden: evBars.hidden },
         extremeLabels: { items: revLabelItems },
         legend: { labels: { boxWidth: 12 } },
         tooltip: { callbacks: {
@@ -1463,7 +1577,7 @@ function renderCharts() {
     })
   });
 
-  attachEventClicks(charts.rev);
+  attachEventBars(charts.rev);
 
   /* ---- 2. 비중 추이 ---- */
   let ratioDatasets;
