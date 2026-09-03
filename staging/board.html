@@ -797,10 +797,22 @@ function prevSpanSums(key){
   return s;
 }
 // 우측 고정 정보 패널 — 기본은 최근 구간, 막대 호버 시 해당 구간
+/* 목표 대비 부족/초과 한 줄 — 부족은 주황, 달성은 초록 */
+function gapRow(label, gap){
+  const short = gap > 0;
+  return `<div class="row" style="font-size:10.5px;line-height:1.5;margin:-3px 0 3px">
+    <span class="k" style="opacity:.7">${label}</span>
+    <span style="color:${short?"var(--peak)":"var(--green)"}">${short?억(gap)+" 부족":"달성 (+"+억(-gap)+")"}</span></div>`;
+}
 function fillInfo(idx){
   const el=document.getElementById("s1info"); if(!el)return;
   const r=CHART_ROWS[idx]; if(!r){el.innerHTML="";return;}
   const pct=v=>r.total?(v/r.total*100).toFixed(1)+"%":"–";
+  // 실적 기준 목표 = 그 구간 전체 매출 × 목표비중(그 달의 TGTR)
+  // r.tgt.ratio 는 이미 퍼센트 값(40) — 100을 곱하지 않는다
+  const tgtR = r.tgt&&r.tgt.ratio!=null ? +(+r.tgt.ratio).toFixed(0)
+             : (r.key.length>=7 && TGTR[r.key.slice(0,7)]!=null ? +TGTR[r.key.slice(0,7)] : null);
+  const tgtA = (tgtR!=null && r.total) ? r.total*tgtR/100 : null;
   const ps=prevSpanSums(r.key);
   const dTxt=(cur,prv)=>{ const d=cur-prv; const rate=prv?d/prv*100:null;
     return `<span style="color:${d>=0?'var(--green)':'var(--down)'}">${d>=0?"▲ +":"▼ −"}${억(Math.abs(d))}${rate!=null?" ("+(d>=0?"+":"-")+Math.abs(rate).toFixed(1)+"%)":""}</span>`; };
@@ -817,8 +829,11 @@ function fillInfo(idx){
     <div class="row"><span class="k" style="color:var(--green)">· PC</span><span>${억(r.pc)} (${pct(r.pc)})</span></div>
     ${sub(r.pc,ps&&ps.pc)}
     <div class="row"><span class="k">기타(마켓)</span><span>${억(r.etc)} (${pct(r.etc)})</span></div>
-    ${r.tgt?`<div class="row"><span class="k">목표 자체결제</span><span style="color:var(--purple)">${억(r.tgt.d2c)} (${P(r.tgt.ratio)})</span></div>`:""}
-    <div style="margin-top:8px;font-size:10.5px;color:var(--muted);opacity:.75;line-height:1.5">막대에 마우스를 올리면 해당 구간 정보로 바뀝니다</div>`;
+    ${r.tgt?`<div class="row"><span class="k">목표 자체결제 <span style="opacity:.6;font-size:10px">사업목표</span></span><span style="color:var(--purple)">${억(r.tgt.d2c)} (${P(r.tgt.ratio)})</span></div>`:""}
+    ${r.tgt?gapRow("└ 부족", r.tgt.d2c-r.d2c):""}
+    ${tgtA!=null?`<div class="row" style="margin-top:4px"><span class="k">목표 자체결제 <span style="opacity:.6;font-size:10px">실적 기준</span></span><span style="color:var(--purple)" title="전체 매출 ${억(r.total)} × 목표비중 ${tgtR}% = ${억(tgtA)}">${억(tgtA)} (${tgtR}%)</span></div>`:""}
+    ${tgtA!=null?gapRow("└ 부족", tgtA-r.d2c):""}
+    <div style="margin-top:8px;font-size:10.5px;color:var(--muted);opacity:.75;line-height:1.5">막대에 마우스를 올리면 해당 구간 정보로 바뀝니다<br>실적 기준 목표 = 그 구간 <b>전체 매출 × 목표비중</b> · 사업목표 = 사업계획 × 목표비중</div>`;
 }
 
 function renderCards(rows){
