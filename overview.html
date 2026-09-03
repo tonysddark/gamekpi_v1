@@ -49,7 +49,8 @@
   .prov{font-size:10px;color:var(--peak);border:1px solid var(--peak);border-radius:5px;padding:0 5px;margin-left:5px;vertical-align:1px;}
   /* 섹션 단독 임베드(?sec=) — 머리말·안내·시트 연결을 숨기고 그 섹션만 */
   html.embed body{padding:0}
-  html.embed header, html.embed .sub, html.embed .banner, html.embed #setup, html.embed .foot-note{display:none !important}
+  /* #range 를 id 로 지정 — 표 안의 셀 클래스와 이름이 겹치지 않게 (.sub 로 잡으면 표 라벨까지 숨는다) */
+  html.embed header, html.embed #range, html.embed .banner, html.embed #setup, html.embed .foot-note{display:none !important}
   html.embed .panel{border:none;border-radius:0;margin:0}
   .linkBtn{background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:7px;
     padding:2px 8px;font-size:11px;cursor:pointer;margin-left:8px;vertical-align:2px;font-weight:400}
@@ -61,7 +62,7 @@
   tr.amt.first td{padding-top:5px;}
   tr.amt.last td{border-bottom:1px solid var(--border);padding-bottom:6px;}
   tr.amt td.k{text-align:left;white-space:nowrap;}
-  tr.amt td.k.sub{padding-left:20px;}
+  tr.amt td.k.chsub{padding-left:20px;}
   tr.amt.d2c td{color:var(--accent);font-weight:600;}
   tr.amt.tot td{color:var(--text);}
   .chart-box{position:relative;height:320px;margin-top:8px;}
@@ -262,9 +263,9 @@ function amtRows(c,ms){
   const defs=[
     ['tot','전체 매출','',o=>o.totRev],
     ['d2c','자체결제 매출','',o=>o.d2cRev],
-    ['','ㄴ WEB 매출','sub',o=>o.web],
-    ['','ㄴ APK 매출','sub',o=>o.apk],
-    ['','ㄴ PC 매출','sub',o=>o.pc]];
+    ['','ㄴ WEB 매출','chsub',o=>o.web],
+    ['','ㄴ APK 매출','chsub',o=>o.apk],
+    ['','ㄴ PC 매출','chsub',o=>o.pc]];
   return defs.map(([cls,label,ind,get],i)=>{
     const cells=ms.map(m=>{
       const o=AGG[c][m]; if(!o)return '<td>–</td>';
