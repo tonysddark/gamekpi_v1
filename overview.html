@@ -65,6 +65,7 @@
   tr.amt td.k.chsub{padding-left:20px;}
   tr.amt.d2c td{color:var(--accent);font-weight:600;}
   tr.amt.tot td{color:var(--text);}
+  .mom{font-size:10.5px;line-height:1.35;margin-top:1px;white-space:nowrap;}
   .chart-box{position:relative;height:320px;margin-top:8px;}
   .legend{display:flex;flex-wrap:wrap;gap:13px;font-size:12px;color:var(--muted);margin:2px 0 8px;}
   .legend span{display:flex;align-items:center;gap:5px;}
@@ -279,6 +280,16 @@ function amtRows(c,ms){
 const isPct=m=>m==='puShare'||m==='revShare';
 const fmtMetric=(v,m)=> v==null?'–' : (isPct(m)?P(v):N(v));
 
+/* 전월 대비 표기 — 비중(%) 지표는 %p 차, 그 외는 % 변화율 */
+function momTag(cur,prev,metric){
+  if(cur==null||prev==null||(!isPct(metric)&&!prev))return "";
+  const d=isPct(metric)? cur-prev : (cur/prev-1)*100;
+  if(!isFinite(d))return "";
+  const c=d>0.05?"var(--green)":d<-0.05?"var(--down)":"var(--muted)";
+  const sign=d>0.05?"▲":d<-0.05?"▼":"―";
+  const txt=Math.abs(d).toFixed(1)+(isPct(metric)?"%p":"%");
+  return `<div class="mom" style="color:${c}">${sign} ${txt}</div>`;
+}
 function monthsOfYear(y){ const ms=[]; for(let i=1;i<=12;i++){const k=y+"-"+String(i).padStart(2,'0'); if(CODES.some(c=>AGG[c][k]))ms.push(k);} return ms; }
 function isProvisional(m,o){ if(m!==LATEST)return false; const y=+m.slice(0,4),mo=+m.slice(5,7); const dim=new Date(y,mo,0).getDate(); return o.days.size<dim; }
 
@@ -309,14 +320,18 @@ function renderAll(){
   CODES.forEach(c=>{
     const open=amtOpen.has(c);
     body+=`<tr><td class="pj" style="color:${HEX[c]}" data-pj="${c}" title="클릭하면 금액 상세를 접었다 펼칩니다"><span class="cav">${open?'▾':'▸'}</span>${c}</td>`;
-    ms.forEach(m=>{
+    ms.forEach((m,mi)=>{
       const o=AGG[c][m]; if(!o){body+="<td>–</td>";return;}
       const v=metricVal(o,curMetric,dlyOf(c,m)); const prov=isProvisional(m,o);
+      // 전월 대비 — 비중 지표는 %p, 금액·인원 지표는 %
+      const pm=mi>0?ms[mi-1]:null, po=pm?AGG[c][pm]:null;
+      const pv=po?metricVal(po,curMetric,dlyOf(c,pm)):null;
+      const mom=momTag(v,pv,curMetric);
       if(curMetric==='puShare'&&v!=null){
         const t2=Math.max(0,Math.min(1,v/35)); const a=(0.18+t2*0.7).toFixed(2);
-        body+=`<td><span class="heat" style="background:rgba(79,140,255,${a})">${P(v)}${prov?'<span class="prov">진행중</span>':''}</span></td>`;
+        body+=`<td><span class="heat" style="background:rgba(79,140,255,${a})">${P(v)}${prov?'<span class="prov">진행중</span>':''}</span>${mom}</td>`;
       } else {
-        body+=`<td>${fmtMetric(v,curMetric)}${prov?'<span class="prov">진행중</span>':''}</td>`;
+        body+=`<td>${fmtMetric(v,curMetric)}${prov?'<span class="prov">진행중</span>':''}${mom}</td>`;
       }
     });
     body+="</tr>";
