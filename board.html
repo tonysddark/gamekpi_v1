@@ -438,7 +438,26 @@ const valPlugin={id:"barVals",afterDatasetsDraw(c){
       ctx.fillStyle=ds.valColor||"#fff"; ctx.textAlign="center"; ctx.textBaseline="middle";
       ctx.fillText(억(v), el.x, (el.y+el.base)/2); ctx.restore(); });
   });
+  // 비중 선(우축) 수치 — 점 위에 % 표기. 실선(실적)만, 겹치면 건너뛴다
+  c.data.datasets.forEach((ds,di)=>{
+    if(ds.type!=="line"||!ds.showPct)return; const meta=c.getDatasetMeta(di); if(meta.hidden)return;
+    ctx.save(); ctx.font="700 10px Pretendard,'Malgun Gothic',sans-serif";
+    ctx.textAlign="center"; ctx.textBaseline="bottom";
+    let lastX=-99;
+    meta.data.forEach((el,i)=>{ const v=ds.data[i]; if(v==null||!el)return;
+      if(el.x-lastX<30)return;                       // 라벨끼리 겹치면 생략
+      lastX=el.x;
+      const t=v.toFixed(1)+"%";
+      const w=ctx.measureText(t).width;
+      ctx.fillStyle=bgC(); ctx.globalAlpha=.72;      // 선·막대 위에서도 읽히게 배경 깔기
+      ctx.fillRect(el.x-w/2-3, el.y-15, w+6, 13);
+      ctx.globalAlpha=1; ctx.fillStyle=ds.borderColor;
+      ctx.fillText(t, el.x, el.y-3);
+    });
+    ctx.restore();
+  });
 }};
+const bgC=()=>getComputedStyle(document.documentElement).getPropertyValue("--panel").trim()||"#fff";
 let kpiView="game", kpiMonth="2026-12"; // 섹터4 뷰: 'month'(선택 프로젝트 월별) | 'game'(특정 월 전 게임) — 기본 게임별
 // 목표 금액 기준: 'plan'=사업계획×목표비중 / 'actual'=전체 매출 실측×목표비중
 let kpiBase="plan";
@@ -716,7 +735,7 @@ function render(){
   // 목표 비중: 목표 있는 구간 + 직전 실적 앵커
   const firstTgt=rows.findIndex(r=>r.tgt);
   const lineTgt=rows.map((r,i)=>{ if(r.tgt)return r.tgt.ratio; if(firstTgt>0&&i===firstTgt-1)return r.ratio; return null; });
-  ds.push({type:"line",label:"자체결제 비중",data:lineAct,borderColor:COL.ratio,borderWidth:2.5,pointRadius:2,tension:.25,yAxisID:"y2",order:0});
+  ds.push({type:"line",label:"자체결제 비중",data:lineAct,borderColor:COL.ratio,borderWidth:2.5,pointRadius:2,tension:.25,yAxisID:"y2",order:0,showPct:1});
   ds.push({type:"line",label:"자체결제 비중(목표)",data:lineTgt,borderColor:COL.ratio,borderWidth:2.5,borderDash:[6,4],pointRadius:2,tension:.25,yAxisID:"y2",order:0});
 
   const grid=gridC(), tk=tickC();
@@ -778,10 +797,22 @@ function prevSpanSums(key){
   return s;
 }
 // 우측 고정 정보 패널 — 기본은 최근 구간, 막대 호버 시 해당 구간
+/* 목표 대비 부족/초과 한 줄 — 부족은 주황, 달성은 초록 */
+function gapRow(label, gap){
+  const short = gap > 0;
+  return `<div class="row" style="font-size:10.5px;line-height:1.5;margin:-3px 0 3px">
+    <span class="k" style="opacity:.7">${label}</span>
+    <span style="color:${short?"var(--peak)":"var(--green)"}">${short?억(gap)+" 부족":"달성 (+"+억(-gap)+")"}</span></div>`;
+}
 function fillInfo(idx){
   const el=document.getElementById("s1info"); if(!el)return;
   const r=CHART_ROWS[idx]; if(!r){el.innerHTML="";return;}
   const pct=v=>r.total?(v/r.total*100).toFixed(1)+"%":"–";
+  // 실적 기준 목표 = 그 구간 전체 매출 × 목표비중(그 달의 TGTR)
+  // r.tgt.ratio 는 이미 퍼센트 값(40) — 100을 곱하지 않는다
+  const tgtR = r.tgt&&r.tgt.ratio!=null ? +(+r.tgt.ratio).toFixed(0)
+             : (r.key.length>=7 && TGTR[r.key.slice(0,7)]!=null ? +TGTR[r.key.slice(0,7)] : null);
+  const tgtA = (tgtR!=null && r.total) ? r.total*tgtR/100 : null;
   const ps=prevSpanSums(r.key);
   const dTxt=(cur,prv)=>{ const d=cur-prv; const rate=prv?d/prv*100:null;
     return `<span style="color:${d>=0?'var(--green)':'var(--down)'}">${d>=0?"▲ +":"▼ −"}${억(Math.abs(d))}${rate!=null?" ("+(d>=0?"+":"-")+Math.abs(rate).toFixed(1)+"%)":""}</span>`; };
@@ -798,8 +829,11 @@ function fillInfo(idx){
     <div class="row"><span class="k" style="color:var(--green)">· PC</span><span>${억(r.pc)} (${pct(r.pc)})</span></div>
     ${sub(r.pc,ps&&ps.pc)}
     <div class="row"><span class="k">기타(마켓)</span><span>${억(r.etc)} (${pct(r.etc)})</span></div>
-    ${r.tgt?`<div class="row"><span class="k">목표 자체결제</span><span style="color:var(--purple)">${억(r.tgt.d2c)} (${P(r.tgt.ratio)})</span></div>`:""}
-    <div style="margin-top:8px;font-size:10.5px;color:var(--muted);opacity:.75;line-height:1.5">막대에 마우스를 올리면 해당 구간 정보로 바뀝니다</div>`;
+    ${r.tgt?`<div class="row"><span class="k">목표 자체결제 <span style="opacity:.6;font-size:10px">사업목표</span></span><span style="color:var(--purple)">${억(r.tgt.d2c)} (${P(r.tgt.ratio)})</span></div>`:""}
+    ${r.tgt?gapRow("└ 부족", r.tgt.d2c-r.d2c):""}
+    ${tgtA!=null?`<div class="row" style="margin-top:4px"><span class="k">목표 자체결제 <span style="opacity:.6;font-size:10px">실적 기준</span></span><span style="color:var(--purple)" title="전체 매출 ${억(r.total)} × 목표비중 ${tgtR}% = ${억(tgtA)}">${억(tgtA)} (${tgtR}%)</span></div>`:""}
+    ${tgtA!=null?gapRow("└ 부족", tgtA-r.d2c):""}
+    <div style="margin-top:8px;font-size:10.5px;color:var(--muted);opacity:.75;line-height:1.5">막대에 마우스를 올리면 해당 구간 정보로 바뀝니다<br>실적 기준 목표 = 그 구간 <b>전체 매출 × 목표비중</b> · 사업목표 = 사업계획 × 목표비중</div>`;
 }
 
 function renderCards(rows){
