@@ -759,7 +759,10 @@ function render(){
     ds.forEach((d,i)=>chart.setDatasetVisibility(i,!HIDDEN.has(d.label)));
     chart.update(); }
   else chart=new Chart(document.getElementById("s1chart"),{data:{labels,datasets:ds},options:opts,plugins:[valPlugin]});
-  fillInfo(rows.length-1);
+  INFO_DEF=defaultInfoIdx(rows);
+  fillInfo(INFO_DEF);
+  // 마우스를 떼면 기본 구간(현재 월)으로 되돌린다 — 마지막에 스친 막대가 남아 있지 않게
+  chart.canvas.onmouseleave=()=>fillInfo(INFO_DEF);
 
   renderCards(rows);
   renderKPI();
@@ -807,6 +810,14 @@ function gapRow(label, gap){
     <span class="k" style="opacity:.7">${label}</span>
     <span style="color:${short?"var(--peak)":"var(--green)"}">${short?억(gap)+" 부족":"달성 (+"+억(-gap)+")"}</span></div>`;
 }
+/* 마우스를 올리지 않았을 때 보여줄 기본 구간 = 데이터가 있는 마지막 달(=현재 월).
+   월별이면 그 달 막대, 일별·주별이면 그 달의 마지막 막대. */
+let INFO_DEF=-1;
+function defaultInfoIdx(rows){
+  const m=MAXD?MAXD.slice(0,7):"";
+  if(m) for(let i=rows.length-1;i>=0;i--) if(String(rows[i].key||"").slice(0,7)===m) return i;
+  return rows.length-1;
+}
 function fillInfo(idx){
   const el=document.getElementById("s1info"); if(!el)return;
   const r=CHART_ROWS[idx]; if(!r){el.innerHTML="";return;}
@@ -836,7 +847,7 @@ function fillInfo(idx){
     ${r.tgt?gapRow("└ 부족", r.tgt.d2c-r.d2c):""}
     ${tgtA!=null?`<div class="row" style="margin-top:4px"><span class="k">목표 자체결제 <span style="opacity:.6;font-size:10px">실적 기준</span></span><span style="color:var(--purple)" title="전체 매출 ${억(r.total)} × 목표비중 ${tgtR}% = ${억(tgtA)}">${억(tgtA)} (${tgtR}%)</span></div>`:""}
     ${tgtA!=null?gapRow("└ 부족", tgtA-r.d2c):""}
-    <div style="margin-top:8px;font-size:10.5px;color:var(--muted);opacity:.75;line-height:1.5">막대에 마우스를 올리면 해당 구간 정보로 바뀝니다<br>실적 기준 목표 = 그 구간 <b>전체 매출 × 목표비중</b> · 사업목표 = 사업계획 × 목표비중</div>`;
+    <div style="margin-top:8px;font-size:10.5px;color:var(--muted);opacity:.75;line-height:1.5">막대에 마우스를 올리면 해당 구간, 떼면 ${INFO_DEF>=0&&CHART_ROWS[INFO_DEF]?labelOf(CHART_ROWS[INFO_DEF].key):"현재 월"} 로 돌아옵니다<br>실적 기준 목표 = 그 구간 <b>전체 매출 × 목표비중</b> · 사업목표 = 사업계획 × 목표비중</div>`;
 }
 
 function renderCards(rows){
