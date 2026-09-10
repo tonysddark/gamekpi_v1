@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 시트 서버와 미리 연결해 둔다 -->
+<link rel="preconnect" href="https://docs.google.com" crossorigin>
+<link rel="dns-prefetch" href="https://docs.google.com">
 <title>자체결제 KPI 대시보드</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
@@ -601,8 +604,12 @@ const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 �
 
 /* ================= 버전 ================= */
 /* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
-const APP_VERSION = "1.28.0";
+const APP_VERSION = "1.29.0";
 const VERSION_HISTORY = [
+  { ver: "1.29.0", date: "2026-09-09", type: "기능", changes: [
+    "섹션 🔗 URL 이 '복사 당시의 옵션'을 담음 — 섹션 안에서 바꾼 게임·기간·월(메인), 지표·연도(전사 비교), 목표 기준(현황판)이 링크·다음 로드에 그대로 따라감. 커스텀 보드 카드 머리말에 지금 옵션이 표시되어 무엇이 복사될지 미리 확인 가능",
+    "첫 로드 속도 개선 — ① 게임 요약 탭을 한꺼번에 읽음(6개면 6번 줄 서던 것을 1회분으로) ② 같은 시트 탭은 한 번만 읽어 커스텀 보드 섹션끼리 나눠 씀(5분 캐시, 새로고침·직접 누른 동기화는 항상 새로 읽음) ③ ?game= 임베드는 그 프로젝트를 먼저 그리고 나머지는 뒤에서 채움 ④ 시트 서버 preconnect",
+  ]},
   { ver: "1.28.0", date: "2026-09-03", type: "기능", changes: [
     "메인 대시보드 섹션 임베드에 컨트롤 바 추가 — 노션·커스텀 보드에서도 섹션 안에서 게임(전체+게임별)·기간 프리셋(7/14/30/90/전체)·월을 바로 전환",
     "임베드에서 바꾼 값은 그 화면에만 적용되고 이 기기의 대시보드 설정(활성 게임·월)에는 저장되지 않음",
@@ -1042,6 +1049,7 @@ async function syncEvents(silent) {
   const useMaster = !eventSheetUrl;                 // 별도 이벤트 시트 미연결 → 마스터 시트 events 탭 사용
   const srcUrl = eventSheetUrl || masterSheetUrl;
   if (!srcUrl) return;
+  if (!silent) GSheet.bust();                       // 직접 누른 동기화는 캐시를 비우고 새로 읽는다
   try {
     let grid;
     if (useMaster) {
@@ -2098,6 +2106,8 @@ function renderAll() {
   renderTable();
   renderEvents();
   applyView();
+  // 데이터가 들어온 뒤에만 알린다 — 로드 전 기본값(전체)이 링크의 ?game= 을 덮지 않도록
+  if (EMBED_SEC && Object.keys(games).length) GSheet.postSecState("index", EMBED_SEC, embedParams());
 }
 
 /* ================= 테마 ================= */
@@ -2233,23 +2243,35 @@ async function readIndexTab(url) {
   return codes;
 }
 
-/* ---- 메인 시트(멀티 탭) 연결: index의 게임코드 → 각 '코드' 탭(요약) 로드 (-kpi 제외) ---- */
+/* ---- 메인 시트(멀티 탭) 연결: index의 게임코드 → 각 '코드' 탭(요약) 로드 (-kpi 제외) ----
+   요약 탭은 서로 의존이 없으므로 한꺼번에 읽는다 (예전엔 한 개씩 기다려 6개면 6번을 줄 세웠다).
+   섹션 임베드에 ?game= 이 박혀 있으면 그 프로젝트를 먼저 그리고, 나머지는 뒤에서 채운다. */
+async function loadGameTabs(url, codes, ok, fail) {
+  await Promise.all(codes.map(async code => {
+    const tu = sheetTabCsvUrl(url, code);   // 요약 탭 = 게임코드 (접미사 없음)
+    try {
+      const rows = parseKpiGrid(await fetchTabGrid(url, code));
+      games[code] = rows;
+      gameSheets[code] = tu;                // 개별 재동기화용
+      ok.push(`${code} ${rows.length}일`);
+    } catch (err) { fail.push(`${code}(${err.message})`); }
+  }));
+}
 async function connectMasterSheet(url, silent) {
   try {
+    if (!silent) GSheet.bust();             // 사용자가 직접 누른 동기화는 항상 새로 읽는다
     const codes = await readIndexTab(url);
     const ok = [], fail = [];
-    for (const code of codes) {
-      try {
-        const tu = sheetTabCsvUrl(url, code); // 요약 탭 = 게임코드 (접미사 없음)
-        const r = await fetch(tu + "&_t=" + Date.now(), { cache: "no-store" });
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        const rows = parseKpiGrid(parseCsv(await r.text()));
-        games[code] = rows;
-        gameSheets[code] = tu; // 개별 재동기화용
-        ok.push(`${code} ${rows.length}일`);
-      } catch (err) { fail.push(`${code}(${err.message})`); }
-    }
+    // 임베드에서 한 프로젝트만 보고 있으면 그 탭부터 — 첫 화면이 6개를 다 기다리지 않는다
+    const first = (EMBED_SEC && EMBED_GAME && EMBED_GAME !== "ALL" && codes.includes(EMBED_GAME))
+      ? EMBED_GAME : "";
+    const rest = first ? codes.filter(c => c !== first) : [];
+    await loadGameTabs(url, first ? [first] : codes, ok, fail);
     masterSheetUrl = url;
+    if (rest.length) {
+      // 임베드 안 컨트롤로 다른 프로젝트도 고를 수 있어야 하므로 뒤에서 이어 받는다
+      loadGameTabs(url, rest, ok, fail).then(() => { saveState(); renderAll(); });
+    }
     if (ok.length) {
       // 임베드 링크에 ?game= 이 있으면 그걸 유지한다 (기본은 여러 개면 전체)
       activeGame = (EMBED_GAME && (EMBED_GAME === "ALL" || games[EMBED_GAME]))
@@ -2270,11 +2292,12 @@ async function connectMasterSheet(url, silent) {
 async function syncAllGameSheets(silent) {
   const names = Object.keys(gameSheets);
   if (!names.length) return;
+  if (!silent) GSheet.bust();
   const ok = [], fail = [];
-  for (const n of names) {
+  await Promise.all(names.map(async n => {          // 시트끼리 의존이 없어 한꺼번에 읽는다
     try { ok.push(`${n} ${await syncGameSheet(n)}일`); }
     catch (e) { fail.push(`${n}(${e.message})`); }
-  }
+  }));
   if (ok.length) { saveState(); renderAll(); }
   if (!silent) {
     if (ok.length) toast(`🔄 시트 동기화: ${ok.join(" · ")}${fail.length ? " / 실패: " + fail.join(", ") : ""}`);
@@ -2882,6 +2905,17 @@ function renderEmbedCtl() {
     else { selMonth = ""; rangeFromD = rangeToD = ""; }
     renderAll();
   });
+}
+/* 지금 임베드가 보여주고 있는 옵션 — 커스텀 보드가 🔗 로 URL 을 복사할 때 이 값을 담는다
+   (섹션 안에서 게임·기간을 바꿔놓고 복사하면 그 화면이 그대로 열려야 한다) */
+function embedParams() {
+  const o = { game: activeGame || "" };
+  if (selMonth) o.month = selMonth;
+  else if (rangeFromD || rangeToD) { o.from = rangeFromD || ""; o.to = rangeToD || ""; }
+  else o.days = String(rangeDays);
+  if (tblGran === "month") o.tbl = "month";
+  if (wkGran === "month") o.wk = "month";
+  return o;
 }
 /* ?sec= 이면 그 섹션만 남긴다 — applyView 가 매번 display 를 덮으므로 그 뒤에 다시 적용 */
 const EMBED_CHARTS = { rev:"p-rev", ratio:"p-ratio", puarppu:"p-puarppu", weekly:"p-weekly", putrend:"p-putrend" };

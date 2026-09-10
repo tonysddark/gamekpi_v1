@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 시트 서버와 미리 연결해 둔다 -->
+<link rel="preconnect" href="https://docs.google.com" crossorigin>
+<link rel="dns-prefetch" href="https://docs.google.com">
 <title>프로젝트별 ARPPU·PU 비교</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="assets/gsheet.js"></script>
@@ -350,7 +353,10 @@ function renderAll(){
   const leg=document.getElementById("allLegend"); leg.innerHTML=CODES.map(c=>`<span><i style="background:${HEX[c]}"></i>${c}</span>`).join("");
   const ds=CODES.map(c=>({label:c,data:ms.map(m=>AGG[c][m]?metricVal(AGG[c][m],curMetric,dlyOf(c,m)):null),borderColor:HEX[c],backgroundColor:HEX[c],borderWidth:2,tension:.3,spanGaps:false,pointRadius:3}));
   drawLine('allChart',ms.map(m=>+m.slice(5,7)+"월"),ds,curMetric,r=>chart=r,chart);
+  postSec();
 }
+/* 섹션 안에서 지표·연도를 바꾸면 부모(커스텀 보드)에 알린다 — 🔗 복사가 지금 화면을 담도록 */
+function postSec(){ if(EMBED_SEC) GSheet.postSecState("overview", EMBED_SEC, {met:curMetric, year:curYear}); }
 
 /* ---------- 프로젝트 상세 뷰 ---------- */
 function renderOne(code){
@@ -424,7 +430,7 @@ function applyEmbed(){
 function render(){
   const sel=document.getElementById("pjSel").value;
   if(sel==="ALL"){document.getElementById("allView").style.display="";document.getElementById("oneView").style.display="none";renderAll();}
-  else{document.getElementById("allView").style.display="none";document.getElementById("oneView").style.display="";renderOne(sel);}
+  else{document.getElementById("allView").style.display="none";document.getElementById("oneView").style.display="";renderOne(sel);postSec();}
 }
 
 async function boot(url){
@@ -494,7 +500,7 @@ document.getElementById("amtAll").addEventListener("click",()=>{
   amtOpen = allOpen? new Set() : new Set(CODES);
   saveAmtOpen(); renderAll();
 });
-document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
+document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}GSheet.bust();boot(u);});
 
 (function(){
   let url="";
