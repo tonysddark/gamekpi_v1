@@ -431,6 +431,34 @@ function saveHidden(c){ HIDDEN=new Set(); c.data.datasets.forEach((d,i)=>{ if(!c
   try{ localStorage.setItem("board-chart-hidden", JSON.stringify([...HIDDEN])); }catch(e){} }
 const EMBED_SEC=qp("sec");
 // 막대 안에 매출 수치 표기 플러그인 (토글 가능)
+/* 월 경계 점선 — 일별로 볼 때 달이 바뀌는 지점을 나눠 준다 (월별·연간은 막대 자체가 구간이라 생략) */
+const monthLinePlugin={id:"monthLines",beforeDatasetsDraw(c){
+  const cfg=c.options.plugins.monthLines; if(!cfg||!cfg.at||!cfg.at.length)return;
+  const xs=c.scales.x, area=c.chartArea, ctx=c.ctx, col=tickC();
+  ctx.save();
+  ctx.lineWidth=1; ctx.strokeStyle=col; ctx.fillStyle=col; ctx.globalAlpha=.5;
+  ctx.font="600 9.5px 'Pretendard','Malgun Gothic',sans-serif";
+  ctx.textAlign="left"; ctx.textBaseline="top";
+  cfg.at.forEach(m=>{
+    const x=(xs.getPixelForValue(m.i-1)+xs.getPixelForValue(m.i))/2;
+    if(x<area.left||x>area.right)return;
+    ctx.setLineDash([3,4]);
+    ctx.beginPath(); ctx.moveTo(x,area.top); ctx.lineTo(x,area.bottom); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillText(m.label,x+3,area.top+2);
+  });
+  ctx.restore();
+}};
+/* 달이 바뀌는 지점 — 일별(key=YYYY-MM-DD)일 때만 의미가 있다 */
+function monthMarks(rows){
+  if(curGran!=="day")return [];
+  const out=[];
+  for(let i=1;i<rows.length;i++){
+    const a=String(rows[i-1].key||"").slice(0,7), b=String(rows[i].key||"").slice(0,7);
+    if(a&&b&&a!==b)out.push({i,label:+b.slice(5)+"월"});
+  }
+  return out;
+}
 const valPlugin={id:"barVals",afterDatasetsDraw(c){
   if(!showVals)return; const ctx=c.ctx;
   c.data.datasets.forEach((ds,di)=>{
@@ -752,13 +780,14 @@ function render(){
       legend:{labels:{color:tk,boxWidth:12,font:{size:11}},
         onClick:(e,item,lg)=>{ Chart.defaults.plugins.legend.onClick.call(lg,e,item,lg); saveHidden(lg.chart); }},
       // 캔버스 툴팁 비활성 — 마우스오버 시 우측 고정 패널(#s1info)에 표시 (차트를 가리지 않음)
-      tooltip:{enabled:false,external:c=>{const t=c.tooltip;if(t&&t.opacity>0&&t.dataPoints&&t.dataPoints.length)fillInfo(t.dataPoints[0].dataIndex);}}
+      tooltip:{enabled:false,external:c=>{const t=c.tooltip;if(t&&t.opacity>0&&t.dataPoints&&t.dataPoints.length)fillInfo(t.dataPoints[0].dataIndex);}},
+      monthLines:{at:monthMarks(rows)}
     }};
   ds.forEach(d=>{ if(HIDDEN.has(d.label))d.hidden=true; }); // 숨김 상태 복원 (라벨 기준)
   if(chart){ chart.data={labels,datasets:ds}; chart.options=opts;
     ds.forEach((d,i)=>chart.setDatasetVisibility(i,!HIDDEN.has(d.label)));
     chart.update(); }
-  else chart=new Chart(document.getElementById("s1chart"),{data:{labels,datasets:ds},options:opts,plugins:[valPlugin]});
+  else chart=new Chart(document.getElementById("s1chart"),{data:{labels,datasets:ds},options:opts,plugins:[monthLinePlugin,valPlugin]});
   INFO_DEF=defaultInfoIdx(rows);
   fillInfo(INFO_DEF);
   // 마우스를 떼면 기본 구간(현재 월)으로 되돌린다 — 마지막에 스친 막대가 남아 있지 않게

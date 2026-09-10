@@ -613,8 +613,11 @@ const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 �
 
 /* ================= 버전 ================= */
 /* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
-const APP_VERSION = "1.29.1";
+const APP_VERSION = "1.29.2";
 const VERSION_HISTORY = [
+  { ver: "1.29.2", date: "2026-09-10", type: "기능", changes: [
+    "일별 차트에 월 경계 점선 — 달이 바뀌는 두 지점 사이에 세로 점선과 새 달 이름(예: 8월) 표시. 메인 대시보드 4개 차트(일별 매출·비중 추이·PU & ARPPU·PU 추이)와 KPI 현황판 ③ 매출 추이(집계=일별)에 적용",
+  ]},
   { ver: "1.29.1", date: "2026-09-10", type: "기능", changes: [
     "섹션 임베드 컨트롤 바에 조회 기간 직접 지정 추가 — 시작일~종료일 날짜 입력(데이터 있는 구간으로 선택 제한), 거꾸로 넣으면 자동 교정, ✕ 로 해제. 프리셋·월 선택 대신 적용되며 🔗 복사 링크에 ?from=&to= 로 담김",
     "KPI 현황판 ③ 정보 패널 기본 구간을 현재 월로 — 막대에서 마우스를 떼면 마지막에 스친 구간이 남지 않고 현재 월로 돌아옴",
@@ -1451,6 +1454,44 @@ function renderCards() {
 }
 
 /* ================= 피크/최저 라벨 플러그인 ================= */
+/* ── 월 경계 점선 ────────────────────────────────────────────────────
+   일별 차트는 x축 라벨이 08/10, 08/13… 식이라 달이 어디서 바뀌는지 잘 안 보인다.
+   달이 바뀌는 두 막대 사이에 점선을 세우고 새 달 이름을 적어 준다. */
+const monthLinePlugin = {
+  id: "monthLines",
+  beforeDatasetsDraw(chart) {
+    const cfg = chart.options.plugins.monthLines;
+    if (!cfg || !cfg.at || !cfg.at.length) return;
+    const xs = chart.scales.x, area = chart.chartArea, ctx = chart.ctx;
+    const col = th_muted();
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = col;
+    ctx.fillStyle = col;
+    ctx.globalAlpha = .5;
+    ctx.font = "600 9.5px 'Pretendard','Malgun Gothic',sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    cfg.at.forEach(m => {
+      const x = (xs.getPixelForValue(m.i - 1) + xs.getPixelForValue(m.i)) / 2;
+      if (x < area.left || x > area.right) return;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.moveTo(x, area.top); ctx.lineTo(x, area.bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillText(m.label, x + 3, area.top + 2);
+    });
+    ctx.restore();
+  }
+};
+/* 일별 행에서 달이 바뀌는 지점 — { i: 새 달의 첫 인덱스, label: "8월" } */
+function monthMarks(rows) {
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const a = String(rows[i - 1].date || "").slice(0, 7), b = String(rows[i].date || "").slice(0, 7);
+    if (a && b && a !== b) out.push({ i, label: +b.slice(5) + "월" });
+  }
+  return out;
+}
 const extremePlugin = {
   id: "extremeLabels",
   afterDatasetsDraw(chart) {
@@ -1544,6 +1585,7 @@ function renderCharts() {
   const rows = ranged();
   const labels = rows.map(r => mmdd(r.date));
   const dateIdx = {}; rows.forEach((r, i) => dateIdx[r.date] = i);
+  const mMarks = monthMarks(rows);                     // 월 경계 점선 위치
   const ratioPct = rows.map(r => r.ratio * 100);
   const isAll = activeGame === "ALL";
   const gameNames = Object.keys(games);
@@ -1614,7 +1656,7 @@ function renderCharts() {
   const evBars = buildEvBars(rows, rows.length ? eventGroups(visibleEvents()).map((g, k) => ({ ...g, num: k + 1 })) : []);
   charts.rev = new Chart(document.getElementById("chRevenue"), {
     data: { labels, datasets: revDatasets },
-    plugins: [extremePlugin, eventBarPlugin],
+    plugins: [extremePlugin, eventBarPlugin, monthLinePlugin],
     options: baseOpts(th, {
       layout: { padding: { top: 26, bottom: 24 + evBars.lanes * EV_LANE_H + (evBars.hidden ? 12 : 0) } },
       scales: {
@@ -1624,6 +1666,7 @@ function renderCharts() {
       },
       plugins: {
         eventBars: { bars: evBars.bars, hidden: evBars.hidden },
+        monthLines: { at: mMarks },
         extremeLabels: { items: revLabelItems },
         legend: { labels: { boxWidth: 12 } },
         tooltip: { callbacks: {
@@ -1671,7 +1714,7 @@ function renderCharts() {
   charts.ratio = new Chart(document.getElementById("chRatio"), {
     type: "line",
     data: { labels, datasets: ratioDatasets },
-    plugins: [eventMarkPlugin],
+    plugins: [eventMarkPlugin, monthLinePlugin],
     options: baseOpts(th, {
       layout: { padding: { bottom: 24 } },
       scales: {
@@ -1680,6 +1723,7 @@ function renderCharts() {
       },
       plugins: {
         eventMarks: { groups: evGroups },
+        monthLines: { at: mMarks },
         tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${c.parsed.y == null ? "-" : c.parsed.y.toFixed(1) + "%"}` } }
       }
     })
@@ -1688,6 +1732,7 @@ function renderCharts() {
 
   /* ---- 3. PU & ARPPU ---- */
   charts.pu = new Chart(document.getElementById("chPu"), {
+    plugins: [monthLinePlugin],
     data: {
       labels,
       datasets: [
@@ -1703,7 +1748,7 @@ function renderCharts() {
         y: { grid: { color: th.grid } },
         y2: { position: "right", grid: { display: false }, ticks: { callback: v => fmtWon(v) } }
       },
-      plugins: { tooltip: { callbacks: { label: c =>
+      plugins: { monthLines: { at: mMarks }, tooltip: { callbacks: { label: c =>
         c.dataset.yAxisID === "y2"
           ? ` ${c.dataset.label}: ${c.parsed.y == null ? "-" : Math.round(c.parsed.y).toLocaleString() + "원"}`
           : ` ${c.dataset.label}: ${c.parsed.y.toLocaleString()}명` } } }
@@ -1815,7 +1860,7 @@ function renderCharts() {
   charts.puTrend = new Chart(document.getElementById("chPuTrend"), {
     type: "line",
     data: { labels, datasets: puDatasets },
-    plugins: [extremePlugin, eventMarkPlugin],
+    plugins: [extremePlugin, eventMarkPlugin, monthLinePlugin],
     options: baseOpts(th, {
       layout: { padding: { top: 26, bottom: 24 } },
       scales: {
@@ -1825,6 +1870,7 @@ function renderCharts() {
       plugins: {
         eventMarks: { groups: evGroups },
         extremeLabels: { items: puLabelItems },
+        monthLines: { at: mMarks },
         tooltip: { callbacks: {
           label: c => ` ${c.dataset.label}: ${c.parsed.y == null ? "-" : Math.round(c.parsed.y).toLocaleString() + "명"}`,
           afterTitle: items => {
