@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 시트 서버와 미리 연결해 둔다 -->
+<link rel="preconnect" href="https://docs.google.com" crossorigin>
+<link rel="dns-prefetch" href="https://docs.google.com">
 <title>커스텀 보드</title>
 <script src="assets/gsheet.js"></script>
 <style>
@@ -39,6 +42,8 @@
   .cell-h{display:flex;align-items:center;gap:7px;padding:8px 10px;border-bottom:1px solid var(--bd);background:var(--card2);flex-wrap:wrap}
   .cell-h .t{font-size:12.5px;font-weight:700}
   .cell-h .g{font-size:10.5px;color:#fff;background:var(--accent);border-radius:6px;padding:1px 6px;font-weight:600}
+  .cell-h .g.all{background:transparent;color:var(--mut);border:1px solid var(--bd);font-weight:400}
+  .cell-h .opt:empty{display:none}
   .cell-h .src{font-size:10.5px;color:var(--mut);border:1px solid var(--bd);border-radius:6px;padding:1px 6px}
   .cell-h .tools{margin-left:auto;display:flex;gap:4px}
   .ic{background:transparent;border:1px solid var(--bd);color:var(--mut);border-radius:7px;padding:2px 7px;font-size:11px;cursor:pointer;line-height:1.5}
@@ -212,9 +217,11 @@ function load(){
   const w = qp.get("w");
   if(w){
     items = w.split(",").filter(Boolean).map(s=>{
-      const [id,game,h,wd] = s.split("~");
+      const [id,game,h,wd,lv] = s.split("~");
       if(!DEF[id]) return null;
-      return { id, game: game||"", h: +h||DEF[id].h, w: +wd||DEF[id].w };
+      const o = { id, game: game||"", h: +h||DEF[id].h, w: +wd||DEF[id].w };
+      const live = decLive(lv); if(live) o.live = live;    // 복사 당시 섹션 옵션
+      return o;
     }).filter(Boolean);
     cols = +qp.get("cols") || 2;
     baseGame = qp.get("proj") || "";
@@ -238,18 +245,55 @@ function save(){
 }
 
 /* ===== 렌더 ===== */
-/* 섹션 단독 URL(절대주소) — 노션 임베드용 */
+/* 섹션 단독 URL(절대주소) — 노션 임베드용. iframeSrc 가 it.live 를 반영하므로
+   섹션 안에서 게임·기간을 바꿔놓고 복사하면 그 화면이 그대로 담긴다 */
 function secUrl(it){ return new URL(iframeSrc(it), location.href).href; }
+/* 카드 머리말에 지금 옵션을 적어 둔다 — 무엇이 복사될지 눈으로 확인하려는 것 */
+const MET_NAME = { revShare:"매출비중", puShare:"PU비중", totARPPU:"전체 ARPPU", d2cARPPU:"자체 ARPPU", totPU:"전체 PU" };
+function gameLabel(it){
+  const lv = liveOf(it);
+  if(lv && lv.game !== undefined) return lv.game === "ALL" ? "" : lv.game;
+  if(lv && lv.proj !== undefined) return lv.proj;
+  return it.game || baseGame;
+}
+function optLabel(it){
+  const lv = liveOf(it), src = it.id.split(":")[0];
+  if(src === "i"){
+    const q = lv || {};
+    if(q.month) return +q.month.slice(5) + "월";
+    if(q.from || q.to) return "기간 지정";
+    const d = q.days != null ? +q.days : (/M$/.test(it.id) ? 0 : 30);
+    return d ? d + "일" : "전체 기간";
+  }
+  if(src === "b") return ((lv && lv.kbase) || kpiBaseSel) === "actual" ? "실적 기준" : "사업목표 기준";
+  if(src === "o") return (lv && MET_NAME[lv.met]) || "";
+  return "";
+}
+/* 섹션별 옵션을 링크에 담는 짧은 표기 — "game=GBTW;days=30" */
+function encLive(lv){
+  if(!lv) return "";
+  return Object.keys(lv).filter(k => lv[k] !== "" && lv[k] != null).map(k => k + "=" + lv[k]).join(";");
+}
+function decLive(s){
+  if(!s) return null;
+  const o = {};
+  s.split(";").forEach(kv => { const i = kv.indexOf("="); if(i > 0) o[kv.slice(0,i)] = kv.slice(i+1); });
+  return Object.keys(o).length ? o : null;
+}
 /* 클립보드 복사 — 실패하면 주소창에 띄워 직접 복사하게 한다 */
 function copyText(text, msg){
   navigator.clipboard.writeText(text).then(()=>toast(msg))
     .catch(()=>prompt("아래 주소를 복사하세요.", text));
 }
 /* 배포 버전 — iframe URL 에 붙여 브라우저가 옛 섹션을 캐시해 두는 것을 막는다 */
-const CB_VER = "1.28.0";
+const CB_VER = "1.29.0";
+/* 섹션 안에서 바꾼 옵션(it.live) — 섹션이 postMessage 로 알려준 지금 화면.
+   🔗 복사·새 탭·다음 로드가 모두 이 값을 따르므로 "보던 그대로" 열린다. */
+function liveOf(it){ return (it && it.live && typeof it.live === "object") ? it.live : null; }
 function iframeSrc(it){
   const d = DEF[it.id];
   const [src, key] = it.id.split(":");
+  const lv = liveOf(it);
   const game = it.game || baseGame;
   const p = new URLSearchParams();
   if(SHEET) p.set("sheet", SHEET);
@@ -257,8 +301,9 @@ function iframeSrc(it){
   p.set("v", CB_VER);
   if(src === "b"){
     p.set("sec", key);
-    if(game) p.set("proj", game);
-    p.set("kbase", kpiBaseSel);          // 목표 기준 — 커스텀 보드 상단에서 지정
+    const pj = lv && lv.proj !== undefined ? lv.proj : game;
+    if(pj) p.set("proj", pj);
+    p.set("kbase", (lv && lv.kbase) || kpiBaseSel);   // 목표 기준 — 섹션 안에서 바꿨으면 그 값
     return "board.html?" + p.toString();
   }
   if(src === "r"){
@@ -270,15 +315,27 @@ function iframeSrc(it){
   }
   if(src === "o"){
     p.set("sec", key);
+    if(lv && lv.met)  p.set("met", lv.met);          // 섹션 안에서 고른 지표·연도
+    if(lv && lv.year) p.set("year", lv.year);
     return "overview.html?" + p.toString();
   }
   if(src === "i"){
     // weeklyM / tableM = 같은 섹션의 월별 모드 (전체 기간)
     p.set("sec", key === "weeklyM" ? "weekly" : key === "tableM" ? "table" : key);
-    if(game) p.set("game", game);
-    if(key === "weeklyM"){ p.set("wk", "month"); p.set("days", "0"); }
-    else if(key === "tableM"){ p.set("tbl", "month"); p.set("days", "0"); }
-    else p.set("days", "30");
+    if(lv){
+      // 섹션 안 컨트롤로 바꿔놓은 게임·기간을 그대로 (전체 프로젝트면 game=ALL)
+      if(lv.game) p.set("game", lv.game);
+      if(lv.month) p.set("month", lv.month);
+      else if(lv.from || lv.to){ if(lv.from) p.set("from", lv.from); if(lv.to) p.set("to", lv.to); }
+      else p.set("days", lv.days != null ? String(lv.days) : "30");
+      if(lv.tbl) p.set("tbl", lv.tbl);
+      if(lv.wk)  p.set("wk",  lv.wk);
+    } else {
+      if(game) p.set("game", game);
+      if(key === "weeklyM"){ p.set("wk", "month"); p.set("days", "0"); }
+      else if(key === "tableM"){ p.set("tbl", "month"); p.set("days", "0"); }
+      else p.set("days", "30");
+    }
     return "index.html?" + p.toString();
   }
   if(it.id === "p:overview") return "overview.html?" + p.toString();
@@ -301,13 +358,14 @@ function render(){
   const grid = document.getElementById("grid");
   grid.innerHTML = items.map((it,i)=>{
     const d = DEF[it.id];
-    const game = it.game || baseGame;
+    const gl = gameLabel(it), ol = optLabel(it);
     const span = Math.min(it.w||d.w, cols);
     return `<div class="cell" data-i="${i}" style="grid-column:span ${span}">
       <div class="cell-h">
         <button class="ic mv" draggable="true" title="끌어서 순서 변경">⣿</button>
         <span class="t">${d.name}</span>
-        ${game?`<span class="g">${game}</span>`:`<span class="src">전체</span>`}
+        <span class="g${gl?"":" all"}">${gl||"전체"}</span>
+        <span class="src opt" title="지금 이 섹션이 보고 있는 옵션 — 🔗 로 복사하면 이대로 열립니다">${ol}</span>
         <span class="src">${it.id.startsWith("b:")?"현황판":it.id.startsWith("r:")?"리포트":"페이지"}</span>
         <span class="tools">
           <button class="ic cfg" title="게임·높이·너비">⚙</button>
@@ -339,8 +397,9 @@ function render(){
   bindCells();
   observeCells();
   document.getElementById("foot").innerHTML = items.length
-    ? `섹션 ${items.length}개 · 각 섹션은 화면에 보일 때 불러옵니다(지연 로드) · 섹션마다 시트를 따로 읽으므로 10개 이상 담으면 첫 로드가 느려질 수 있습니다<br>
-       <b style="color:var(--tx)">노션에 넣을 때</b> — 카드의 <b>🔗</b> 로 그 섹션만 열리는 주소를 복사해 노션에서 <b>/embed</b> 로 붙이세요(여러 개면 상단 <b>🔗 섹션 URL 전체</b>). 보드 전체를 한 장으로 넣으려면 <b>🔗 보드 URL</b> 을 쓰면 됩니다`
+    ? `섹션 ${items.length}개 · 각 섹션은 화면에 보일 때 불러옵니다(지연 로드) · 같은 시트 탭은 한 번만 읽어 섹션끼리 나눠 씁니다<br>
+       <b style="color:var(--tx)">노션에 넣을 때</b> — 카드의 <b>🔗</b> 로 그 섹션만 열리는 주소를 복사해 노션에서 <b>/embed</b> 로 붙이세요(여러 개면 상단 <b>🔗 섹션 URL 전체</b>). 보드 전체를 한 장으로 넣으려면 <b>🔗 보드 URL</b> 을 쓰면 됩니다<br>
+       섹션 <b>안에서</b> 게임·기간·목표 기준을 바꾸면 그 상태가 카드 머리말에 표시되고 <b>🔗</b> 복사·다음 로드에 그대로 따라갑니다. 상단의 <b>기본 게임</b>·<b>목표 기준</b>을 바꾸면 섹션별로 잡아둔 옵션은 초기화됩니다`
     : "";
 }
 
@@ -353,7 +412,8 @@ function bindCells(){
     cell.querySelector(".dn").addEventListener("click",()=>move(i,1));
     cell.querySelector(".new").addEventListener("click",()=>window.open(iframeSrc(items[i]),"_blank"));
     cell.querySelector(".lnk").addEventListener("click",()=>copyText(secUrl(items[i]), DEF[items[i].id].name+" 섹션 URL 복사 — 노션에 붙여넣으면 임베드됩니다"));
-    cell.querySelector(".cg").addEventListener("change",e=>{ items[i].game=e.target.value; save(); render(); });
+    // ⚙ 로 게임을 직접 고르면 섹션 안에서 잡아둔 옵션은 버린다 (지정이 무시되면 고장처럼 보이므로)
+    cell.querySelector(".cg").addEventListener("change",e=>{ items[i].game=e.target.value; delete items[i].live; save(); render(); });
     cell.querySelector(".ch").addEventListener("change",e=>{ items[i].h=+e.target.value; save(); render(); });
     cell.querySelector(".cw").addEventListener("change",e=>{ items[i].w=+e.target.value; save(); render(); });
     // 드래그로 순서 변경
@@ -369,6 +429,25 @@ function bindCells(){
     });
   });
 }
+/* 섹션(iframe) 이 "지금 이 옵션을 보고 있다"고 알려오면 그대로 기억해 둔다.
+   iframe 을 다시 불러오지 않고 머리말만 고쳐 쓴다 — 차트가 깜빡이지 않게. */
+window.addEventListener("message", e=>{
+  if(e.origin !== location.origin) return;
+  const d = e.data;
+  if(!d || d.__d2c !== "secState" || !d.p) return;
+  const cell = [...document.querySelectorAll("#grid .cell")]
+    .find(c=>{ const f = c.querySelector("iframe"); return f && f.contentWindow === e.source; });
+  if(!cell) return;
+  const it = items[+cell.dataset.i]; if(!it) return;
+  if(JSON.stringify(it.live || null) === JSON.stringify(d.p)) return;   // 값이 그대로면 저장도 건너뛴다
+  it.live = d.p; save();
+  const gl = gameLabel(it);
+  const g = cell.querySelector(".cell-h .g");
+  if(g){ g.textContent = gl || "전체"; g.classList.toggle("all", !gl); }
+  const o = cell.querySelector(".cell-h .opt");
+  if(o) o.textContent = optLabel(it);
+});
+function clearLive(){ items.forEach(it=>{ delete it.live; }); }
 function move(i,d){
   const j = i+d; if(j<0||j>=items.length) return;
   const [x] = items.splice(i,1); items.splice(j,0,x); save(); render();
@@ -446,7 +525,8 @@ document.querySelectorAll("#colSeg button").forEach(b=>b.addEventListener("click
   cols = +b.dataset.c; save(); render();
 }));
 document.querySelectorAll("#cbBaseSeg button").forEach(b=>b.addEventListener("click",()=>{
-  kpiBaseSel = b.dataset.b; save(); render();      // 섹션 iframe 을 새 기준으로 다시 불러온다
+  // 상단에서 기준을 바꾸면 전체에 다시 적용한다 — 섹션별로 따로 잡아둔 옵션은 초기화
+  kpiBaseSel = b.dataset.b; clearLive(); save(); render();
 }));
 document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click",()=>{
   items = PRESETS[b.dataset.preset].map(id=>({ id, game:"", h:DEF[id].h, w:DEF[id].w }));
@@ -455,7 +535,7 @@ document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click"
 document.getElementById("linkBtn").addEventListener("click", ()=>{
   const p = new URLSearchParams();
   if(SHEET) p.set("sheet", SHEET);
-  p.set("w", items.map(it=>[it.id, it.game, it.h, it.w].join("~")).join(","));
+  p.set("w", items.map(it=>[it.id, it.game, it.h, it.w, encLive(liveOf(it))].join("~")).join(","));
   p.set("cols", cols);
   p.set("kbase", kpiBaseSel);
   if(baseGame) p.set("proj", baseGame);
@@ -472,7 +552,7 @@ load();
   const s = document.getElementById("gameSel");
   s.innerHTML = `<option value="">전체 프로젝트</option>` + CODES.map(c=>`<option value="${c}">${c}</option>`).join("");
   s.value = baseGame;
-  s.addEventListener("change", e=>{ baseGame = e.target.value; save(); render(); });
+  s.addEventListener("change", e=>{ baseGame = e.target.value; clearLive(); save(); render(); });
 })();
 
 render();

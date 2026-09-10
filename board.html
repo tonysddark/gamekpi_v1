@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 시트 서버와 미리 연결해 둔다 -->
+<link rel="preconnect" href="https://docs.google.com" crossorigin>
+<link rel="dns-prefetch" href="https://docs.google.com">
 <title>자체결제 KPI 현황판</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="assets/gsheet.js"></script>
@@ -1572,7 +1575,7 @@ function syncDates(){
   document.getElementById(id).addEventListener("change",e=>{ if(k==="f")fromD=e.target.value; else toD=e.target.value; syncDates(); render(); });
 });
 ["rangeReset","s1reset"].forEach(id=>document.getElementById(id).addEventListener("click",()=>{fromD=MIND;toD=HORIZON;syncDates();render();}));
-document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}boot(u);});
+document.getElementById("setupGo").addEventListener("click",()=>{const u=document.getElementById("setupUrl").value.trim();if(!u){alert("시트 URL을 입력하세요.");return;}GSheet.bust();boot(u);});
 document.getElementById("kpiViewSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiView=b.dataset.v;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("kpiBaseSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;setKpiBase(b.dataset.b);});
 document.getElementById("dBaseSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;setKpiBase(b.dataset.b);});
@@ -1581,6 +1584,8 @@ function setKpiBase(v){
   kpiBase=v;
   document.querySelectorAll("#kpiBaseSeg button, #dBaseSeg button").forEach(x=>x.classList.toggle("active",x.dataset.b===v));
   saveFilters(); renderKPI(); renderDaily();
+  // 섹션 안에서 목표 기준을 바꾸면 부모(커스텀 보드)에 알린다 — 🔗 복사가 지금 화면을 담도록
+  if(EMBED_SEC) GSheet.postSecState("board", EMBED_SEC, {kbase:kpiBase, proj:curProj==="ALL"?"":curProj});
 }
 document.getElementById("kpiStageSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;kpiMonth=b.dataset.m;s5cov=null;[...e.currentTarget.children].forEach(x=>x.classList.toggle("active",x===b));renderKPI();});
 document.getElementById("jlGrade").addEventListener("change",e=>{jlGrade=e.target.value;renderKPI();});

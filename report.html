@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 시트 서버와 미리 연결해 둔다 -->
+<link rel="preconnect" href="https://docs.google.com" crossorigin>
+<link rel="dns-prefetch" href="https://docs.google.com">
 <title>KPI 리포트 위젯</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="assets/gsheet.js"></script>
@@ -126,7 +129,9 @@ async function loadKpiOne(sheet,game){const grid=await GSheet.fetchTab(sheet,gam
     if(D2C_PGS.includes(String(g[ci.pg]||"").trim())){const pu=GSheet.toNum(g[ci.pu])||0,k=String(g[ci.plat]||"").trim().toUpperCase()==="WEB"?"web":String(g[ci.plat]||"").trim().toUpperCase()==="PC"?"pc":"apk";
       o.d2c+=rev;o.pu+=pu;o[k]+=rev;o[k+"_pu"]+=pu;}}return by;}
 async function loadData(){if(dailyCache)return dailyCache;let games=[state.game];if(state.game==="ALL")games=await discoverGames(state.sheet);
-  const merged={};for(const g of games){const by=await loadKpiOne(state.sheet,g);for(const d in by){const s=merged[d]=merged[d]||{date:d,total:0,d2c:0,pu:0,web:0,apk:0,pc:0,web_pu:0,apk_pu:0,pc_pu:0};
+  // 게임별 -kpi 탭은 서로 의존이 없어 한꺼번에 읽는다 (한 개씩 기다리면 게임 수만큼 줄을 선다)
+  const bys=await Promise.all(games.map(g=>loadKpiOne(state.sheet,g)));
+  const merged={};for(const by of bys){for(const d in by){const s=merged[d]=merged[d]||{date:d,total:0,d2c:0,pu:0,web:0,apk:0,pc:0,web_pu:0,apk_pu:0,pc_pu:0};
     ["total","d2c","pu","web","apk","pc","web_pu","apk_pu","pc_pu"].forEach(k=>s[k]+=by[d][k]);}}
   dailyCache=Object.values(merged).sort((a,b)=>a.date.localeCompare(b.date));return dailyCache;}
 function sliceDays(rows,period){if(!period||period==="all")return rows;const n=parseInt(period,10);return n>0?rows.slice(-n):rows;}
