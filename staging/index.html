@@ -295,6 +295,15 @@
     border-radius: 7px; padding: 3px 7px; font-size: 11.5px;
   }
   .embed-ctl .ec-lbl { color: var(--muted); }
+  /* 조회 기간 직접 지정 — 프리셋·월 선택 대신 적용된다 */
+  .embed-ctl .ec-range { display: inline-flex; align-items: center; gap: 4px; }
+  .embed-ctl .ec-range input[type=date] {
+    background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 7px; padding: 2px 6px; font-size: 11.5px; font-family: inherit;
+  }
+  .embed-ctl .ec-range.on input[type=date] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .embed-ctl .ec-range:not(.on) .ec-x { display: none; }
+  :root[data-theme="dark"] .embed-ctl .ec-range input[type=date] { color-scheme: dark; }
   /* 정렬 가능한 표 헤더 */
   .sk {
     display: inline-flex; align-items: center; gap: 2px; cursor: pointer;
@@ -604,8 +613,12 @@ const DEFAULT_DATA = []; // 배포 버전: 데이터 미내장 (xlsx 업로드 �
 
 /* ================= 버전 ================= */
 /* 규칙 — 첫째: 통계툴 리뉴얼 / 둘째: 신규 기능 추가 / 셋째: 패치 업데이트 */
-const APP_VERSION = "1.29.0";
+const APP_VERSION = "1.29.1";
 const VERSION_HISTORY = [
+  { ver: "1.29.1", date: "2026-09-10", type: "기능", changes: [
+    "섹션 임베드 컨트롤 바에 조회 기간 직접 지정 추가 — 시작일~종료일 날짜 입력(데이터 있는 구간으로 선택 제한), 거꾸로 넣으면 자동 교정, ✕ 로 해제. 프리셋·월 선택 대신 적용되며 🔗 복사 링크에 ?from=&to= 로 담김",
+    "KPI 현황판 ③ 정보 패널 기본 구간을 현재 월로 — 막대에서 마우스를 떼면 마지막에 스친 구간이 남지 않고 현재 월로 돌아옴",
+  ]},
   { ver: "1.29.0", date: "2026-09-09", type: "기능", changes: [
     "섹션 🔗 URL 이 '복사 당시의 옵션'을 담음 — 섹션 안에서 바꾼 게임·기간·월(메인), 지표·연도(전사 비교), 목표 기준(현황판)이 링크·다음 로드에 그대로 따라감. 커스텀 보드 카드 머리말에 지금 옵션이 표시되어 무엇이 복사될지 미리 확인 가능",
     "첫 로드 속도 개선 — ① 게임 요약 탭을 한꺼번에 읽음(6개면 6번 줄 서던 것을 1회분으로) ② 같은 시트 탭은 한 번만 읽어 커스텀 보드 섹션끼리 나눠 씀(5분 캐시, 새로고침·직접 누른 동기화는 항상 새로 읽음) ③ ?game= 임베드는 그 프로젝트를 먼저 그리고 나머지는 뒤에서 채움 ④ 시트 서버 preconnect",
@@ -2881,6 +2894,13 @@ function renderEmbedCtl() {
   if (!EMBED_SEC || !Object.keys(games).length) { el.innerHTML = ""; return; }
   const names = Object.keys(games), ms = monthsAvailable();
   const on = c => c ? " on" : "";
+  // 날짜 입력의 선택 가능 범위 = 실제 데이터가 있는 구간
+  let lo = "", hi = "";
+  names.forEach(g => games[g].forEach(r => {
+    if (!r.date) return;
+    if (!lo || r.date < lo) lo = r.date;
+    if (!hi || r.date > hi) hi = r.date;
+  }));
   el.innerHTML =
     `<span class="ec-tabs">
       ${names.length > 1 ? `<button class="ec-g${on(activeGame === "ALL")}" data-g="ALL">전체</button>` : ""}
@@ -2892,7 +2912,14 @@ function renderEmbedCtl() {
      <select class="ec-m" title="월을 고르면 그 달 1일~말일이 적용됩니다">
        <option value="">월 선택</option>
        ${ms.map(m => `<option value="${m}"${m === selMonth ? " selected" : ""}>${m.slice(0, 4)}년 ${+m.slice(5)}월</option>`).join("")}
-     </select>`;
+     </select>
+     <span class="ec-lbl">조회</span>
+     <span class="ec-range${on(customRange())}" title="시작일~종료일을 직접 지정하면 프리셋·월 선택 대신 적용됩니다">
+       <input type="date" class="ec-f" value="${rangeFromD}" min="${lo}" max="${hi}">
+       <span class="ec-lbl">~</span>
+       <input type="date" class="ec-t" value="${rangeToD}" min="${lo}" max="${hi}">
+       <button class="ec-x" title="기간 지정 해제">✕</button>
+     </span>`;
   el.querySelectorAll(".ec-g").forEach(b => b.addEventListener("click", () => {
     activeGame = b.dataset.g; renderAll();
   }));
@@ -2904,6 +2931,22 @@ function renderEmbedCtl() {
     if (v) { selMonth = v; rangeFromD = v + "-01"; rangeToD = monthEndOf(v); }
     else { selMonth = ""; rangeFromD = rangeToD = ""; }
     renderAll();
+  });
+  // 조회 기간 직접 지정 — 한쪽만 넣어도 그 방향으로 열린 구간이 된다
+  const fEl = el.querySelector(".ec-f"), tEl = el.querySelector(".ec-t");
+  const applyRange = () => {
+    rangeFromD = fEl.value || ""; rangeToD = tEl.value || "";
+    if (rangeFromD && rangeToD && rangeFromD > rangeToD) {          // 거꾸로 넣으면 바로잡는다
+      const t = rangeFromD; rangeFromD = rangeToD; rangeToD = t;
+    }
+    // 그 달 전체와 정확히 같을 때만 월 선택을 유지한다
+    if (selMonth && !(rangeFromD === selMonth + "-01" && rangeToD === monthEndOf(selMonth))) selMonth = "";
+    renderAll();
+  };
+  fEl.addEventListener("change", applyRange);
+  tEl.addEventListener("change", applyRange);
+  el.querySelector(".ec-x").addEventListener("click", () => {
+    rangeFromD = rangeToD = ""; selMonth = ""; renderAll();
   });
 }
 /* 지금 임베드가 보여주고 있는 옵션 — 커스텀 보드가 🔗 로 URL 을 복사할 때 이 값을 담는다
