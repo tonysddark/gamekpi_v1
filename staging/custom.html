@@ -287,7 +287,7 @@ function copyText(text, msg){
     .catch(()=>prompt("아래 주소를 복사하세요.", text));
 }
 /* 배포 버전 — iframe URL 에 붙여 브라우저가 옛 섹션을 캐시해 두는 것을 막는다 */
-const CB_VER = "1.29.1";
+const CB_VER = "1.29.2";
 /* 섹션 안에서 바꾼 옵션(it.live) — 섹션이 postMessage 로 알려준 지금 화면.
    🔗 복사·새 탭·다음 로드가 모두 이 값을 따르므로 "보던 그대로" 열린다. */
 function liveOf(it){ return (it && it.live && typeof it.live === "object") ? it.live : null; }
